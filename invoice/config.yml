@@ -1,0 +1,578 @@
+# =============================================================================
+# Invoice App — Configuration
+# =============================================================================
+
+# Organization
+organization:                # leave blank to show kBenestad wordmark
+logo: no                     # yes|no — if yes, loads assets/logo.png or logo.jpg
+logo-maxwidth: 4             # cm — maximum logo width on PDF
+tagline:                     # subtitle shown below org name
+
+# Page setup
+paper-format: a4             # a4 or letter
+
+# PDF output language: default (the first defined language) or user-selected (follow the UI)
+output-language: default
+
+# Typography
+# Standard fonts: Helvetica, Times, Courier (plus Bold/Italic variants)
+# Custom: place a .ttf file in assets/ and use the filename (e.g. "assets/MyFont.ttf")
+font-body: Helvetica
+font-heading: Helvetica
+font-monospace: Courier
+font-size: 10                # base font size in pt for PDF
+
+# Branding
+accent-colour: "#2f6fed"
+
+# ── Payment info visibility ───────────────────────────────────────────────────
+# Set to true to hide the payment info panel entirely (useful if payment info
+# should not appear on invoices, e.g. per company policy).
+hide-payment-info: false
+
+# ── Date format ───────────────────────────────────────────────────────────────
+# Tokens: d=day, dd=day(0-padded), M=month, MM=month(0-padded),
+#         MMM=short month name, MMMM=full month name, YY=2-digit year, YYYY=4-digit year
+date-format: "d MMMM YYYY"
+
+# ── Tax types (user builds tax lines; these are the label options) ─────────────
+tax-types:
+  - key: vat
+  - key: gst
+  - key: sales-tax
+  - key: withholding
+  - key: other
+
+# ── Units of measure ──────────────────────────────────────────────────────────
+uom:
+  - code: EA
+  - code: HR
+  - code: DY
+  - code: WK
+  - code: MO
+  - code: LS
+
+# ── Predefined recipients (charge-to) ─────────────────────────────────────────
+charge-to:
+  - display: Acme Corporation
+    name: Acme Corporation Ltd.
+    address1: 123 Business Avenue
+    address2: Suite 400
+    address3: New York, NY 10001
+    address4: ""
+    country: US
+    phone: "+1-212-555-0100"
+    email: accounts@acmecorp.example
+    vat-id: "US-EIN-12-3456789"
+    reg-no: ""
+    currency: USD
+    project-codes:
+      - AC-100
+      - AC-110
+      - AC-200
+  - display: Example NGO
+    name: Example Non-Profit Organisation
+    address1: 45 Charity Lane
+    address2: London EC1A 1BB
+    address3: ""
+    address4: ""
+    country: GB
+    phone: "+44 20 7123 4567"
+    email: finance@examplengo.example
+    vat-id: "GB123456789"
+    reg-no: "01234567"
+    currency: GBP
+    project-codes:
+      - NGO-2026-01
+      - NGO-2026-02
+      - NGO-2026-03
+
+# ── Project codes ──────────────────────────────────────────────────────────────
+project-codes:
+  - Project 100
+  - Project 110
+  - Project 230
+
+# ── Predefined products / services ────────────────────────────────────────────
+products:
+  - code: CONSULTING
+    uom: HR
+    price: 100.00
+  - code: TRAINING
+    uom: DY
+    price: 800.00
+  - code: REPORT
+    uom: EA
+    qty: 1
+    price: 500.00
+  - code: REVIEW
+    uom: HR
+    price: 120.00
+
+# ── Foreign currency options ───────────────────────────────────────────────────
+currencies:
+  - USD
+  - EUR
+  - GBP
+  - JPY
+  - CHF
+  - CAD
+  - AUD
+  - NOK
+  - SEK
+  - DKK
+  - THB
+  - SGD
+  - HKD
+  - INR
+  - MXN
+  - BRL
+  - ZAR
+
+# ── Localisation ──────────────────────────────────────────────────────────────
+localisation:
+  default-language: en
+
+  # ── Language declarations ──────────────────────────────────────────────────
+  languages:
+    - code: en
+      name: English
+      direction: ltr
+    - code: de
+      name: Deutsch
+      direction: ltr
+    - code: fr
+      name: Français
+      direction: ltr
+    - code: es
+      name: Español
+      direction: ltr
+
+  # ── English ────────────────────────────────────────────────────────────────
+  en:
+    # Optional. Remove about from all language sections to hide the ⓘ button and footer link.
+    about:
+      title: "About"
+      btn-close: "Close"
+      content: |
+        ### Invoice Generator
+        A single-file browser app for generating freelance invoices as PDF.
+        No backend, no build step — just a browser and a config file.
+
+        **Source:** [kbenestad/invoice](https://github.com/kbenestad/invoice)
+        **Docs:** [docs.benestad.net/invoice](https://docs.benestad.net/invoice)
+
+        &copy; 2026 Kristian Benestad. Licensed under the Apache 2 license.
+    tax-types:
+      vat: VAT
+      gst: GST
+      sales-tax: Sales Tax
+      withholding: Withholding Tax
+      other: Other Tax
+    uom:
+      EA: Each
+      HR: Hour
+      DY: Day
+      WK: Week
+      MO: Month
+      LS: Lump Sum
+    products:
+      CONSULTING: Consulting Services
+      TRAINING: Training
+      REPORT: Written Report
+      REVIEW: Review & Feedback
+    ui:
+      language: Language
+      invoice: INVOICE
+      sender-name: Issuer
+      sender-address1: Address Line 1
+      sender-address2: Address Line 2
+      sender-address3: Address Line 3
+      sender-address4: Address Line 4
+      sender-country: Country
+      sender-phone: Phone
+      sender-email: Email
+      charge-to: "Charge to"
+      charge-to-name: Organisation / Name
+      charge-to-address1: Address Line 1
+      charge-to-address2: Address Line 2
+      charge-to-address3: Address Line 3
+      charge-to-address4: Address Line 4
+      charge-to-country: Country
+      charge-to-phone: Phone
+      charge-to-email: Email
+      vat-id: VAT / Tax ID
+      registration-no: "Registration no."
+      invoice-date: Invoice date
+      project-code: Project code
+      invoice-no: "Invoice no."
+      qty: QTY
+      uom: UOM
+      description: Description
+      price: Unit Price
+      line-total: Line Total
+      foreign-currency: Foreign currency
+      currency-code: Foreign currency code
+      exchange-rate: Exchange rate
+      per-item: Price per item in
+      total-foreign: Line total in
+      add-line: "+ Add new line"
+      subtotal: Subtotal
+      tax: Tax
+      paid: Paid
+      to-pay: To Pay
+      save: Save
+      validate: Validate
+      val-ok-head: "All good."
+      val-ok: "The form is ready to download."
+      val-errors-head: "Please fix the following:"
+      val-invoice-no: Invoice number is required
+      val-from-name: Sender name is required
+      val-charge-to: Charge-to is required
+      val-lines: At least one line item is required
+      generate-invoice: Download Invoice
+      other: Other
+      select: "— Select —"
+      yes: "Yes"
+      no-option: "No"
+      invoice-currency: Invoice currency
+      add-tax: "+ Add new tax"
+      tax-pct: "%"
+      tax-amount: Amount
+      converted-from: Converted from
+      download-pdf: "Download PDF"
+      close: Close
+      invoice-lines: Invoice Lines
+      sender-section: From
+      invoice-details-section: Invoice Details
+      payment: Payment
+      payment-terms: Payment terms
+      payment-days: days
+      pay-by: Pay by
+      account-holder: Account holder
+      account-no: "Account no. (BBAN/IBAN)"
+      bank-bic: "Bank / BIC (Swift code)"
+      bank-address: Bank address
+      payment-ref: Please use reference
+      reset-lines: Reset invoice lines
+
+  # ── German ─────────────────────────────────────────────────────────────────
+  de:
+    about:
+      title: "Über"
+      btn-close: "Schließen"
+      content: |
+        ### Rechnungsgenerator
+        Eine Single-File-Browser-App zur Erstellung von Freiberufler-Rechnungen als PDF.
+        Kein Backend, kein Build-Schritt.
+
+        **Quellcode:** [kbenestad/invoice](https://github.com/kbenestad/invoice)
+        **Dokumentation:** [docs.benestad.net/invoice](https://docs.benestad.net/invoice)
+
+        &copy; 2026 Kristian Benestad. Lizenziert unter Apache 2.
+    tax-types:
+      vat: MwSt.
+      gst: GST
+      sales-tax: Umsatzsteuer
+      withholding: Quellensteuer
+      other: Sonstige Steuer
+    uom:
+      EA: Stück
+      HR: Stunde
+      DY: Tag
+      WK: Woche
+      MO: Monat
+      LS: Pauschale
+    products:
+      CONSULTING: Beratungsleistungen
+      TRAINING: Schulung
+      REPORT: Schriftlicher Bericht
+      REVIEW: "Überprüfung & Feedback"
+    ui:
+      language: Sprache
+      invoice: RECHNUNG
+      sender-name: Issuer
+      sender-address1: Adresszeile 1
+      sender-address2: Adresszeile 2
+      sender-address3: Adresszeile 3
+      sender-address4: Adresszeile 4
+      sender-country: Land
+      sender-phone: Telefon
+      sender-email: E-Mail
+      charge-to: "In Rechnung an"
+      charge-to-name: Organisation / Name
+      charge-to-address1: Adresszeile 1
+      charge-to-address2: Adresszeile 2
+      charge-to-address3: Adresszeile 3
+      charge-to-address4: Adresszeile 4
+      charge-to-country: Land
+      charge-to-phone: Telefon
+      charge-to-email: E-Mail
+      vat-id: USt-IdNr.
+      registration-no: "Handelsreg.-Nr."
+      invoice-date: Rechnungsdatum
+      project-code: Projektnummer
+      invoice-no: "Rechnungsnr."
+      qty: Menge
+      uom: Einh.
+      description: Beschreibung
+      price: Einzelpreis
+      line-total: Betrag
+      foreign-currency: Fremdwährung
+      currency-code: Fremdwährungscode
+      exchange-rate: Wechselkurs
+      per-item: Preis je Einheit in
+      total-foreign: Zeilenbetrag in
+      add-line: "+ Neue Zeile hinzufügen"
+      subtotal: Zwischensumme
+      tax: Steuer
+      paid: Bezahlt
+      to-pay: Zu zahlen
+      save: Speichern
+      validate: Prüfen
+      val-ok-head: "Alles in Ordnung."
+      val-ok: "Das Formular ist bereit zum Herunterladen."
+      val-errors-head: "Bitte korrigieren Sie Folgendes:"
+      val-invoice-no: Rechnungsnummer ist erforderlich
+      val-from-name: Absendername ist erforderlich
+      val-charge-to: Empfänger ist erforderlich
+      val-lines: Mindestens eine Zeile ist erforderlich
+      generate-invoice: Rechnung herunterladen
+      other: Andere
+      select: "— Auswählen —"
+      yes: "Ja"
+      no-option: "Nein"
+      invoice-currency: Rechnungswährung
+      add-tax: "+ Neue Steuer hinzufügen"
+      tax-pct: "%"
+      tax-amount: Betrag
+      converted-from: Umgerechnet aus
+      download-pdf: "PDF herunterladen"
+      close: Schließen
+      invoice-lines: Rechnungspositionen
+      sender-section: Von
+      invoice-details-section: Rechnungsdetails
+      payment: Zahlung
+      payment-terms: Zahlungsbedingungen
+      payment-days: Tage
+      pay-by: Zahlbar bis
+      account-holder: Kontoinhaber
+      account-no: "Kontonummer (BBAN/IBAN)"
+      bank-bic: "Bank / BIC (Swift)"
+      bank-address: Bankadresse
+      payment-ref: Bitte Referenz angeben
+      reset-lines: Positionen zurücksetzen
+
+  # ── French ─────────────────────────────────────────────────────────────────
+  fr:
+    about:
+      title: "À propos"
+      btn-close: "Fermer"
+      content: |
+        ### Générateur de factures
+        Une application de navigateur en fichier unique pour générer des factures en PDF.
+        Aucun backend, aucune étape de build.
+
+        **Code source :** [kbenestad/invoice](https://github.com/kbenestad/invoice)
+        **Documentation :** [docs.benestad.net/invoice](https://docs.benestad.net/invoice)
+
+        &copy; 2026 Kristian Benestad. Sous licence Apache 2.
+    tax-types:
+      vat: TVA
+      gst: TPS
+      sales-tax: Taxe de vente
+      withholding: "Retenue à la source"
+      other: Autre taxe
+    uom:
+      EA: Pièce
+      HR: Heure
+      DY: Jour
+      WK: Semaine
+      MO: Mois
+      LS: Forfait
+    products:
+      CONSULTING: Services de conseil
+      TRAINING: Formation
+      REPORT: Rapport écrit
+      REVIEW: "Révision et retours"
+    ui:
+      language: Langue
+      invoice: FACTURE
+      sender-name: Issuer
+      sender-address1: "Ligne d'adresse 1"
+      sender-address2: "Ligne d'adresse 2"
+      sender-address3: "Ligne d'adresse 3"
+      sender-address4: "Ligne d'adresse 4"
+      sender-country: Pays
+      sender-phone: Téléphone
+      sender-email: "E-mail"
+      charge-to: "Facturer à"
+      charge-to-name: Organisation / Nom
+      charge-to-address1: "Ligne d'adresse 1"
+      charge-to-address2: "Ligne d'adresse 2"
+      charge-to-address3: "Ligne d'adresse 3"
+      charge-to-address4: "Ligne d'adresse 4"
+      charge-to-country: Pays
+      charge-to-phone: Téléphone
+      charge-to-email: "E-mail"
+      vat-id: "N° TVA / ID fiscal"
+      registration-no: "N° d'enregistrement"
+      invoice-date: Date de facture
+      project-code: Code projet
+      invoice-no: "N° de facture"
+      qty: Qté
+      uom: UM
+      description: Description
+      price: Prix unitaire
+      line-total: Total ligne
+      foreign-currency: Devise étrangère
+      currency-code: Code devise étrangère
+      exchange-rate: Taux de change
+      per-item: Prix par unité en
+      total-foreign: Total ligne en
+      add-line: "+ Ajouter une ligne"
+      subtotal: Sous-total
+      tax: Taxe
+      paid: Payé
+      to-pay: À payer
+      save: Enregistrer
+      validate: Valider
+      val-ok-head: "Tout est bon."
+      val-ok: "Le formulaire est prêt à télécharger."
+      val-errors-head: "Veuillez corriger ce qui suit :"
+      val-invoice-no: Le numéro de facture est requis
+      val-from-name: "Le nom de l'expéditeur est requis"
+      val-charge-to: Le destinataire est requis
+      val-lines: Au moins une ligne est requise
+      generate-invoice: Télécharger la facture
+      other: Autre
+      select: "— Sélectionner —"
+      yes: "Oui"
+      no-option: "Non"
+      invoice-currency: Devise de facturation
+      add-tax: "+ Ajouter une taxe"
+      tax-pct: "%"
+      tax-amount: Montant
+      converted-from: Converti depuis
+      download-pdf: "Télécharger PDF"
+      close: Fermer
+      invoice-lines: Lignes de facture
+      sender-section: De
+      invoice-details-section: Détails de la facture
+      payment: Paiement
+      payment-terms: Conditions de paiement
+      payment-days: jours
+      pay-by: "À payer avant le"
+      account-holder: Titulaire du compte
+      account-no: "N° de compte (BBAN/IBAN)"
+      bank-bic: "Banque / BIC (code Swift)"
+      bank-address: Adresse de la banque
+      payment-ref: "Merci d'indiquer la référence"
+      reset-lines: Réinitialiser les lignes
+
+  # ── Spanish ────────────────────────────────────────────────────────────────
+  es:
+    about:
+      title: "Acerca de"
+      btn-close: "Cerrar"
+      content: |
+        ### Generador de facturas
+        Una aplicación de navegador de un solo archivo para generar facturas de autónomo en PDF.
+        Sin backend, sin paso de compilación — solo un navegador y un archivo de configuración.
+
+        **Código fuente:** [kbenestad/invoice](https://github.com/kbenestad/invoice)
+        **Documentación:** [docs.benestad.net/invoice](https://docs.benestad.net/invoice)
+
+        &copy; 2026 Kristian Benestad. Con licencia Apache 2.
+    tax-types:
+      vat: IVA
+      gst: GST
+      sales-tax: Impuesto sobre ventas
+      withholding: Retención en la fuente
+      other: Otro impuesto
+    uom:
+      EA: Unidad
+      HR: Hora
+      DY: Día
+      WK: Semana
+      MO: Mes
+      LS: Suma fija
+    products:
+      CONSULTING: Servicios de consultoría
+      TRAINING: Formación
+      REPORT: Informe escrito
+      REVIEW: "Revisión y comentarios"
+    ui:
+      language: Idioma
+      invoice: FACTURA
+      sender-name: Emisor
+      sender-address1: "Línea de dirección 1"
+      sender-address2: "Línea de dirección 2"
+      sender-address3: "Línea de dirección 3"
+      sender-address4: "Línea de dirección 4"
+      sender-country: País
+      sender-phone: Teléfono
+      sender-email: "Correo electrónico"
+      charge-to: "Facturar a"
+      charge-to-name: Organización / Nombre
+      charge-to-address1: "Línea de dirección 1"
+      charge-to-address2: "Línea de dirección 2"
+      charge-to-address3: "Línea de dirección 3"
+      charge-to-address4: "Línea de dirección 4"
+      charge-to-country: País
+      charge-to-phone: Teléfono
+      charge-to-email: "Correo electrónico"
+      vat-id: NIF / CIF
+      registration-no: "N.º de registro"
+      invoice-date: Fecha de factura
+      project-code: Código de proyecto
+      invoice-no: "N.º de factura"
+      qty: Cant.
+      uom: UM
+      description: Descripción
+      price: Precio unitario
+      line-total: Total línea
+      foreign-currency: Divisa extranjera
+      currency-code: Código de divisa extranjera
+      exchange-rate: Tipo de cambio
+      per-item: Precio por unidad en
+      total-foreign: Total línea en
+      add-line: "+ Agregar nueva línea"
+      subtotal: Subtotal
+      tax: Impuesto
+      paid: Pagado
+      to-pay: A pagar
+      save: Guardar
+      validate: Validar
+      val-ok-head: "Todo correcto."
+      val-ok: "El formulario está listo para descargar."
+      val-errors-head: "Por favor, corrija lo siguiente:"
+      val-invoice-no: El número de factura es obligatorio
+      val-from-name: El nombre del emisor es obligatorio
+      val-charge-to: El destinatario es obligatorio
+      val-lines: Se requiere al menos una línea
+      generate-invoice: Descargar factura
+      other: Otro
+      select: "— Seleccionar —"
+      yes: "Sí"
+      no-option: "No"
+      invoice-currency: Divisa de facturación
+      add-tax: "+ Agregar impuesto"
+      tax-pct: "%"
+      tax-amount: Importe
+      converted-from: Convertido desde
+      download-pdf: "Descargar PDF"
+      close: Cerrar
+      invoice-lines: Líneas de factura
+      sender-section: De
+      invoice-details-section: Detalles de la factura
+      payment: Pago
+      payment-terms: Condiciones de pago
+      payment-days: días
+      pay-by: Pagar antes del
+      account-holder: Titular de la cuenta
+      account-no: "N.º de cuenta (BBAN/IBAN)"
+      bank-bic: "Banco / BIC (código Swift)"
+      bank-address: Dirección del banco
+      payment-ref: Por favor, indique la referencia
+      reset-lines: Restablecer líneas de factura
