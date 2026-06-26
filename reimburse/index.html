@@ -100,10 +100,7 @@
 
 // ========== UTILITIES ==========
 // $, $$, el, uid live in app.js
-function fmtAmt(n) {
-  const v = parseFloat(n);
-  return isNaN(v) ? '–' : v.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
-}
+function fmtAmt(n) { return formatAmount(n, { fallback: '–', locale: undefined }); }
 function defaultPeriod() {
   const d = new Date();
   const isLastDay = d.getDate() === new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
@@ -153,11 +150,9 @@ function showAboutModal() {
 // ========== CONFIG ==========
 let CFG;
 async function loadConfig() {
-  const res = await fetch('config.yml');
-  if (!res.ok) throw new Error('Cannot load config.yml');
-  CFG = jsyaml.load(await res.text());
+  CFG = await loadYamlConfig();
   normaliseConfig();
-  document.documentElement.style.setProperty('--accent', CFG['accent-colour'] || '#2F6FED');
+  applyAccent(CFG);
 }
 
 // ── Localisation adapter ───────────────────────────────────────────────────────
@@ -435,22 +430,8 @@ function render() {
 
   toolbar.appendChild(el('div', {className:'spacer'}));
 
-  // Font size — A− / A+ with a live % label
-  const scales = [0.5,0.6,0.7,0.8,0.9,1,1.1,1.2,1.3,1.4,1.5];
-  let scaleIdx = 5; // default: 100%
-  const szLabel = el('span', {style:'font-size:12px;color:var(--text-muted);font-family:var(--font-mono)'}, '100%');
-  const sizeSeg = el('div', {className:'kb-seg', role:'group', 'aria-label':'Text size'});
-  const szDown = el('button', {type:'button', 'aria-label':'Smaller text'}, 'A−');
-  const szUp   = el('button', {type:'button', 'aria-label':'Larger text'},  'A+');
-  function applyScale() {
-    szDown.disabled = scaleIdx === 0;
-    szUp.disabled   = scaleIdx === scales.length - 1;
-    document.documentElement.style.setProperty('--font-scale', scales[scaleIdx]);
-    szLabel.textContent = Math.round(scales[scaleIdx] * 100) + '%';
-  }
-  szDown.addEventListener('click', () => { if (scaleIdx > 0)               { scaleIdx--; applyScale(); } });
-  szUp.addEventListener('click',   () => { if (scaleIdx < scales.length-1) { scaleIdx++; applyScale(); } });
-  sizeSeg.append(szDown, szUp);
+  // Font size — A− / A+ control (built by app.js, drives --font-scale)
+  const { seg: sizeSeg, label: szLabel } = makeSizeControl();
   toolbar.appendChild(sizeSeg);
   toolbar.appendChild(szLabel);
 
@@ -1110,7 +1091,6 @@ async function generatePDF() {
   // Header: org name left | REIMBURSEMENT right  (timesheet style)
   const hdrTopY = y;
   const nowD = new Date();
-  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
   const hdrNameSize = szLg;  // org name and title same size
   const hdrNameY = hdrTopY - Math.round(hdrNameSize * 0.28);  // cap top near hdrTopY
@@ -1130,7 +1110,7 @@ async function generatePDF() {
   const titleW = fontBold.widthOfTextAtSize(titleStr, hdrNameSize);
   pg.drawText(titleStr, { x: M.left + W - titleW, y: hdrNameY, size: hdrNameSize, font: fontBold, color: clrText });
 
-  const claimDate = `Claim · ${nowD.getDate()} ${MONTHS[nowD.getMonth()]} ${nowD.getFullYear()}`;
+  const claimDate = `Claim · ${nowD.getDate()} ${MONTHS_SHORT[nowD.getMonth()]} ${nowD.getFullYear()}`;
   const claimDateW = fontBody.widthOfTextAtSize(claimDate, szSm);
   pg.drawText(claimDate, { x: M.left + W - claimDateW, y: hdrSubtY, size: szSm, font: fontBody, color: clrMuted });
 
@@ -1472,6 +1452,7 @@ async function onSave() {
 async function init() {
   try {
     await loadConfig();
+    initFontScale();
     state.lang = localStorage.getItem('reimb-lang') || CFG['default-code'] || 'en';
     applyLang(state.lang);
     await initDB();

@@ -71,10 +71,10 @@
     </div>
     <div class="spacer"></div>
     <div class="kb-seg" role="group" aria-label="Text size">
-      <button id="sz-down" onclick="bumpZoom(-1)" aria-label="Smaller text">A−</button>
-      <button id="sz-up"   onclick="bumpZoom(1)"  aria-label="Larger text">A+</button>
+      <button id="sz-down" onclick="bumpFontScale(-1)" aria-label="Smaller text">A−</button>
+      <button id="sz-up"   onclick="bumpFontScale(1)"  aria-label="Larger text">A+</button>
     </div>
-    <span id="sz-label" style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono)">100%</span>
+    <span id="sz-label" class="kb-sz-label">100%</span>
     <button class="kb-iconbtn kb-theme-btn" id="btn-theme" onclick="toggleTheme()" title="Toggle light/dark" aria-label="Toggle dark mode">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
@@ -174,37 +174,10 @@ function normaliseI18n(c) {
   });
 }
 
-// ── Numbers ───────────────────────────────────────────────────────────────────
-function fmt(n) {
-  if (n === "" || n == null || isNaN(+n)) return "0.00";
-  return (+n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function pn(s) { return parseFloat(String(s ?? 0).replace(/,/g, "")) || 0; }
-
-// ── Date ─────────────────────────────────────────────────────────────────────
-const MONTHS_FULL  = ["January","February","March","April","May","June",
-                      "July","August","September","October","November","December"];
-const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun",
-                      "Jul","Aug","Sep","Oct","Nov","Dec"];
-
-function fmtDate(v) {
-  if (!v) return "";
-  const [yr, mo, dy] = v.split("-").map(Number);
-  const pattern = cfg?.["date-format"] || "d MMMM YYYY";
-  return pattern.replace(/YYYY|YY|MMMM|MMM|MM|M|dd|d/g, tok => {
-    switch (tok) {
-      case "YYYY": return yr;
-      case "YY":   return String(yr).slice(-2);
-      case "MMMM": return MONTHS_FULL[mo - 1];
-      case "MMM":  return MONTHS_SHORT[mo - 1];
-      case "MM":   return String(mo).padStart(2, "0");
-      case "M":    return mo;
-      case "dd":   return String(dy).padStart(2, "0");
-      case "d":    return dy;
-      default:     return tok;
-    }
-  });
-}
+// ── Numbers & dates: formatAmount/parseAmount/formatDate live in app.js ───────
+function fmt(n) { return formatAmount(n); }
+function pn(s)  { return parseAmount(s); }
+function fmtDate(v) { return formatDate(v, cfg?.["date-format"] || "d MMMM YYYY"); }
 
 // ── HTML escape ───────────────────────────────────────────────────────────────
 function h(s) {
@@ -301,9 +274,7 @@ function countryOpts(sel) {
 // ── Load config ───────────────────────────────────────────────────────────────
 async function loadCfg() {
   try {
-    const r = await fetch("config.yml");
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    cfg  = jsyaml.load(await r.text());
+    cfg = await loadYamlConfig();
     normaliseI18n(cfg);
     lang = cfg["default-code"] || "en";
     boot();
@@ -316,7 +287,7 @@ async function loadCfg() {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 function boot() {
-  if (cfg['accent-colour']) document.documentElement.style.setProperty('--accent', cfg['accent-colour']);
+  applyAccent(cfg);
   buildLangBar();
   buildHeader();
   buildForm();
@@ -380,28 +351,11 @@ function updateInvMeta() {
 }
 
 // ── Font-size accessibility ────────────────────────────────────────────────────
-const ZOOMS       = [0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.5];
-const ZOOM_LABELS = ["50%","60%","70%","80%","90%","100%","110%","120%","130%","140%","150%"];
-let zoomIdx = +(localStorage.getItem("zoomIdx") ?? 5);
-
-function applyZoom() {
-  const fr = document.getElementById("form-root");
-  if (fr) fr.style.zoom = ZOOMS[zoomIdx];
-  const lbl = document.getElementById("sz-label");
-  if (lbl) lbl.textContent = ZOOM_LABELS[zoomIdx];
-  document.getElementById("sz-down").disabled = zoomIdx === 0;
-  document.getElementById("sz-up").disabled   = zoomIdx === ZOOMS.length - 1;
-}
-
-function bumpZoom(dir) {
-  zoomIdx = Math.max(0, Math.min(ZOOMS.length - 1, zoomIdx + dir));
-  localStorage.setItem("zoomIdx", zoomIdx);
-  applyZoom();
-}
+// Text-size control drives the shared --font-scale token (see app.js).
 
 // ── Language bar ──────────────────────────────────────────────────────────────
 function buildLangBar() {
-  applyZoom();
+  initFontScale();
   if (cfg.about) {
     const btn = document.getElementById("btn-about");
     if (btn) btn.style.display = "";

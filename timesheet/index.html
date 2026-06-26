@@ -186,11 +186,9 @@ function dateRange(from, to) {
 // ========== CONFIG ==========
 let CFG;
 async function loadConfig() {
-  const res = await fetch('config.yml');
-  if (!res.ok) throw new Error('Cannot load config.yml');
-  CFG = jsyaml.load(await res.text());
+  CFG = await loadYamlConfig();
   normaliseConfig();
-  document.documentElement.style.setProperty('--accent', CFG['accent-colour'] || '#2f6fed');
+  applyAccent(CFG);
 }
 
 // ── Localisation adapter ───────────────────────────────────────────────────────
@@ -678,21 +676,8 @@ function render() {
     render();
   });
 
-  const curScale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--font-scale') || '1') || 1;
-  const szLabel = el('span', {className:'kb-sz-label'}, Math.round(curScale * 100) + '%');
-
-  const sizeSeg = el('div', {className:'kb-seg', role:'group', 'aria-label':'Text size'});
-  [['A−', -1, 'Smaller text'], ['A+', 1, 'Larger text']].forEach(([label, dir, ariaLabel]) => {
-    const btn = el('button', {type:'button', 'aria-label': ariaLabel}, label);
-    btn.addEventListener('click', () => {
-      const cur = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--font-scale') || '1') || 1;
-      const nxt = Math.max(0.5, Math.min(1.5, cur + dir * 0.1));
-      document.documentElement.style.setProperty('--font-scale', nxt.toFixed(1));
-      localStorage.setItem('ts-fontscale', nxt.toFixed(1));
-      szLabel.textContent = Math.round(nxt * 100) + '%';
-    });
-    sizeSeg.appendChild(btn);
-  });
+  // Font size — A− / A+ control (built by app.js, drives --font-scale)
+  const { seg: sizeSeg, label: szLabel } = makeSizeControl();
 
   // Theme + About icon buttons (built by app.js)
   const themeBtn = makeThemeButton();
@@ -1607,8 +1592,7 @@ async function init() {
     await loadConfig();
     loadSignature();
 
-    const savedScale = localStorage.getItem('ts-fontscale');
-    if (savedScale) document.documentElement.style.setProperty('--font-scale', savedScale);
+    initFontScale();
 
     const savedLang = localStorage.getItem('timesheet-lang');
     const savedEmp  = localStorage.getItem('timesheet-employee');

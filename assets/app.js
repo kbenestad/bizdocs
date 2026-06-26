@@ -185,3 +185,95 @@ function kbAbout({ title, contentMD, closeLabel } = {}) {
     buttons: [{ label: closeLabel || 'Close', value: true, variant: 'kb-btn--primary', autofocus: true }],
   });
 }
+
+/* ── Config loading ────────────────────────────────────────────────────────── */
+/** Fetch + parse a YAML config file. Throws on HTTP error. */
+async function loadYamlConfig(url = 'config.yml') {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return jsyaml.load(await res.text());
+}
+
+/** Apply a config's accent-colour to the --accent token (no-op if unset; the
+ *  token already has a sensible default in style.css). */
+function applyAccent(cfg) {
+  if (cfg && cfg['accent-colour']) {
+    document.documentElement.style.setProperty('--accent', cfg['accent-colour']);
+  }
+}
+
+/* ── Numbers & dates ───────────────────────────────────────────────────────── */
+/** Format a number with thousands separators and 2 decimals; returns `fallback`
+ *  for non-numeric input. */
+function formatAmount(n, { fallback = '0.00', locale = 'en-US' } = {}) {
+  if (n === '' || n == null || isNaN(+n)) return fallback;
+  return (+n).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** Parse a possibly comma-grouped numeric string to a number (0 if invalid). */
+function parseAmount(s) { return parseFloat(String(s ?? 0).replace(/,/g, '')) || 0; }
+
+const MONTHS_FULL  = ['January','February','March','April','May','June',
+                      'July','August','September','October','November','December'];
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun',
+                      'Jul','Aug','Sep','Oct','Nov','Dec'];
+
+/** Format an ISO date (YYYY-MM-DD) with a token pattern:
+ *  d/dd day · M/MM/MMM/MMMM month · YY/YYYY year. */
+function formatDate(iso, pattern = 'd MMMM YYYY', full = MONTHS_FULL, short = MONTHS_SHORT) {
+  if (!iso) return '';
+  const [yr, mo, dy] = String(iso).split('-').map(Number);
+  return pattern.replace(/YYYY|YY|MMMM|MMM|MM|M|dd|d/g, tok => {
+    switch (tok) {
+      case 'YYYY': return yr;
+      case 'YY':   return String(yr).slice(-2);
+      case 'MMMM': return full[mo - 1];
+      case 'MMM':  return short[mo - 1];
+      case 'MM':   return String(mo).padStart(2, '0');
+      case 'M':    return mo;
+      case 'dd':   return String(dy).padStart(2, '0');
+      case 'd':    return dy;
+      default:     return tok;
+    }
+  });
+}
+
+/* ── Font scale (shared text-size control) ─────────────────────────────────── */
+/* Every app drives the same --font-scale token (defined in style.css) and
+ * persists it under one key, so the A−/A+ control behaves identically. */
+const KB_SCALE_KEY = 'kb-font-scale';
+const KB_SCALE_MIN = 0.5, KB_SCALE_MAX = 1.5, KB_SCALE_STEP = 0.1;
+
+function currentScale() {
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--font-scale'));
+  return isNaN(v) ? 1 : v;
+}
+function applyScaleLabels() {
+  const pct = Math.round(currentScale() * 100) + '%';
+  $$('.kb-sz-label').forEach(l => { l.textContent = pct; });
+}
+/** Set the global font scale (clamped, 1-decimal), persist, and sync labels. */
+function setFontScale(scale) {
+  const s = Math.round(Math.max(KB_SCALE_MIN, Math.min(KB_SCALE_MAX, scale)) * 10) / 10;
+  document.documentElement.style.setProperty('--font-scale', String(s));
+  try { localStorage.setItem(KB_SCALE_KEY, String(s)); } catch (e) {}
+  applyScaleLabels();
+  return s;
+}
+function bumpFontScale(dir) { return setFontScale(currentScale() + dir * KB_SCALE_STEP); }
+/** Apply the persisted font scale + refresh labels (call once at startup). */
+function initFontScale() {
+  const v = localStorage.getItem(KB_SCALE_KEY);
+  if (v) document.documentElement.style.setProperty('--font-scale', v);
+  applyScaleLabels();
+}
+/** Build an A− / A+ text-size segment plus its % label → { seg, label }. */
+function makeSizeControl() {
+  const seg = el('div', { className: 'kb-seg', role: 'group', 'aria-label': 'Text size' });
+  seg.append(
+    el('button', { type: 'button', 'aria-label': 'Smaller text', onClick: () => bumpFontScale(-1) }, 'A−'),
+    el('button', { type: 'button', 'aria-label': 'Larger text',  onClick: () => bumpFontScale(1)  }, 'A+')
+  );
+  const label = el('span', { className: 'kb-sz-label' }, Math.round(currentScale() * 100) + '%');
+  return { seg, label };
+}
