@@ -1,0 +1,441 @@
+# =============================================================================
+# Timesheet App — Configuration
+# =============================================================================
+
+# Organization
+organization:                # leave blank to show kBenestad wordmark
+logo: no                     # yes|no — if yes, loads assets/logo.png or logo.jpg
+logo-maxwidth: 7.5           # cm — maximum logo width on PDF
+tagline:                     # subtitle shown below org name
+
+# Page setup
+page-size: A4                # A4 or letter
+
+# PDF output language: default (the first defined language) or user-selected (follow the UI)
+output-language: default
+
+# Typography
+# Standard fonts: Helvetica, Times, Courier (plus Bold/Italic variants)
+# Custom: place a .ttf file in assets/ and use the filename (e.g. "assets/MyFont.ttf")
+font-body: Helvetica
+font-heading: Helvetica
+font-monospace: Courier
+font-size: 10                # base font size in pt for PDF
+
+# Branding
+accent-colour: "#2f6fed"
+
+# Form text (appears on PDF)
+footer: "Confidential"
+
+muted-background: yes
+needssignature: yes
+default-work-code: REG
+
+employee-types:
+  - code: hourly
+    display: "Hourly"
+    prefilled: non-working
+
+  - code: monthly
+    display: "Monthly"
+    prefilled: working
+
+  - code: freelance
+    display: "Freelance"
+    prefilled: non-working
+
+workdays: [Mon, Tue, Wed, Thu, Fri]
+workhours-from: "09:00"
+workhours-to: "17:00"
+
+holidays:
+  - date: "2025-01-01"
+  - date: "2025-04-30"
+  - date: "2025-05-01"
+  - date: "2025-09-02"
+
+  - date: "2026-01-01"
+  - date: "2026-04-30"
+  - date: "2026-05-01"
+  - date: "2026-09-02"
+
+codes:
+  - code: NON
+    counthours: no
+    lockstate: locked
+    employee-types: [hourly, freelance]
+    colour-border: "#393939"
+    colour-bg: "#d7d7d7"
+
+  - code: REG
+    counthours: yes
+    lockstate: unlocked
+    employee-types: [monthly, hourly, freelance]
+    colour-border: "#0078d7"
+    colour-bg: "#cce4f7"
+
+  - code: PPT
+    counthours: yes
+    lockstate: locked
+    employee-types: [monthly, hourly]
+    colour-border-fullday: "#ed616f"
+    colour-bg-fullday: "#ffd9d9"
+    colour-border-partialday: "#ffb900"
+    colour-bg-partialday: "#fff1cc"
+
+  - code: OTH
+    counthours: yes
+    lockstate: unlocked
+    employee-types: [monthly, hourly]
+    colour-border: "#a4252c"
+    colour-bg: "#edd4d5"
+
+  - code: UNP
+    counthours: yes
+    lockstate: locked
+    employee-types: [monthly]
+    colour-border: "#393939"
+    colour-bg: "#d7d7d7"
+
+  - code: HOL
+    counthours: yes
+    lockstate: locked
+    employee-types: [monthly, hourly, freelance]
+    colour-border: "#8cbd18"
+    colour-bg: "#e8f2d1"
+
+# ── Localisation ──────────────────────────────────────────────────────────────
+localisation:
+  default-language: en
+
+  # ── Language declarations ──────────────────────────────────────────────────
+  languages:
+    - code: en
+      display: "English"
+    - code: de
+      display: "Deutsch"
+    - code: fr
+      display: "Français"
+    - code: es
+      display: "Español"
+
+  # ── English ────────────────────────────────────────────────────────────────
+  en:
+    about:
+      title: "About Timesheet"
+      button: "Close"
+      content: |
+        **Timesheet** is an open-source timesheet and invoice tool built for individuals and small organizations.
+
+        Generate professional PDF timesheets with configurable work codes, employee types, and branding.
+
+        Source code and documentation available at [kbenestad/timesheet](https://github.com/kbenestad/timesheet).
+    holidays:
+      "2025-01-01": "New Year's Day"
+      "2025-04-30": "Reunification Day"
+      "2025-05-01": "International Labour Day"
+      "2025-09-02": "National Day"
+      "2026-01-01": "New Year's Day"
+      "2026-04-30": "Reunification Day"
+      "2026-05-01": "International Labour Day"
+      "2026-09-02": "National Day"
+    codes:
+      NON: "Non-working day"
+      REG:
+        display: "Regular"
+        hint: "Please describe your activities"
+      PPT: "PPT"
+      OTH:
+        display: "Other paid leave"
+        hint: "Please enter type of leave"
+      UNP: "Unpaid leave"
+      HOL: "Holiday"
+    ui:
+      employee-type-label: "Employee type"
+      option-salaried: "Salaried"
+      option-hourly: "Hourly"
+      language-label: "Language"
+      period-label: "Period"
+      employee-label: "Employee"
+      col-date: "Date"
+      col-time-in: "Time in"
+      col-time-out: "Time out"
+      col-code: "Code"
+      col-description: "Description"
+      col-hours: "Hours"
+      total-hours: "Total hours"
+      total-hours-decimal: "Total hours (decimal - transfer to invoice)"
+      of-which: "Of which"
+      note-unpaid: "{x} hours of unpaid leave registered out of {y} total.\nMonthly pay quantity: {q}"
+      btn-validate: "Validate"
+      btn-generate: "Generate Timesheet"
+      btn-new: "New Timesheet"
+      unlock-label: "Unlock"
+      val-employee-required: "Employee name is required"
+      val-time-order: "Time out must be after time in"
+      val-desc-required: "Description is required"
+      val-time-overlap: "Time ranges overlap on this day"
+      val-hours-exceed: "Daily hours exceed standard day length"
+      val-code-empty: "Code is not set on a workday row"
+      new-confirm: "This will clear all current timesheet data and start a fresh form. Your name, employee type, and language preference will be kept.<br><br>Are you sure?"
+      period-to: "to"
+      generating: "Generating PDF…"
+      signature-employee: "Employee signature"
+      signature-authorised: "Authorised signature"
+      signature-date: "Date"
+      pdf-title: "TIMESHEET"
+      pdf-employee: "Employee"
+      pdf-period: "Period"
+      pdf-type: "Type"
+      confirm-title: "Confirm"
+      btn-cancel: "Cancel"
+      daily-entries: "Daily entries"
+      btn-save: "Save"
+      btn-saved: "Saved ✓"
+      val-ok-title: "All good."
+      val-ok-body: "The form is ready to download."
+      val-errors-title: "Errors — fix before generating:"
+      val-warnings-title: "Warnings:"
+      weekend: "Weekend"
+      summary: "Summary"
+
+  # ── German ─────────────────────────────────────────────────────────────────
+  de:
+    about:
+      title: "Über Stundenzettel"
+      button: "Schließen"
+      content: |
+        **Timesheet** ist ein Open-Source-Stundenzettel- und Rechnungstool für Einzelpersonen und kleine Organisationen.
+
+        Erstellen Sie professionelle PDF-Stundenzettel mit konfigurierbaren Arbeitscodes, Mitarbeitertypen und Branding.
+
+        Quellcode und Dokumentation unter [kbenestad/timesheet](https://github.com/kbenestad/timesheet).
+    holidays:
+      "2025-01-01": "Neujahr"
+      "2025-04-30": "Wiedervereinigungstag"
+      "2025-05-01": "Internationaler Tag der Arbeit"
+      "2025-09-02": "Nationalfeiertag"
+      "2026-01-01": "Neujahr"
+      "2026-04-30": "Wiedervereinigungstag"
+      "2026-05-01": "Internationaler Tag der Arbeit"
+      "2026-09-02": "Nationalfeiertag"
+    codes:
+      NON: "Nicht-Arbeitstag"
+      REG:
+        display: "Normal"
+        hint: "Bitte beschreiben Sie Ihre Tätigkeiten"
+      PPT: "PPT"
+      OTH:
+        display: "Anderer bezahlter Urlaub"
+        hint: "Bitte Urlaubsart eingeben"
+      UNP: "Unbezahlter Urlaub"
+      HOL: "Feiertag"
+    ui:
+      employee-type-label: "Mitarbeitertyp"
+      option-salaried: "Festgehalt"
+      option-hourly: "Stundenweise"
+      language-label: "Sprache"
+      period-label: "Zeitraum"
+      employee-label: "Mitarbeiter"
+      col-date: "Datum"
+      col-time-in: "Arbeitsbeginn"
+      col-time-out: "Arbeitsende"
+      col-code: "Code"
+      col-description: "Beschreibung"
+      col-hours: "Stunden"
+      total-hours: "Gesamtstunden"
+      total-hours-decimal: "Gesamtstunden (dezimal - in Rechnung übertragen)"
+      of-which: "Davon"
+      note-unpaid: "{x} Stunden unbezahlter Urlaub von insgesamt {y} erfasst.\nMonatsgehalt-Faktor: {q}"
+      btn-validate: "Prüfen"
+      btn-generate: "Stundenzettel erstellen"
+      btn-new: "Neuer Stundenzettel"
+      unlock-label: "Entsperren"
+      val-employee-required: "Mitarbeitername ist erforderlich"
+      val-time-order: "Arbeitsende muss nach Arbeitsbeginn liegen"
+      val-desc-required: "Beschreibung ist erforderlich"
+      val-time-overlap: "Zeiträume überschneiden sich an diesem Tag"
+      val-hours-exceed: "Tagesstunden überschreiten die Standard-Tageslänge"
+      val-code-empty: "Code ist für eine Arbeitstag-Zeile nicht gesetzt"
+      new-confirm: "Dadurch werden alle aktuellen Stundenzetteldaten gelöscht und ein neues Formular begonnen. Name, Mitarbeitertyp und Spracheinstellung werden beibehalten.<br><br>Sind Sie sicher?"
+      period-to: "bis"
+      generating: "PDF wird erstellt…"
+      signature-employee: "Unterschrift Mitarbeiter"
+      signature-authorised: "Bevollmächtigte Unterschrift"
+      signature-date: "Datum"
+      pdf-title: "STUNDENZETTEL"
+      pdf-employee: "Mitarbeiter"
+      pdf-period: "Zeitraum"
+      pdf-type: "Typ"
+      confirm-title: "Bestätigen"
+      btn-cancel: "Abbrechen"
+      daily-entries: "Tägliche Einträge"
+      btn-save: "Speichern"
+      btn-saved: "Gespeichert ✓"
+      val-ok-title: "Alles in Ordnung."
+      val-ok-body: "Das Formular ist bereit zum Herunterladen."
+      val-errors-title: "Fehler — vor dem Erstellen beheben:"
+      val-warnings-title: "Warnungen:"
+      weekend: "Wochenende"
+      summary: "Zusammenfassung"
+
+  # ── French ─────────────────────────────────────────────────────────────────
+  fr:
+    about:
+      title: "À propos de Timesheet"
+      button: "Fermer"
+      content: |
+        **Timesheet** est un outil open source de feuille de temps et de facturation pour les particuliers et les petites organisations.
+
+        Générez des feuilles de temps PDF professionnelles avec des codes de travail, des types d'employés et une charte graphique configurables.
+
+        Code source et documentation disponibles sur [kbenestad/timesheet](https://github.com/kbenestad/timesheet).
+    holidays:
+      "2025-01-01": "Jour de l'An"
+      "2025-04-30": "Jour de la Réunification"
+      "2025-05-01": "Fête du Travail"
+      "2025-09-02": "Fête Nationale"
+      "2026-01-01": "Jour de l'An"
+      "2026-04-30": "Jour de la Réunification"
+      "2026-05-01": "Fête du Travail"
+      "2026-09-02": "Fête Nationale"
+    codes:
+      NON: "Jour non travaillé"
+      REG:
+        display: "Régulier"
+        hint: "Veuillez décrire vos activités"
+      PPT: "PPT"
+      OTH:
+        display: "Autre congé payé"
+        hint: "Veuillez saisir le type de congé"
+      UNP: "Congé sans solde"
+      HOL: "Jour férié"
+    ui:
+      employee-type-label: "Type d'employé"
+      option-salaried: "Salarié"
+      option-hourly: "À l'heure"
+      language-label: "Langue"
+      period-label: "Période"
+      employee-label: "Employé"
+      col-date: "Date"
+      col-time-in: "Heure d'arrivée"
+      col-time-out: "Heure de départ"
+      col-code: "Code"
+      col-description: "Description"
+      col-hours: "Heures"
+      total-hours: "Total heures"
+      total-hours-decimal: "Total heures (décimal - à transférer sur la facture)"
+      of-which: "Dont"
+      note-unpaid: "{x} heures de congé sans solde enregistrées sur {y} au total.\nCoefficient de salaire mensuel : {q}"
+      btn-validate: "Valider"
+      btn-generate: "Générer la feuille de temps"
+      btn-new: "Nouvelle feuille"
+      unlock-label: "Déverrouiller"
+      val-employee-required: "Le nom de l'employé est obligatoire"
+      val-time-order: "L'heure de départ doit être postérieure à l'heure d'arrivée"
+      val-desc-required: "La description est obligatoire"
+      val-time-overlap: "Les plages horaires se chevauchent ce jour"
+      val-hours-exceed: "Les heures journalières dépassent la durée standard de la journée"
+      val-code-empty: "Le code n'est pas défini pour une ligne de jour ouvrable"
+      new-confirm: "Cela effacera toutes les données actuelles de la feuille de temps et commencera un nouveau formulaire. Votre nom, type d'employé et préférence de langue seront conservés.<br><br>Êtes-vous sûr(e) ?"
+      period-to: "au"
+      generating: "Génération du PDF…"
+      signature-employee: "Signature de l'employé"
+      signature-authorised: "Signature autorisée"
+      signature-date: "Date"
+      pdf-title: "FEUILLE DE TEMPS"
+      pdf-employee: "Employé"
+      pdf-period: "Période"
+      pdf-type: "Type"
+      confirm-title: "Confirmer"
+      btn-cancel: "Annuler"
+      daily-entries: "Saisies quotidiennes"
+      btn-save: "Enregistrer"
+      btn-saved: "Enregistré ✓"
+      val-ok-title: "Tout est bon."
+      val-ok-body: "Le formulaire est prêt à télécharger."
+      val-errors-title: "Erreurs — à corriger avant de générer :"
+      val-warnings-title: "Avertissements :"
+      weekend: "Week-end"
+      summary: "Résumé"
+
+  # ── Spanish ────────────────────────────────────────────────────────────────
+  es:
+    about:
+      title: "Acerca de Timesheet"
+      button: "Cerrar"
+      content: |
+        **Timesheet** es una herramienta de código abierto para hojas de horas y facturación, diseñada para particulares y pequeñas organizaciones.
+
+        Genere hojas de horas PDF profesionales con códigos de trabajo, tipos de empleado y branding configurables.
+
+        Código fuente y documentación disponibles en [kbenestad/timesheet](https://github.com/kbenestad/timesheet).
+    holidays:
+      "2025-01-01": "Año Nuevo"
+      "2025-04-30": "Día de la Reunificación"
+      "2025-05-01": "Día Internacional del Trabajo"
+      "2025-09-02": "Día Nacional"
+      "2026-01-01": "Año Nuevo"
+      "2026-04-30": "Día de la Reunificación"
+      "2026-05-01": "Día Internacional del Trabajo"
+      "2026-09-02": "Día Nacional"
+    codes:
+      NON: "Día no laborable"
+      REG:
+        display: "Regular"
+        hint: "Por favor, describa sus actividades"
+      PPT: "PPT"
+      OTH:
+        display: "Otra baja retribuida"
+        hint: "Por favor, introduzca el tipo de baja"
+      UNP: "Baja no retribuida"
+      HOL: "Festivo"
+    ui:
+      employee-type-label: "Tipo de empleado"
+      option-salaried: "Asalariado"
+      option-hourly: "Por horas"
+      language-label: "Idioma"
+      period-label: "Período"
+      employee-label: "Empleado"
+      col-date: "Fecha"
+      col-time-in: "Entrada"
+      col-time-out: "Salida"
+      col-code: "Código"
+      col-description: "Descripción"
+      col-hours: "Horas"
+      total-hours: "Total horas"
+      total-hours-decimal: "Total horas (decimal - transferir a factura)"
+      of-which: "De los cuales"
+      note-unpaid: "{x} horas de baja no retribuida registradas de un total de {y}.\nCoeficiente de salario mensual: {q}"
+      btn-validate: "Validar"
+      btn-generate: "Generar hoja de horas"
+      btn-new: "Nueva hoja"
+      unlock-label: "Desbloquear"
+      val-employee-required: "El nombre del empleado es obligatorio"
+      val-time-order: "La hora de salida debe ser posterior a la de entrada"
+      val-desc-required: "La descripción es obligatoria"
+      val-time-overlap: "Los rangos de tiempo se superponen en este día"
+      val-hours-exceed: "Las horas diarias superan la duración estándar de la jornada"
+      val-code-empty: "El código no está establecido en una fila de día laborable"
+      new-confirm: "Esto borrará todos los datos de la hoja de horas actual y comenzará un formulario nuevo. Se conservarán su nombre, tipo de empleado y preferencia de idioma.<br><br>¿Está seguro?"
+      period-to: "a"
+      generating: "Generando PDF…"
+      signature-employee: "Firma del empleado"
+      signature-authorised: "Firma autorizada"
+      signature-date: "Fecha"
+      pdf-title: "HOJA DE HORAS"
+      pdf-employee: "Empleado"
+      pdf-period: "Período"
+      pdf-type: "Tipo"
+      confirm-title: "Confirmar"
+      btn-cancel: "Cancelar"
+      daily-entries: "Entradas diarias"
+      btn-save: "Guardar"
+      btn-saved: "Guardado ✓"
+      val-ok-title: "Todo correcto."
+      val-ok-body: "El formulario está listo para descargar."
+      val-errors-title: "Errores — corríjalos antes de generar:"
+      val-warnings-title: "Advertencias:"
+      weekend: "Fin de semana"
+      summary: "Resumen"
