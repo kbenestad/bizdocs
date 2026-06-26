@@ -75,7 +75,7 @@
       <button id="sz-up"   onclick="bumpZoom(1)"  aria-label="Larger text">A+</button>
     </div>
     <span id="sz-label" style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono)">100%</span>
-    <button class="kb-iconbtn" id="btn-theme" onclick="toggleTheme()" title="Toggle light/dark" aria-label="Toggle dark mode">
+    <button class="kb-iconbtn kb-theme-btn" id="btn-theme" onclick="toggleTheme()" title="Toggle light/dark" aria-label="Toggle dark mode">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
       </svg>
@@ -104,17 +104,6 @@
 
 </div><!-- /.kb-wrap -->
 
-<!-- About modal -->
-<div id="about-modal" class="kb-overlay" style="display:none">
-  <div class="kb-modal">
-    <div class="kb-modal__hdr" id="about-dialog-header"></div>
-    <div class="kb-modal__body" id="about-dialog-body"></div>
-    <div class="kb-modal__footer">
-      <button id="about-btn-close" class="kb-btn kb-btn--primary" onclick="closeAbout()">Close</button>
-    </div>
-  </div>
-</div>
-
 <footer id="app-footer" class="kb-footer"></footer>
 
 <!-- js-yaml -->
@@ -123,9 +112,8 @@
 <!-- jsPDF -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
         crossorigin="anonymous"></script>
-<!-- marked (About modal markdown) -->
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"
-        crossorigin="anonymous"></script>
+<!-- Shared app runtime (DOM helpers, markdown, theme, modals) -->
+<script src="../assets/app.js"></script>
 
 <script>
 "use strict";
@@ -308,23 +296,7 @@ function countryOpts(sel) {
   ).join("");
 }
 
-// ── Theme toggle ──────────────────────────────────────────────────────────────
-const _moonSVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>`;
-const _sunSVG  = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>`;
-function _currentTheme() {
-  return document.documentElement.getAttribute("data-theme") ||
-    (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-}
-function updateThemeIcon() {
-  const btn = document.getElementById("btn-theme");
-  if (btn) btn.innerHTML = _currentTheme() === "dark" ? _sunSVG : _moonSVG;
-}
-function toggleTheme() {
-  const next = _currentTheme() === "dark" ? "light" : "dark";
-  document.documentElement.setAttribute("data-theme", next);
-  localStorage.setItem("kb-theme", next);
-  updateThemeIcon();
-}
+// ── Theme toggle: currentTheme/toggleTheme/updateThemeIcon live in app.js ─────
 
 // ── Load config ───────────────────────────────────────────────────────────────
 async function loadCfg() {
@@ -357,7 +329,7 @@ function boot() {
 }
 
 // ── Document header ───────────────────────────────────────────────────────────
-const KB_BRAND_SVG = `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true" style="width:100%;height:100%;display:block"><rect x="3" y="14" width="29" height="29" rx="8" fill="var(--accent)"/><rect x="16" y="3" width="29" height="29" rx="8" fill="none" stroke="var(--accent)" stroke-width="4"/></svg>`;
+// KB_BRAND_SVG lives in app.js
 const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" aria-hidden="true">
   <rect width="48" height="48" rx="12" fill="var(--accent)"/>
   <path d="M14 9 H29 L34 14 V39 H14 Z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/>
@@ -1720,7 +1692,7 @@ function buildFooter() {
     ? ` <span class="sep">&#183;</span> <a href="#" onclick="openAbout();return false">${h(ab.title ?? "About")}</a>`
     : "";
   footer.innerHTML =
-    `<span class="kb-mark"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><rect x="1" y="5" width="11" height="11" rx="3" fill="var(--accent)"/><rect x="6" y="1" width="11" height="11" rx="3" fill="none" stroke="var(--accent)" stroke-width="1.5"/></svg>kBenestad</span>`
+    `<span class="kb-mark">${KB_FOOTER_MARK_SVG}kBenestad</span>`
     + ` <span class="sep">&#183;</span>`
     + ` <span>&#169; 2026 Kristian Benestad</span>`
     + ` <span class="sep">&#183;</span>`
@@ -1731,21 +1703,8 @@ function buildFooter() {
 function openAbout() {
   const ab = aboutData();
   if (!ab) return;
-  document.getElementById("about-dialog-header").textContent = ab.title ?? "";
-  document.getElementById("about-dialog-body").innerHTML =
-    typeof marked !== "undefined" ? marked.parse(ab.content ?? "") : h(ab.content ?? "");
-  document.getElementById("about-btn-close").textContent = ab["btn-close"] ?? "Close";
-  document.getElementById("about-modal").style.display = "flex";
-  document.getElementById("about-btn-close").focus();
+  kbAbout({ title: ab.title, contentMD: ab.content, closeLabel: ab["btn-close"] });
 }
-
-function closeAbout() {
-  document.getElementById("about-modal").style.display = "none";
-}
-
-document.addEventListener("keydown", e => {
-  if (e.key === "Escape") closeAbout();
-});
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 loadCfg();

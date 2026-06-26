@@ -14,8 +14,9 @@
 <meta name="theme-color" content="#2f6fed">
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://unpkg.com/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+<script src="../assets/app.js"></script>
 <script>
-  (function(){var t=localStorage.getItem('reimb-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
+  (function(){var t=localStorage.getItem('kb-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
 </script>
 <link rel="stylesheet" href="../assets/style.css">
 <link rel="stylesheet" href="../assets/ui.css">
@@ -95,26 +96,10 @@
 'use strict';
 
 // ── Brand assets ──────────────────────────────────────────────────────────────
-const KB_BRAND_SVG = `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true" style="width:100%;height:100%;display:block"><rect x="3" y="14" width="29" height="29" rx="8" fill="var(--accent)"/><rect x="16" y="3" width="29" height="29" rx="8" fill="none" stroke="var(--accent)" stroke-width="4"/></svg>`;
+// KB_BRAND_SVG lives in app.js
 
 // ========== UTILITIES ==========
-const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
-const $ = (sel, ctx) => (ctx || document).querySelector(sel);
-const $$ = (sel, ctx) => [...(ctx || document).querySelectorAll(sel)];
-const el = (tag, attrs, children) => {
-  const e = document.createElement(tag);
-  if (attrs) Object.entries(attrs).forEach(([k,v]) => {
-    if (k === 'className') e.className = v;
-    else if (k === 'style' && typeof v === 'object') Object.assign(e.style, v);
-    else if (k.startsWith('on')) e.addEventListener(k.slice(2).toLowerCase(), v);
-    else if (v != null && v !== false) e.setAttribute(k, v);
-  });
-  if (children) (Array.isArray(children) ? children : [children]).forEach(c => {
-    if (c == null) return;
-    e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
-  });
-  return e;
-};
+// $, $$, el, uid live in app.js
 function fmtAmt(n) {
   const v = parseFloat(n);
   return isNaN(v) ? '–' : v.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -148,79 +133,21 @@ function isDateInPeriod(date) {
 }
 
 // ========== MODALS ==========
+// Generic kbModal / kbConfirm / kbAlert / kbAbout live in app.js.
 function showConfirmModal(msg) {
-  return new Promise(resolve => {
-    const overlay = el('div', {className:'kb-overlay'});
-    const box = el('div', {className:'kb-modal'});
-    const note = el('div', {className:'kb-note kb-note--warning', style:{marginBottom:'16px'}});
-    note.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg><span></span>`;
-    note.querySelector('span').innerHTML = msg;
-    const footer = el('div', {className:'kb-modal__footer'});
-    const cancelBtn = el('button', {className:'kb-btn kb-btn--ghost'}, T('cancel'));
-    const confirmBtn = el('button', {className:'kb-btn kb-btn--primary'}, T('confirm-new-form'));
-    cancelBtn.addEventListener('click', () => { overlay.remove(); resolve(false); });
-    confirmBtn.addEventListener('click', () => { overlay.remove(); resolve(true); });
-    footer.append(cancelBtn, confirmBtn);
-    box.append(note, footer);
-    overlay.appendChild(box);
-    overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.remove(); resolve(false); } });
-    document.body.appendChild(overlay);
-    cancelBtn.focus();
-  });
+  return kbConfirm({ message: msg, confirmLabel: T('confirm-new-form'), cancelLabel: T('cancel') });
 }
 
 function showWarningModal(msg) {
-  return new Promise(resolve => {
-    const overlay = el('div', {className:'kb-overlay'});
-    const box = el('div', {className:'kb-modal'});
-    const note = el('div', {className:'kb-note kb-note--info', style:{marginBottom:'16px'}});
-    note.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zm.9 6.8H7.1v5.4h1.8V6.8zM8 3.3a1.1 1.1 0 1 0 0 2.2 1.1 1.1 0 0 0 0-2.2z"/></svg><span></span>`;
-    note.querySelector('span').innerHTML = msg;
-    const footer = el('div', {className:'kb-modal__footer'});
-    const okBtn = el('button', {className:'kb-btn kb-btn--primary'}, T('ok'));
-    okBtn.addEventListener('click', () => { overlay.remove(); resolve(); });
-    footer.appendChild(okBtn);
-    box.append(note, footer);
-    overlay.appendChild(box);
-    overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.remove(); resolve(); } });
-    document.body.appendChild(overlay);
-    okBtn.focus();
-  });
-}
-
-function mdToHtml(md) {
-  if (!md) return '';
-  let html = md
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/^#{3}\s+(.+)$/gm, '<h3>$1</h3>')
-    .replace(/^#{2}\s+(.+)$/gm, '<h2>$1</h2>')
-    .replace(/^#{1}\s+(.+)$/gm, '<h1>$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-  html = html.replace(/((?:^- .+\n?)+)/gm, m => '<ul>' + m.replace(/^- (.+)$/gm, '<li>$1</li>') + '</ul>');
-  html = html.split(/\n{2,}/).map(b => b.trim()).filter(Boolean).map(b => /^<[hul]/.test(b) ? b : `<p>${b.replace(/\n/g, '<br>')}</p>`).join('\n');
-  return html;
+  return kbAlert({ message: msg, okLabel: T('ok') });
 }
 
 function showAboutModal() {
-  const title = (CFG && CFG['about-title']) || 'About';
-  const content = (CFG && CFG['about-content']) || '';
-  const btnLabel = (CFG && CFG['about-button']) || 'Close';
-  const overlay = el('div', {className:'kb-overlay'});
-  const box = el('div', {className:'kb-modal'});
-  box.appendChild(el('div', {className:'kb-modal__hdr'}, title));
-  const body = el('div', {className:'kb-modal__body'});
-  body.innerHTML = mdToHtml(content);
-  const footer = el('div', {className:'kb-modal__footer'});
-  const closeBtn = el('button', {className:'kb-btn kb-btn--primary'}, btnLabel);
-  closeBtn.addEventListener('click', () => overlay.remove());
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-  footer.appendChild(closeBtn);
-  box.append(body, footer);
-  overlay.appendChild(box);
-  document.body.appendChild(overlay);
-  closeBtn.focus();
+  return kbAbout({
+    title:      (CFG && CFG['about-title'])   || 'About',
+    contentMD:  (CFG && CFG['about-content']) || '',
+    closeLabel: (CFG && CFG['about-button'])  || 'Close',
+  });
 }
 
 // ========== CONFIG ==========
@@ -527,26 +454,9 @@ function render() {
   toolbar.appendChild(sizeSeg);
   toolbar.appendChild(szLabel);
 
-  // Theme toggle (single icon button: moon = light mode, sun = dark mode)
-  const themeBtn = el('button', {className:'kb-iconbtn', type:'button', 'aria-label':'Toggle theme'});
-  const moonSVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>`;
-  const sunSVG  = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>`;
-  const currentTheme = () => document.documentElement.getAttribute('data-theme') ||
-    (window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light');
-  const updateThemeBtn = () => { themeBtn.innerHTML = currentTheme() === 'dark' ? sunSVG : moonSVG; };
-  updateThemeBtn();
-  themeBtn.addEventListener('click', () => {
-    const next = currentTheme() === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('reimb-theme', next);
-    updateThemeBtn();
-  });
-  toolbar.appendChild(themeBtn);
-
-  // About
-  const aboutBtn = el('button', {className:'kb-iconbtn', type:'button', 'aria-label':'About', onClick: showAboutModal});
-  aboutBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>`;
-  toolbar.appendChild(aboutBtn);
+  // Theme + About icon buttons (built by app.js)
+  toolbar.appendChild(makeThemeButton());
+  toolbar.appendChild(makeAboutButton(showAboutModal));
   wrap.appendChild(toolbar);
 
   // ── Header ────────────────────────────────────────────────────────────────

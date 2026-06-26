@@ -13,8 +13,9 @@
 <meta name="theme-color" content="#2f6fed">
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://unpkg.com/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+<script src="../assets/app.js"></script>
 <script>
-  (function(){var t=localStorage.getItem('ts-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
+  (function(){var t=localStorage.getItem('kb-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
 </script>
 <link rel="stylesheet" href="../assets/style.css">
 <link rel="stylesheet" href="../assets/ui.css">
@@ -104,26 +105,11 @@
 'use strict';
 
 // ── Brand assets ──────────────────────────────────────────────────────────────
-const KB_BRAND_SVG = `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true" style="width:100%;height:100%;display:block"><rect x="3" y="14" width="29" height="29" rx="8" fill="var(--accent)"/><rect x="16" y="3" width="29" height="29" rx="8" fill="none" stroke="var(--accent)" stroke-width="4"/></svg>`;
+// KB_BRAND_SVG lives in app.js
 const TS_APP_ICON  = `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true" style="width:100%;height:100%;display:block"><rect width="48" height="48" rx="12" fill="var(--accent)"/><circle cx="24" cy="24" r="13" fill="none" stroke="#fff" stroke-width="3.2"/><path d="M24 16 V24 L30 27.5" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 // ========== UTILITIES ==========
-const $ = (sel, ctx) => (ctx || document).querySelector(sel);
-const $$ = (sel, ctx) => [...(ctx || document).querySelectorAll(sel)];
-const el = (tag, attrs, children) => {
-  const e = document.createElement(tag);
-  if (attrs) Object.entries(attrs).forEach(([k, v]) => {
-    if (k === 'className') e.className = v;
-    else if (k === 'style' && typeof v === 'object') Object.assign(e.style, v);
-    else if (k.startsWith('on')) e.addEventListener(k.slice(2).toLowerCase(), v);
-    else if (v != null && v !== false) e.setAttribute(k, v);
-  });
-  if (children) (Array.isArray(children) ? children : [children]).forEach(c => {
-    if (c == null) return;
-    e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
-  });
-  return e;
-};
+// $, $$, el live in app.js
 
 function defaultPeriod() {
   const d = new Date();
@@ -412,64 +398,20 @@ function computeTotals() {
 }
 
 // ========== MODALS ==========
+// Generic kbModal / kbConfirm / kbAbout live in app.js.
 function showConfirmModal(msgHTML) {
-  return new Promise(resolve => {
-    const overlay = el('div', {className:'kb-overlay'});
-    const modal = el('div', {className:'kb-modal'});
-    const hdr = el('div', {className:'kb-modal__hdr'});
-    // warning icon
-    const warnSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    warnSvg.setAttribute('width','20'); warnSvg.setAttribute('height','20');
-    warnSvg.setAttribute('viewBox','0 0 24 24'); warnSvg.setAttribute('fill','none');
-    warnSvg.setAttribute('stroke','var(--warning)'); warnSvg.setAttribute('stroke-width','2');
-    warnSvg.setAttribute('stroke-linecap','round'); warnSvg.setAttribute('stroke-linejoin','round');
-    const warnPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    warnPath.setAttribute('d','M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01');
-    warnSvg.appendChild(warnPath);
-    hdr.append(warnSvg, el('span', null, S('confirm-title')));
-    const body = el('div', {className:'kb-modal__body'});
-    body.innerHTML = msgHTML;
-    const footer = el('div', {className:'kb-modal__footer'});
-    const cancelBtn = el('button', {className:'kb-btn kb-btn--ghost'}, S('btn-cancel'));
-    const confirmBtn = el('button', {className:'kb-btn kb-btn--primary'}, S('btn-new'));
-    cancelBtn.addEventListener('click', () => { overlay.remove(); resolve(false); });
-    confirmBtn.addEventListener('click', () => { overlay.remove(); resolve(true); });
-    footer.append(cancelBtn, confirmBtn);
-    modal.append(hdr, body, footer);
-    overlay.appendChild(modal);
-    overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.remove(); resolve(false); } });
-    document.body.appendChild(overlay);
-    cancelBtn.focus();
+  return kbConfirm({
+    title: S('confirm-title'), message: msgHTML,
+    confirmLabel: S('btn-new'), cancelLabel: S('btn-cancel'),
   });
 }
 
 function showAboutModal() {
-  const overlay = el('div', {className:'kb-overlay'});
-  const modal = el('div', {className:'kb-modal'});
-  const hdr = el('div', {className:'kb-modal__hdr'});
-  hdr.append(el('span', null, CFG['about-title'] || 'About'));
-  const body = el('div', {className:'kb-modal__body'});
-  body.innerHTML = markdownToHTML(CFG['about-content'] || '');
-  const footer = el('div', {className:'kb-modal__footer'});
-  const closeBtn = el('button', {className:'kb-btn kb-btn--primary'}, CFG['about-button'] || 'Close');
-  closeBtn.addEventListener('click', () => overlay.remove());
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-  footer.append(closeBtn);
-  modal.append(hdr, body, footer);
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-  closeBtn.focus();
-}
-
-function markdownToHTML(md) {
-  if (!md) return '';
-  return md
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-    .split(/\n\n+/)
-    .map(p => `<p>${p.trim().replace(/\n/g, '<br>')}</p>`)
-    .join('');
+  return kbAbout({
+    title:      CFG['about-title']   || 'About',
+    contentMD:  CFG['about-content'] || '',
+    closeLabel: CFG['about-button']  || 'Close',
+  });
 }
 
 // ========== VALIDATION ==========
@@ -752,23 +694,9 @@ function render() {
     sizeSeg.appendChild(btn);
   });
 
-  const moonSVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>`;
-  const sunSVG  = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>`;
-  const tsCurrentTheme = () => document.documentElement.getAttribute('data-theme') ||
-    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  const themeBtn = el('button', {type:'button', className:'kb-iconbtn', title:'Toggle light/dark', 'aria-label':'Toggle dark mode'});
-  const updateThemeBtn = () => { themeBtn.innerHTML = tsCurrentTheme() === 'dark' ? sunSVG : moonSVG; };
-  updateThemeBtn();
-  themeBtn.addEventListener('click', () => {
-    const next = tsCurrentTheme() === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('ts-theme', next);
-    updateThemeBtn();
-  });
-
-  const aboutBtn = el('button', {type:'button', className:'kb-iconbtn', 'aria-label':'About'});
-  aboutBtn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>`;
-  aboutBtn.addEventListener('click', showAboutModal);
+  // Theme + About icon buttons (built by app.js)
+  const themeBtn = makeThemeButton();
+  const aboutBtn = makeAboutButton(showAboutModal);
 
   toolbar.append(langSeg, el('div', {className:'spacer'}), sizeSeg, szLabel, themeBtn, aboutBtn);
   wrap.appendChild(toolbar);
