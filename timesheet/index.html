@@ -199,17 +199,10 @@ async function loadConfig() {
 function normaliseConfig() {
   const loc = CFG && CFG.localisation;
   if (!loc) return;
-  const langs = Array.isArray(loc.languages) ? loc.languages : [];
-  const codes = langs.map(l => l.code);
-  CFG['default-code'] = loc['default-language'] || codes[0] || 'en';
-  CFG.languages = CFG.languages || langs;
-
-  const ui = CFG['ui-strings'] || {};
-  codes.forEach(lc => {
-    const m = (loc[lc] && loc[lc].ui) || {};
-    Object.keys(m).forEach(k => { (ui[k] = ui[k] || {})[lc] = m[k]; });
-  });
-  CFG['ui-strings'] = ui;
+  const { table, languages, codes, defaultCode } = buildLangTable(loc);
+  CFG['default-code'] = defaultCode;
+  CFG.languages = CFG.languages || languages;
+  CFG['ui-strings'] = table;
 
   (CFG.holidays || []).forEach(hol => {
     codes.forEach(lc => { const m = loc[lc] && loc[lc].holidays; if (m && m[hol.date] != null) hol['display-' + lc] = m[hol.date]; });
@@ -247,14 +240,11 @@ function curLang() { return renderLang || state.lang; }
 // PDF/output language: follows the UI when output-language is "user-selected",
 // otherwise the default (first defined) language.
 function outputLang() {
-  return CFG['output-language'] === 'user-selected' ? state.lang : (CFG['default-code'] || 'en');
+  return pdfOutputLang(CFG, state.lang);
 }
 
-function S(key) {
-  const ui = CFG['ui-strings'] || {};
-  const entry = ui[key];
-  if (!entry) return key;
-  return entry[curLang()] || entry['en'] || key;
+function S(key, vars) {
+  return lookupString(CFG['ui-strings'], key, curLang(), CFG['default-code'], vars);
 }
 
 function codeObj(code) {

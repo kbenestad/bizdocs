@@ -277,3 +277,36 @@ function makeSizeControl() {
   const label = el('span', { className: 'kb-sz-label' }, Math.round(currentScale() * 100) + '%');
   return { seg, label };
 }
+
+/* ── Localisation ──────────────────────────────────────────────────────────── */
+/* The apps share the same `localisation:` config shape. These helpers cover the
+ * common core; each app keeps its own data-specific mapping (invoice's
+ * product/uom/tax labels, timesheet's holiday/code rows, reimburse's about/fx). */
+
+/** From a `localisation:` block, build { table, languages, codes, defaultCode }
+ *  where table is a { key: { lang: value } } map of UI strings. */
+function buildLangTable(loc) {
+  const langs = Array.isArray(loc.languages) ? loc.languages : [];
+  const codes = langs.map(l => l.code);
+  const table = {};
+  codes.forEach(lc => {
+    const ui = (loc[lc] && loc[lc].ui) || {};
+    Object.keys(ui).forEach(k => { (table[k] = table[k] || {})[lc] = ui[k]; });
+  });
+  return { table, languages: langs, codes, defaultCode: loc['default-language'] || codes[0] || 'en' };
+}
+
+/** Look up a UI string with fallback (lang → defLang → key) and optional
+ *  {placeholder} interpolation. */
+function lookupString(table, key, lang, defLang, vars) {
+  const e = table && table[key];
+  let s = e ? (e[lang] ?? e[defLang] ?? key) : key;
+  if (vars) for (const k in vars) s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), vars[k]);
+  return s;
+}
+
+/** Resolve the PDF/output language: follow the UI when output-language is
+ *  "user-selected", otherwise use the config default. */
+function pdfOutputLang(cfg, uiLang) {
+  return cfg['output-language'] === 'user-selected' ? uiLang : (cfg['default-code'] || 'en');
+}

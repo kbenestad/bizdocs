@@ -129,9 +129,7 @@ let _loading = false;
 
 // ── i18n ──────────────────────────────────────────────────────────────────────
 function t(key) {
-  const e = cfg?.translations?.[key];
-  if (!e) return key;
-  return e[lang] ?? e[cfg["default-code"]] ?? key;
+  return lookupString(cfg?.translations, key, lang, cfg?.["default-code"]);
 }
 
 // ── Localisation adapter ───────────────────────────────────────────────────────
@@ -141,20 +139,12 @@ function t(key) {
 function normaliseI18n(c) {
   const loc = c && c.localisation;
   if (!loc) return;
-  const langs = Array.isArray(loc.languages) ? loc.languages : [];
-  const codes = langs.map(l => l.code);
-  const def = loc["default-language"] || codes[0] || "en";
-  c["default-code"] = c["default-code"] ?? def;
-  const defLang = langs.find(l => l.code === def);
-  c["default-name"] = c["default-name"] ?? (defLang ? defLang.name : def);
-  c.languages = c.languages ?? langs;
-
-  const tr = c.translations ?? {};
-  codes.forEach(lc => {
-    const ui = (loc[lc] && loc[lc].ui) || {};
-    Object.keys(ui).forEach(k => { (tr[k] ??= {})[lc] = ui[k]; });
-  });
-  c.translations = tr;
+  const { table, languages, codes, defaultCode } = buildLangTable(loc);
+  c["default-code"] = c["default-code"] ?? defaultCode;
+  const defLang = languages.find(l => l.code === defaultCode);
+  c["default-name"] = c["default-name"] ?? (defLang ? defLang.name : defaultCode);
+  c.languages = c.languages ?? languages;
+  c.translations = table;
 
   const about = c.about ?? {};
   codes.forEach(lc => { if (loc[lc] && loc[lc].about) about[lc] = loc[lc].about; });
@@ -1181,7 +1171,7 @@ function generateInvoice() {
 // PDF/output language: follows the UI when output-language is "user-selected",
 // otherwise the default (first defined) language.
 function outputLang() {
-  return cfg["output-language"] === "user-selected" ? lang : (cfg["default-code"] || "en");
+  return pdfOutputLang(cfg, lang);
 }
 
 function gatherData(renderLang) {
