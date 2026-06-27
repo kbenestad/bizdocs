@@ -26,6 +26,7 @@ assets/            ← SHARED across all apps (referenced as ../assets/…)
   style.css          design tokens / colour scheme + reset + page shell
   ui.css             reusable kb-* UI components
   app.js             shared runtime (DOM helpers, theme, modals, i18n, …)
+_template/         CANONICAL STARTER — copy this to create a new app
 invoice/   index.html · config.yml · assets/ (favicons)
 reimburse/ index.html · config.yml · assets/ (favicons)
 timesheet/ index.html · config.yml · assets/ (favicons)
@@ -112,12 +113,21 @@ the About modal, and a non-English language.
 
 ## Adding a new app
 
-Create `newapp/index.html` + `newapp/config.yml` + `newapp/assets/`. Link the
-three shared files (`../assets/style.css`, `ui.css`, `app.js`), build the UI
-from the `kb-*` components and the `app.js` helpers, and follow the
-`localisation:` config shape. Prefer **pdf-lib** for PDF output (see DESIGN.md).
-A new app should inherit the shared look with little more than the three
-`<link>`/`<script>` references plus its own app-specific layout.
+**Copy `_template/`.** It is the canonical shell — the standard `<head>` (with
+the pre-paint theme script and correct script order), a JS-built toolbar /
+header / footer assembled from the shared helpers, an example card, the boot
+sequence, and a pdf-lib download stub — already wired to `../assets/`. Then:
+
+1. Rename the folder; update the `<title>`, the doc-title `<h1>`, and the
+   `template-lang` localStorage key.
+2. Replace `buildExampleCard()` with your form (built from `kb-*` components),
+   and `onDownload()` with your real PDF (use **pdf-lib**).
+3. Fill in `config.yml` — keep the header keys and add your `ui:` strings to
+   *every* language block, plus any data lists you need.
+4. Drop a real favicon / PWA icon set into the new app's `assets/`.
+
+Building from the template rather than hand-assembling the chrome is what keeps
+a new app visually identical to the others. See DESIGN.md for the design system.
 
 ## Out of scope / known notes
 

@@ -141,10 +141,27 @@ should use pdf-lib from the start.**
 
 ## Conventions for new apps
 
-1. Link the three shared files; build the UI from `kb-*` components and `app.js`
-   helpers.
-2. Follow the `localisation:` config shape; route all copy through the lookup.
-3. Use `kb-theme` / `kb-font-scale` and the shared theme/size controls.
-4. Use **pdf-lib** for PDF output.
-5. Keep only genuinely app-specific layout inline; everything shareable goes in
-   `assets/`.
+**Start from `_template/`.** It is a complete, working reference app — the
+canonical shell that wires up the shared toolbar, header, theme, text-size
+control, language switch, About modal, footer and boot sequence. Copy it and
+replace the marked app-specific parts; do **not** hand-assemble the chrome, or
+it will drift from the other apps. The template is verified to render identically
+to the existing three (light/dark, all languages).
+
+What it already establishes, and you should preserve:
+
+1. The exact `<head>`: pre-paint theme script, CDN libs, then the three shared
+   `../assets/` references (`app.js` before the inline script).
+2. The chrome assembly: `kb-toolbar` (language · spacer · `makeSizeControl()` ·
+   `makeThemeButton()` · `makeAboutButton()`), the `kb-header` brand lockup, and
+   the `kb-footer`.
+3. The boot order: `loadYamlConfig → normaliseConfig (buildLangTable) →
+   applyAccent → initFontScale → applyLang → render`.
+4. The `config.yml` header keys: `organization`, `logo`, `logo-maxwidth`,
+   `tagline`, `page-size`, `output-language`, `font-*`, `font-size`,
+   `accent-colour`, then the `localisation:` block.
+
+Then: build your form from `kb-*` components, route every string through the
+lookup (`S()`), use **pdf-lib** for output, and keep only genuinely
+app-specific layout in the app's inline `<style>` — everything shareable goes in
+`assets/`.
