@@ -331,7 +331,7 @@ function recalc() {
   const ge = $('#grand-total');
   if (ge) ge.textContent = fmtAmt(grand);
   const gl = $('#grand-total-label');
-  if (gl) gl.textContent = `Total claim (${state.baseCurrency})`;
+  if (gl) gl.textContent = T('total-claim', {cur: state.baseCurrency});
 }
 
 // ========== CURRENCY HELPERS ==========
@@ -528,7 +528,7 @@ function render() {
     state.items.push(item);
     itemsBox.appendChild(renderItem(item));
     recalc();
-  }}, '+ Add expense item');
+  }}, T('add-item'));
   expCard.appendChild(addItemBtn);
   wrap.appendChild(expCard);
 
@@ -537,7 +537,7 @@ function render() {
   const totals = el('div', {className:'kb-totals'});
   const grandRow = el('div', {className:'grand'});
   grandRow.append(
-    el('span', {className:'lab', id:'grand-total-label'}, `Total claim (${state.baseCurrency})`),
+    el('span', {className:'lab', id:'grand-total-label'}, T('total-claim', {cur: state.baseCurrency})),
     el('span', {className:'val kb-mono', id:'grand-total'}, fmtAmt(0))
   );
   totals.appendChild(grandRow);
