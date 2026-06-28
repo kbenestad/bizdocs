@@ -99,6 +99,21 @@ follows the UI language or the config default (`output-language` setting).
 **Rule:** no user-facing English in code. Add a key to every language block and
 look it up. Use `{token}` placeholders for values (e.g. currency).
 
+## Config loading & validation
+
+`loadYamlConfig()` (in `app.js`) fetches, `jsyaml.load()`s, **and validates** the
+config: it throws unless the result is an object with a `localisation:` block.
+The failure this guards against is silent — on a static host a missing
+`config.yml` (or an SPA fallback / a stale cached page) is returned as an **HTML
+page with a 200**, so `jsyaml.load()` parses it to a plain *string*,
+`CFG.localisation` is undefined, each app's adapter early-returns, and the app
+paints its full chrome with every label as a raw key and an empty language
+dropdown, never throwing. The guard turns that into a clear, actionable error,
+caught by each app's boot `try/catch` and shown as a `.kb-note--error`.
+
+Keeping the check in the shared `loadYamlConfig()` (rather than each app's boot)
+means every app — and any app synced from this design — gets it for free.
+
 ## Theme & text size
 
 - **Theme** is a single attribute (`data-theme`) plus the `kb-theme` storage

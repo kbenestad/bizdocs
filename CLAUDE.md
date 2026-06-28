@@ -49,9 +49,18 @@ Each app links the shared files in its `<head>`:
 2. CDN libraries load: `js-yaml` (all apps), plus `jspdf` (invoice) or
    `pdf-lib` (reimburse, timesheet).
 3. `../assets/app.js` loads and defines the shared globals.
-4. The app's inline `<script>` runs: `loadYamlConfig()` fetches and parses
-   `config.yml`, an adapter normalises the `localisation:` block, and the UI is
-   built from config. State persists to `localStorage`.
+4. The app's inline `<script>` runs: `loadYamlConfig()` fetches, parses **and
+   validates** `config.yml` (see below), an adapter normalises the
+   `localisation:` block, and the UI is built from config. State persists to
+   `localStorage`.
+
+`loadYamlConfig()` (in `app.js`) validates the parsed config and throws if it
+isn't an object with a `localisation:` block. This catches the common deploy
+failure where a static host returns an **HTML page** (a 404 / SPA fallback, or a
+stale cache) with a 200 for `config.yml`: `jsyaml.load()` would parse that to a
+plain string, and without the guard the app would render its chrome with every
+label as a raw key and an empty language dropdown — and no error. Each app's boot
+already wraps the call in a `try/catch` that renders the thrown message.
 
 ## Running / previewing locally
 

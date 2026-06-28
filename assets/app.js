@@ -187,11 +187,27 @@ function kbAbout({ title, contentMD, closeLabel } = {}) {
 }
 
 /* ── Config loading ────────────────────────────────────────────────────────── */
-/** Fetch + parse a YAML config file. Throws on HTTP error. */
+/** Fetch + parse a YAML config file, validating the result.
+ *  Throws on HTTP error, and on a successful fetch that returns the WRONG bytes:
+ *  on a static host a missing config.yml (or an SPA fallback, or a stale cached
+ *  page) is served as an HTML page with a 200, so jsyaml.load() returns a plain
+ *  string instead of the config object. Without this guard CFG.localisation is
+ *  undefined, each app's adapter silently early-returns, and the app renders its
+ *  chrome with every label as a raw key and an empty language dropdown — with no
+ *  error at all. Fail loudly and actionably instead. */
 async function loadYamlConfig(url = 'config.yml') {
   const res = await fetch(url);
   if (!res.ok) throw new Error('HTTP ' + res.status);
-  return jsyaml.load(await res.text());
+  const cfg = jsyaml.load(await res.text());
+  if (!cfg || typeof cfg !== 'object' || !cfg.localisation) {
+    throw new Error(
+      'config.yml loaded but did not parse to a valid configuration. The server ' +
+      'most likely returned an HTML page (a 404 or single-page-app fallback, or a ' +
+      'stale cached page) instead of the YAML file. Confirm config.yml is deployed ' +
+      'next to index.html and served as plain text (not rewritten to index.html).'
+    );
+  }
+  return cfg;
 }
 
 /** Apply a config's accent-colour to the --accent token (no-op if unset; the
