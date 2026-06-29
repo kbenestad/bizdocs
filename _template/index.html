@@ -148,8 +148,8 @@ function buildHeader() {
   const brand = el('div', { className: 'kb-brand' });
   const tile = el('span', { className: 'logo' });
   if (CFG.logo === 'yes' || CFG.logo === true) {
-    const img = el('img', { src: 'assets/logo.png', alt: CFG.organization || '' });
-    img.onerror = () => { img.src = 'assets/logo.jpg'; img.onerror = () => { tile.innerHTML = KB_BRAND_SVG; }; };
+    const img = el('img', { src: '../assets/logo.png', alt: CFG.organization || '' });
+    img.onerror = () => { img.src = '../assets/logo.jpg'; img.onerror = () => { tile.innerHTML = KB_BRAND_SVG; }; };
     tile.appendChild(img);
   } else { tile.innerHTML = KB_BRAND_SVG; }
   const org = el('span', { className: 'org' });

@@ -443,10 +443,10 @@ function render() {
     brand.append(tile, orgSpan);
   } else if (rbHasLogo) {
     const img = el('img', {alt: rbOrg});
-    img.src = 'assets/logo.png';
+    img.src = '../assets/logo.png';
     img.style.cssText = 'max-height:52px;width:auto;display:block;';
     if (CFG['logo-maxwidth']) img.style.maxWidth = CFG['logo-maxwidth'] + 'cm';
-    img.onerror = function() { this.src = 'assets/logo.jpg'; this.onerror = function() { const s = el('span', {className:'logo'}); s.innerHTML = KB_BRAND_SVG; this.replaceWith(s); }; };
+    img.onerror = function() { this.src = '../assets/logo.jpg'; this.onerror = function() { const s = el('span', {className:'logo'}); s.innerHTML = KB_BRAND_SVG; this.replaceWith(s); }; };
     brand.appendChild(img);
     hdr.style.cssText = 'background:#ffffff;border:1px solid var(--border);border-radius:8px;padding:16px 20px;';
   } else {

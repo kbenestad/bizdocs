@@ -4,7 +4,7 @@
 
 # Organization
 organization:                # leave blank to show kBenestad wordmark
-logo: no                     # yes|no — if yes, loads assets/logo.png or logo.jpg
+logo: no                     # yes|no — if yes, loads ../assets/logo.png (shared org logo)
 logo-maxwidth: 7.5           # cm — maximum logo width on PDF
 tagline:                     # subtitle shown below org name
 

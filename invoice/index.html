@@ -317,11 +317,11 @@ function buildHeader() {
     brandEl.innerHTML = `<span class="logo">${KB_BRAND_SVG}</span><span class="org">kbenestad/invoice<small>Invoice generator</small></span>`;
   } else if (hasLogo) {
     const img = document.createElement("img");
-    img.alt = org; img.src = "assets/logo.png";
+    img.alt = org; img.src = "../assets/logo.png";
     img.style.cssText = "max-height:52px;width:auto;display:block;";
     if (cfg["logo-maxwidth"]) img.style.maxWidth = cfg["logo-maxwidth"] + "cm";
     img.onerror = function() {
-      this.src = "assets/logo.jpg";
+      this.src = "../assets/logo.jpg";
       this.onerror = function() { const s = document.createElement("span"); s.className = "logo"; s.innerHTML = KB_BRAND_SVG; this.replaceWith(s); };
     };
     brandEl.appendChild(img);
