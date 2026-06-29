@@ -1,0 +1,29 @@
+# =============================================================================
+# Root config — org-wide settings and navigation
+# =============================================================================
+
+# Organisation (shown in the page header)
+organization:              # leave blank to show kBenestad wordmark
+logo: no                   # yes|no — place logo.png or logo.jpg in assets/
+tagline:                   # subtitle shown below org name
+
+# Branding
+accent-colour: "#2f6fed"
+
+# Apps — paths relative to this folder
+apps:
+  - name: Invoice
+    href: invoice/
+    description: Freelance and consulting invoices as PDF
+  - name: Reimburse
+    href: reimburse/
+    description: Expense reimbursement with attached receipts
+  - name: Timesheet
+    href: timesheet/
+    description: Timesheets by employee type with signatures
+
+# External links (open in a new tab)
+links:
+  - name: GitHub
+    href: https://github.com/kbenestad/bizdocs
+    description: Source code and issue tracker
