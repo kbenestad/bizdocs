@@ -163,7 +163,7 @@
 
 /* button rows */
 .kb-actbar { display: flex; gap: 10px; margin-top: 8px; }
-.kb-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+.kb-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 4px; margin-bottom: 24px; }
 .kb-actions .spacer { flex: 1; }
 
 /* ── Row grids (column headers for line-item tables) ───────────────────────── */
