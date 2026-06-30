@@ -21,6 +21,9 @@ apps:
   - name: Timesheet
     href: timesheet/
     description: Timesheets by employee type with signatures
+  - name: Contactmanager
+    href: contactmanager/
+    description: Maintain a contact directory and publish a staff contact book
 
 # External links (open in a new tab)
 links:

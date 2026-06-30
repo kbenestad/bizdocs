@@ -1,0 +1,125 @@
+# =============================================================================
+# contactmanager — Configuration
+# =============================================================================
+# Two audiences, two localisation blocks (see BRIEF / DESIGN):
+#   localisation:         contactmanager's OWN editor UI (used directly via S())
+#   viewer-localisation:  baked into the generated contactbook.html / standalone
+#                         files at export time (same shape, same i18n helpers)
+#
+# Branding (organisation, accent-colour, footer-mark) and the contact schema's
+# field labels are placeholders confirmed against the project brief — adjust
+# with the project owner before treating as final.
+
+# Organization
+organization: "Center for Asylum Protection"
+logo: no                     # yes|no — if yes, loads ../assets/logo.png or .jpg
+logo-maxwidth: 4
+tagline: "Contact manager"
+footer-mark: "CAP"           # short wordmark shown in the generated viewer footer
+
+# Page setup
+page-size: A4
+output-language: default
+
+# Typography (PDF, server variant only)
+font-body: Helvetica
+font-heading: Helvetica
+font-monospace: Courier
+font-size: 10
+
+# Branding — confirm CAP's actual accent colour; this is the template default.
+accent-colour: "#2f6fed"
+
+# ── Localisation: contactmanager's OWN editor UI ────────────────────────────
+# Used directly via S() inside contactmanager's index.html.
+localisation:
+  default-language: en
+
+  languages:
+    - code: en
+      name: English
+
+  en:
+    about:
+      title: "About"
+      button: "Close"
+      content: |
+        ### CAP Contact Manager
+        Internal tool for maintaining CAP's contact directory. Edits made
+        here are exported as files — there is no live database, so changes
+        only reach staff once an exported file is deployed.
+    ui:
+      doc-title: "Contact Manager"
+      subtitle: "Contact manager"
+      contacts-title: "Contacts"
+      add-contact: "Add contact"
+      edit-contact: "Edit contact"
+      delete-contact: "Delete"
+      confirm-delete: "Delete {name}? This cannot be undone."
+      save: "Save"
+      cancel: "Cancel"
+      upload-existing: "Upload a file…"
+      loaded-from-folder: "Loaded the current contact book from this folder."
+      no-existing-found: "No existing contact book found here — starting empty."
+      imported-n: "Imported {n} contacts from the uploaded file."
+      import-failed: "Could not read contacts from that file."
+      no-contacts: "No contacts yet — add one to get started."
+      count-n: "{n} contacts"
+      name-required: "Name is required."
+      field-name: "Name"
+      field-organisation: "Organisation"
+      field-role: "Role"
+      field-phone: "Phone"
+      field-email: "Email"
+      field-address: "Address"
+      field-category: "Category"
+      field-notes: "Notes"
+      ph-name: "Full name"
+      export-title: "Export contact book"
+      download-standalone: "Download standalone file"
+      download-server: "Download contactbook.html (for the server)"
+      export-hint: >
+        Standalone is one self-contained file (email it, or use it offline).
+        contactbook.html is for deploying next to this tool on the web server.
+
+# ── viewer-localisation: baked into the GENERATED contactbook.html /────────
+# standalone files at export time. Same shape as `localisation:` above, so
+# the same buildLangTable()/lookupString()/S() helpers work unchanged when
+# embedded in the generated file — just pointed at this block instead.
+viewer-localisation:
+  default-language: en
+
+  languages:
+    - code: en
+      name: English
+
+  en:
+    about:
+      title: "About"
+      button: "Close"
+      content: |
+        ### CAP Contact Book
+        A directory of CAP's external contacts. Use search and the filters
+        to find someone, then open a contact for full details or to
+        download it as a vCard.
+    ui:
+      subtitle: "Contact Book"
+      search-ph: "Search by name, organisation…"
+      filter-category: "Category"
+      filter-org: "Organisation"
+      filter-all: "All"
+      count-n: "{n} contacts"
+      dl-vcf-list: "Download list (VCF)"
+      dl-pdf-list: "Download list (PDF)"
+      dl-vcf-contact: "Download vCard"
+      back: "Back"
+      edit-contacts: "Edit contacts"
+      f-org: "Organisation"
+      f-role: "Role"
+      f-phone: "Phone"
+      f-email: "Email"
+      f-address: "Address"
+      f-category: "Category"
+      f-notes: "Notes"
+      empty: "No contacts match your search."
+      pdf-title: "Contact list"
