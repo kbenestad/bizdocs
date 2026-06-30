@@ -64,6 +64,16 @@
 .cm-empty { padding: 28px 10px; text-align: center; color: var(--text-muted); font-size: var(--fs-small); }
 .cm-export-hint { font-size: var(--fs-small); color: var(--text-muted); margin-bottom: 14px; line-height: 1.6; }
 .cm-form .kb-field + .kb-field { margin-top: 0; }
+.cm-nick { font-weight: 400; color: var(--text-muted); }
+
+/* ── Editor: nickname + bigger address + repeatable phones table ───────────── */
+.cm-field--address .kb-textarea { min-height: 96px; }
+.cm-phones { display: flex; flex-direction: column; gap: 8px; }
+.cm-phone-row { display: flex; gap: 8px; align-items: center; }
+.cm-phone-row .kb-select { flex: 0 0 120px; }
+.cm-phone-row .kb-input { flex: 1; min-width: 0; }
+.cm-phone-rm { flex: 0 0 auto; line-height: 1; }
+.cm-phone-add { align-self: flex-start; margin-top: 8px; }
 
 /* ── Phone-width fallback (shared chrome has no <480px breakpoint) ──────────── */
 @media (max-width: 480px) {
@@ -187,8 +197,11 @@ function buildContactsCard() {
     contacts.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '')).forEach(c => {
       const row = el('div', { className: 'cm-row' });
       const main = el('div', { className: 'cm-row__main' });
+      const nameNode = el('div', { className: 'cm-row__name' });
+      nameNode.appendChild(document.createTextNode(c.name || '—'));
+      if (c.nickname) nameNode.appendChild(el('span', { className: 'cm-nick' }, ' “' + c.nickname + '”'));
       main.append(
-        el('div', { className: 'cm-row__name' }, c.name || '—'),
+        nameNode,
         el('div', { className: 'cm-row__sub' }, [
           c.organisation ? el('span', null, c.organisation) : null,
           c.role ? el('span', null, c.role) : null,
@@ -242,33 +255,78 @@ function buildFooter() {
   return footer;
 }
 
+// ── Phones (several per contact, table-style in the form) ────────────────────
+const PHONE_TYPES = ['mobile', 'office', 'home', 'fax', 'other'];
+// Normalise a contact's phones to [{type, value}], tolerating the legacy single
+// `phone` string baked into earlier exports.
+function contactPhones(c) {
+  if (Array.isArray(c.phones)) return c.phones.filter(p => p && (p.value || '').trim());
+  if (c.phone) return [{ type: '', value: c.phone }];
+  return [];
+}
+
 // ── Add / edit / delete ──────────────────────────────────────────────────────
+// Single-value fields, in form order. Phones sit between role and email and are
+// handled separately (see buildPhonesSection).
 const FIELDS = [
   ['name', 'field-name', 'input', 'ph-name'],
+  ['nickname', 'field-nickname', 'input', 'ph-nickname'],
   ['organisation', 'field-organisation', 'input'],
   ['role', 'field-role', 'input'],
-  ['phone', 'field-phone', 'input'],
   ['email', 'field-email', 'input'],
   ['address', 'field-address', 'textarea'],
   ['category', 'field-category', 'input'],
   ['notes', 'field-notes', 'textarea'],
 ];
+const TEXT_KEYS = FIELDS.map(f => f[0]);
+
+// A repeatable [type · number · remove] table; returns the field with a
+// _collect() that reads back the non-empty rows as [{type, value}].
+function buildPhonesSection(data) {
+  const field = el('div', { className: 'kb-field' });
+  field.appendChild(el('span', { className: 'kb-label' }, S('field-phones')));
+  const table = el('div', { className: 'cm-phones' });
+  const addRow = (p) => {
+    const row = el('div', { className: 'cm-phone-row' });
+    const sel = el('select', { className: 'kb-select' });
+    PHONE_TYPES.forEach(t => {
+      const o = el('option', { value: t }, S('phone-type-' + t));
+      if (t === p.type) o.selected = true;
+      sel.appendChild(o);
+    });
+    const input = el('input', { className: 'kb-input', placeholder: S('phone-number'), value: p.value || '' });
+    const rm = el('button', { type: 'button', className: 'kb-btn kb-btn--soft kb-btn--sm cm-phone-rm', 'aria-label': S('remove'), onClick: () => row.remove() }, '×');
+    row.append(sel, input, rm);
+    row._get = () => ({ type: sel.value, value: input.value.trim() });
+    table.appendChild(row);
+  };
+  const existing = contactPhones(data).map(p => ({ type: p.type || 'mobile', value: p.value }));
+  (existing.length ? existing : [{ type: 'mobile', value: '' }]).forEach(addRow);
+  field.appendChild(table);
+  field.appendChild(el('button', { type: 'button', className: 'kb-btn kb-btn--ghost kb-btn--sm cm-phone-add', onClick: () => addRow({ type: 'mobile', value: '' }) }, S('add-phone')));
+  field._collect = () => Array.from(table.children).map(r => r._get()).filter(p => p.value);
+  return field;
+}
 
 async function openContactForm(existing) {
   const data = Object.assign({}, existing);   // edit copy, or {} for new
   const body = el('div', { className: 'kb-modal__body cm-form' });
   const grid = el('div', { className: 'kb-grid' });
   const refs = {};
-  FIELDS.forEach(([key, labelKey, kind, phKey]) => {
+  const makeField = ([key, labelKey, kind, phKey]) => {
     const input = kind === 'textarea'
-      ? el('textarea', { className: 'kb-textarea', rows: 2 })
+      ? el('textarea', { className: 'kb-textarea', rows: key === 'address' ? 4 : 2 })
       : el('input', { className: 'kb-input', placeholder: phKey ? S(phKey) : '' });
     input.value = data[key] || '';
     refs[key] = input;
-    const f = el('div', { className: 'kb-field' });
+    const f = el('div', { className: 'kb-field' + (key === 'address' ? ' cm-field--address' : '') });
     f.append(el('span', { className: 'kb-label' }, S(labelKey)), input);
-    grid.appendChild(f);
-  });
+    return f;
+  };
+  FIELDS.slice(0, 4).forEach(spec => grid.appendChild(makeField(spec)));  // name…role
+  const phonesSection = buildPhonesSection(data);
+  grid.appendChild(phonesSection);
+  FIELDS.slice(4).forEach(spec => grid.appendChild(makeField(spec)));      // email…notes
   body.appendChild(grid);
 
   const result = await kbModal({
@@ -283,7 +341,8 @@ async function openContactForm(existing) {
   if (!result) return;
 
   const next = {};
-  FIELDS.forEach(([key]) => { next[key] = refs[key].value.trim(); });
+  TEXT_KEYS.forEach(key => { next[key] = refs[key].value.trim(); });
+  next.phones = phonesSection._collect();
   if (!next.name) {
     await kbAlert({ title: S('add-contact'), message: S('name-required'), okLabel: S('cancel') });
     next.id = existing && existing.id;
@@ -458,6 +517,12 @@ const VIEWER_CSS = [
 '.cb-detail__field { padding: 10px 0; border-top: 1px solid var(--border); }',
 '.cb-detail__field:first-child { border-top: 0; }',
 '.cb-detail__notes { white-space: pre-wrap; }',
+'.cb-nick { font-weight:400; color:var(--text-muted); }',
+'.cb-link { color: var(--accent); text-decoration:none; }',
+'.cb-link:hover { text-decoration: underline; }',
+'.cb-detail__phones { display:flex; flex-direction:column; gap:4px; }',
+'.cb-detail__phone { display:flex; gap:10px; align-items:baseline; }',
+'.cb-phone-type { font-size:var(--fs-small); color:var(--text-muted); min-width:56px; flex-shrink:0; }',
 '@media (max-width: 480px) { .kb-header { flex-direction:column; align-items:flex-start; gap:12px; } .kb-doctitle { text-align:left; } }',
 ].join('\n');
 
@@ -469,6 +534,15 @@ function viewerRuntime() {
   'use strict';
   let CFG, CONTACTS = [], HAS_PDF = false, lang = 'en';
   const state = { view: 'list', q: '', cat: '', org: '', id: null };
+
+  // Phones: [{type, value}], tolerating the legacy single `phone` string.
+  const VCF_TEL = { mobile: 'CELL', office: 'WORK', home: 'HOME', fax: 'FAX', other: 'VOICE' };
+  function contactPhones(c) {
+    if (Array.isArray(c.phones)) return c.phones.filter(p => p && (p.value || '').trim());
+    if (c.phone) return [{ type: '', value: c.phone }];
+    return [];
+  }
+  function telHref(v) { return 'tel:' + String(v).replace(/[^\d+]/g, ''); }
 
   function S(key, vars) { return lookupString(CFG['ui-strings'], key, lang, CFG['default-code'], vars); }
   function normaliseConfig() {
@@ -488,7 +562,7 @@ function viewerRuntime() {
     return CONTACTS.filter(c => {
       if (state.cat && c.category !== state.cat) return false;
       if (state.org && c.organisation !== state.org) return false;
-      if (q && !((c.name || '') + ' ' + (c.organisation || '') + ' ' + (c.role || '')).toLowerCase().includes(q)) return false;
+      if (q && !((c.name || '') + ' ' + (c.nickname || '') + ' ' + (c.organisation || '') + ' ' + (c.role || '')).toLowerCase().includes(q)) return false;
       return true;
     }).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   }
@@ -497,9 +571,10 @@ function viewerRuntime() {
   function vcfEscape(s) { return String(s).replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n'); }
   function contactToVCard(c) {
     const lines = ['BEGIN:VCARD', 'VERSION:3.0', 'FN:' + vcfEscape(c.name || ''), 'N:' + vcfEscape(c.name || '') + ';;;;'];
+    if (c.nickname) lines.push('NICKNAME:' + vcfEscape(c.nickname));
     if (c.organisation) lines.push('ORG:' + vcfEscape(c.organisation));
     if (c.role) lines.push('TITLE:' + vcfEscape(c.role));
-    if (c.phone) lines.push('TEL;TYPE=WORK,VOICE:' + vcfEscape(c.phone));
+    contactPhones(c).forEach(p => lines.push('TEL;TYPE=' + (VCF_TEL[p.type] || 'VOICE') + ':' + vcfEscape(p.value)));
     if (c.email) lines.push('EMAIL;TYPE=WORK:' + vcfEscape(c.email));
     if (c.address) lines.push('ADR;TYPE=WORK:;;' + vcfEscape(c.address) + ';;;;');
     if (c.notes) lines.push('NOTE:' + vcfEscape(c.notes));
@@ -529,10 +604,14 @@ function viewerRuntime() {
     line(S('pdf-title'), 16, bold, 26);
     filteredContacts().forEach(c => {
       if (y < M + 70) { page = doc.addPage([W, H]); y = H - M; }
-      line(c.name || '-', 12, bold, 15);
+      line((c.name || '-') + (c.nickname ? '  "' + c.nickname + '"' : ''), 12, bold, 15);
       const sub = [c.role, c.organisation].filter(Boolean).join('  -  ');
       if (sub) line(sub, 9, font, 13);
-      [['f-phone', c.phone], ['f-email', c.email], ['f-address', c.address], ['f-category', c.category]].forEach(([k, v]) => {
+      contactPhones(c).forEach(p => {
+        const t = p.type ? ' (' + S('phone-type-' + p.type) + ')' : '';
+        line(S('f-phone') + t + ': ' + p.value, 9, font, 12);
+      });
+      [['f-email', c.email], ['f-address', c.address], ['f-category', c.category]].forEach(([k, v]) => {
         if (v) line(S(k) + ': ' + v, 9, font, 12);
       });
       y -= 8;
@@ -630,8 +709,11 @@ function viewerRuntime() {
     results.forEach(c => {
       const row = el('button', { type: 'button', className: 'cb-row', onClick: () => { state.view = 'detail'; state.id = c.id; render(); } });
       const main = el('div', { className: 'cb-row__main' });
+      const nameNode = el('div', { className: 'cb-row__name' });
+      nameNode.appendChild(document.createTextNode(c.name || '-'));
+      if (c.nickname) nameNode.appendChild(el('span', { className: 'cb-nick' }, ' “' + c.nickname + '”'));
       main.append(
-        el('div', { className: 'cb-row__name' }, c.name || '-'),
+        nameNode,
         el('div', { className: 'cb-row__sub' }, [
           c.organisation ? el('span', null, c.organisation) : null,
           c.role ? el('span', null, c.role) : null,
@@ -647,17 +729,34 @@ function viewerRuntime() {
     const c = CONTACTS.find(x => x.id === state.id);
     const card = el('div', { className: 'kb-card' });
     if (!c) { card.appendChild(el('div', { className: 'cb-empty' }, S('empty'))); return card; }
+    const nameNode = el('div', { className: 'cb-detail__name' });
+    nameNode.appendChild(document.createTextNode(c.name || '-'));
+    if (c.nickname) nameNode.appendChild(el('span', { className: 'cb-nick' }, ' “' + c.nickname + '”'));
     card.append(
-      el('div', { className: 'cb-detail__name' }, c.name || '-'),
+      nameNode,
       el('div', { className: 'cb-detail__sub' }, [c.role, c.organisation].filter(Boolean).join(' · '))
     );
     const grid = el('div', { className: 'cb-detail__grid' });
-    [['f-phone', 'phone'], ['f-email', 'email'], ['f-address', 'address'], ['f-category', 'category'], ['f-notes', 'notes']].forEach(([labelKey, field]) => {
-      if (!c[field]) return;
+    const addField = (labelText, valueNode) => {
       const f = el('div', { className: 'cb-detail__field' });
-      f.append(el('span', { className: 'kb-label' }, S(labelKey)), el('div', { className: field === 'notes' ? 'cb-detail__notes' : '' }, c[field]));
+      f.append(el('span', { className: 'kb-label' }, labelText), valueNode);
       grid.appendChild(f);
-    });
+    };
+    const phones = contactPhones(c);
+    if (phones.length) {
+      const box = el('div', { className: 'cb-detail__phones' });
+      phones.forEach(p => {
+        const lineEl = el('div', { className: 'cb-detail__phone' });
+        if (p.type) lineEl.appendChild(el('span', { className: 'cb-phone-type' }, S('phone-type-' + p.type)));
+        lineEl.appendChild(el('a', { className: 'cb-link', href: telHref(p.value) }, p.value));
+        box.appendChild(lineEl);
+      });
+      addField(S('f-phone'), box);
+    }
+    if (c.email) addField(S('f-email'), el('a', { className: 'cb-link', href: 'mailto:' + c.email }, c.email));
+    if (c.address) addField(S('f-address'), el('div', { className: 'cb-detail__notes' }, c.address));
+    if (c.category) addField(S('f-category'), el('div', null, c.category));
+    if (c.notes) addField(S('f-notes'), el('div', { className: 'cb-detail__notes' }, c.notes));
     card.appendChild(grid);
     const actions = el('div', { className: 'kb-actions' });
     actions.append(
