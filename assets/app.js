@@ -326,3 +326,166 @@ function lookupString(table, key, lang, defLang, vars) {
 function pdfOutputLang(cfg, uiLang) {
   return cfg['output-language'] === 'user-selected' ? uiLang : (cfg['default-code'] || 'en');
 }
+
+/* ── Tabs ──────────────────────────────────────────────────────────────── */
+/** Build a tab strip + panels.
+ *  items: Array<{ label: string, content: Node }>
+ *  opts.defaultIndex: number (default 0) */
+const makeTabs = (items, opts = {}) => {
+  const defaultIndex = opts.defaultIndex ?? 0;
+
+  const tabIds   = items.map(() => uid());
+  const panelIds = items.map(() => uid());
+
+  const tablist = el('div', { className: 'kb-tablist', role: 'tablist' });
+  const tabs = items.map((item, i) => {
+    const btn = el('button', {
+      type: 'button',
+      role: 'tab',
+      id: tabIds[i],
+      'aria-selected': String(i === defaultIndex),
+      'aria-controls': panelIds[i],
+      className: 'kb-tab',
+    }, item.label);
+    tablist.appendChild(btn);
+    return btn;
+  });
+
+  const panels = items.map((item, i) => {
+    const panel = el('div', {
+      role: 'tabpanel',
+      id: panelIds[i],
+      'aria-labelledby': tabIds[i],
+      className: 'kb-tab-panel' + (i === defaultIndex ? ' is-active' : ''),
+    });
+    panel.appendChild(item.content);
+    return panel;
+  });
+
+  tabs.forEach((btn, i) => {
+    btn.addEventListener('click', () => {
+      if (btn.getAttribute('aria-selected') === 'true') return;
+      tabs.forEach((t, j) => {
+        t.setAttribute('aria-selected', String(j === i));
+        panels[j].classList.toggle('is-active', j === i);
+      });
+    });
+  });
+
+  const wrapper = el('div', {});
+  wrapper.appendChild(tablist);
+  panels.forEach(p => wrapper.appendChild(p));
+  return wrapper;
+};
+
+/* ── Accordion ─────────────────────────────────────────────────────────── */
+/** Build a single-open accordion with "Open all / Close all" control.
+ *  items: Array<{ label: string, content: Node }>
+ *  opts.openAllLabel:  string (required)
+ *  opts.closeAllLabel: string (required)
+ *  opts.defaultOpen:   number | null (default null) */
+const makeAccordion = (items, opts = {}) => {
+  const openAllLabel  = opts.openAllLabel;
+  const closeAllLabel = opts.closeAllLabel;
+  let openIndex = opts.defaultOpen ?? null;
+
+  const triggerIds = items.map(() => uid());
+  const panelIds   = items.map(() => uid());
+
+  const chevronSVG = () => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('class', 'kb-accordion__chevron');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M6 9l6 6 6-6');
+    svg.appendChild(path);
+    return svg;
+  };
+
+  const openAllBtn = el('button', {
+    type: 'button',
+    className: 'kb-accordion__open-all',
+  }, openAllLabel);
+
+  const controls = el('div', { className: 'kb-accordion__controls' });
+  controls.appendChild(openAllBtn);
+
+  const isAllOpen = () => triggers.every(t => t.getAttribute('aria-expanded') === 'true');
+
+  const updateOpenAllLabel = () => {
+    openAllBtn.textContent = isAllOpen() ? closeAllLabel : openAllLabel;
+  };
+
+  const openItem = (i) => {
+    triggers[i].setAttribute('aria-expanded', 'true');
+    panelEls[i].classList.add('is-open');
+  };
+  const closeItem = (i) => {
+    triggers[i].setAttribute('aria-expanded', 'false');
+    panelEls[i].classList.remove('is-open');
+  };
+
+  const triggers = [];
+  const panelEls = [];
+  const itemEls  = items.map((item, i) => {
+    const open = i === openIndex;
+    const trigger = el('button', {
+      type: 'button',
+      className: 'kb-accordion__trigger',
+      id: triggerIds[i],
+      'aria-expanded': String(open),
+      'aria-controls': panelIds[i],
+    });
+    trigger.appendChild(document.createTextNode(item.label));
+    trigger.appendChild(chevronSVG());
+
+    const panel = el('div', {
+      className: 'kb-accordion__panel' + (open ? ' is-open' : ''),
+      id: panelIds[i],
+      'aria-labelledby': triggerIds[i],
+    });
+    panel.appendChild(item.content);
+
+    triggers.push(trigger);
+    panelEls.push(panel);
+
+    trigger.addEventListener('click', () => {
+      const expanded = trigger.getAttribute('aria-expanded') === 'true';
+      if (expanded) {
+        closeItem(i);
+        openIndex = null;
+      } else {
+        if (openIndex !== null && !isAllOpen()) closeItem(openIndex);
+        openItem(i);
+        openIndex = i;
+      }
+      updateOpenAllLabel();
+    });
+
+    const itemEl = el('div', { className: 'kb-accordion__item' });
+    itemEl.appendChild(trigger);
+    itemEl.appendChild(panel);
+    return itemEl;
+  });
+
+  openAllBtn.addEventListener('click', () => {
+    if (isAllOpen()) {
+      items.forEach((_, i) => closeItem(i));
+      openIndex = null;
+      openAllBtn.textContent = openAllLabel;
+    } else {
+      items.forEach((_, i) => openItem(i));
+      openIndex = null;
+      openAllBtn.textContent = closeAllLabel;
+    }
+  });
+
+  const accordion = el('div', { className: 'kb-accordion' });
+  accordion.appendChild(controls);
+  itemEls.forEach(itemEl => accordion.appendChild(itemEl));
+  return accordion;
+};
