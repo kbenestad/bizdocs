@@ -49,6 +49,44 @@
 'use strict';
 
 let CFG;
+let lang = 'en';
+
+// ── i18n ─────────────────────────────────────────────────────────────────────
+function S(key, vars) {
+  return lookupString(CFG['ui-strings'], key, lang, CFG['default-code'], vars);
+}
+
+function normaliseConfig() {
+  const { table, languages, defaultCode } = buildLangTable(CFG.localisation || {});
+  CFG['default-code'] = defaultCode;
+  CFG.languages = languages;
+  CFG['ui-strings'] = table;
+}
+
+function applyLang(lc) {
+  lang = lc;
+  document.title = S('doc-title');
+  const loc = CFG.localisation || {};
+  const a = (loc[lc] && loc[lc].about) || (loc[CFG['default-code']] && loc[CFG['default-code']].about) || {};
+  CFG['about-title']   = a.title   || 'About';
+  CFG['about-content'] = a.content || '';
+  CFG['about-button']  = a.button  || 'Close';
+}
+
+function showAboutModal() {
+  return kbAbout({ title: CFG['about-title'], contentMD: CFG['about-content'], closeLabel: CFG['about-button'] });
+}
+
+/** Resolve an item's localised name/description, falling back to the config's
+ *  base fields when the current language has no override in `i18n`. */
+function localiseItem(item, i18n) {
+  const override = (i18n && i18n[item.href] && i18n[item.href][lang]) || {};
+  return {
+    href: item.href,
+    name: override.name || item.name,
+    description: override.description || item.description,
+  };
+}
 
 function render() {
   const app = document.getElementById('app');
@@ -57,8 +95,10 @@ function render() {
 
   wrap.appendChild(buildToolbar());
   wrap.appendChild(buildHeader());
-  if ((CFG.apps || []).length)   wrap.appendChild(buildSection('Apps',  CFG.apps,  false));
-  if ((CFG.links || []).length)  wrap.appendChild(buildSection('Links', CFG.links, true));
+  const apps  = (CFG.apps  || []).map(i => localiseItem(i, CFG['apps-i18n']));
+  const links = (CFG.links || []).map(i => localiseItem(i, CFG['links-i18n']));
+  if (apps.length)  wrap.appendChild(buildSection(S('apps-heading'),  apps,  false));
+  if (links.length) wrap.appendChild(buildSection(S('links-heading'), links, true));
   wrap.appendChild(buildFooter());
 
   app.appendChild(wrap);
@@ -67,8 +107,19 @@ function render() {
 
 function buildToolbar() {
   const toolbar = el('div', { className: 'kb-toolbar' });
+  const langSel = el('select', { className: 'kb-select', 'aria-label': 'Language' });
+  (CFG.languages || []).forEach(l => {
+    const o = el('option', { value: l.code }, l.name || l.code);
+    if (l.code === lang) o.selected = true;
+    langSel.appendChild(o);
+  });
+  langSel.addEventListener('change', () => {
+    applyLang(langSel.value);
+    localStorage.setItem('bizdocs-lang', langSel.value);
+    render();
+  });
   const { seg: sizeSeg, label: szLabel } = makeSizeControl();
-  toolbar.append(el('div', { className: 'spacer' }), sizeSeg, szLabel, makeThemeButton());
+  toolbar.append(langSel, el('div', { className: 'spacer' }), sizeSeg, szLabel, makeThemeButton(), makeAboutButton(showAboutModal));
   return toolbar;
 }
 
@@ -84,11 +135,11 @@ function buildHeader() {
   } else { tile.innerHTML = KB_BRAND_SVG; }
   const org = el('span', { className: 'org' });
   org.appendChild(document.createTextNode(CFG.organization || 'kbenestad/bizdocs'));
-  if (CFG.tagline) org.appendChild(el('small', null, CFG.tagline));
+  org.appendChild(el('small', null, CFG.tagline || S('tagline')));
   brand.append(tile, org);
 
   const title = el('div', { className: 'kb-doctitle' });
-  title.appendChild(el('h1', null, 'Document Tools'));
+  title.appendChild(el('h1', null, S('doc-title')));
 
   header.append(brand, title);
   return header;
@@ -117,16 +168,16 @@ function buildFooter() {
   footer.append(
     mark,
     sep(), el('span', null, '© 2026 Kristian Benestad'),
-    sep(), el('a', { href: 'https://github.com/kbenestad/bizdocs', target: '_blank', rel: 'noopener' }, 'kbenestad/bizdocs')
+    sep(), el('a', { href: 'https://github.com/kbenestad/bizdocs', target: '_blank', rel: 'noopener' }, 'kbenestad/bizdocs'),
+    sep(), el('button', { type: 'button', onClick: showAboutModal }, CFG['about-title'] || 'About')
   );
   return footer;
 }
 
 try {
-  const res = await fetch('config.yml');
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  CFG = jsyaml.load(await res.text());
-  if (!CFG || typeof CFG !== 'object') throw new Error('config.yml did not parse to a valid configuration.');
+  CFG = await loadYamlConfig();
+  normaliseConfig();
+  applyLang(localStorage.getItem('bizdocs-lang') || CFG['default-code']);
   applyAccent(CFG);
   initFontScale();
   render();

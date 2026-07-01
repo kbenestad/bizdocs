@@ -1,16 +1,17 @@
 # =============================================================================
-# Root config — org-wide settings and navigation
+# Root config — org-wide settings, navigation and localisation
 # =============================================================================
 
 # Organisation (shown in the page header)
 organization:              # leave blank to show kBenestad wordmark
 logo: no                   # yes|no — place logo.png or logo.jpg in assets/
-tagline:                   # subtitle shown below org name
+tagline:                   # subtitle shown below org name — leave blank to use the localised default
 
 # Branding
 accent-colour: "#2f6fed"
 
-# Apps — paths relative to this folder
+# Apps — paths relative to this folder. `name`/`description` are fallbacks used
+# when a language has no translation for that entry (see `apps-i18n` below).
 apps:
   - name: Invoice
     href: invoice/
@@ -25,8 +26,63 @@ apps:
     href: contactmanager/
     description: Maintain a contact directory and publish a staff contact book
 
-# External links (open in a new tab)
+# External links (open in a new tab) — same shape as `apps`.
 links:
   - name: GitHub
     href: https://github.com/kbenestad/bizdocs
     description: Source code and issue tracker
+
+# Per-language overrides for `apps`/`links` entries, keyed by `href` then
+# language code. Only fill in the languages/fields you want to translate —
+# anything missing falls back to the `name`/`description` above.
+apps-i18n:
+  invoice/:
+    no: { name: Faktura, description: "Frilans- og konsulentfakturaer som PDF" }
+  reimburse/:
+    no: { name: Utlegg, description: "Refusjon av utlegg med vedlagte kvitteringer" }
+  timesheet/:
+    no: { name: Timeliste, description: "Timelister etter ansattetype med signaturer" }
+  contactmanager/:
+    no: { name: Kontaktbok, description: "Vedlikehold en kontaktkatalog og publiser en ansattkontaktbok" }
+
+links-i18n:
+  https://github.com/kbenestad/bizdocs:
+    no: { description: "Kildekode og feilsporing" }
+
+# ── Localisation: page chrome (title, headings, About dialog) ───────────────
+localisation:
+  default-language: en
+
+  languages:
+    - code: en
+      name: English
+    - code: no
+      name: Norsk
+
+  en:
+    about:
+      title: "About"
+      button: "Close"
+      content: |
+        ### Document Tools
+        A collection of small, self-contained apps for producing common
+        business documents as PDFs. Pick a tool below to get started.
+    ui:
+      doc-title: "Document Tools"
+      tagline: "Document Tools"
+      apps-heading: "Apps"
+      links-heading: "Links"
+
+  no:
+    about:
+      title: "Om"
+      button: "Lukk"
+      content: |
+        ### Dokumentverktøy
+        En samling små, selvstendige apper for å lage vanlige
+        forretningsdokumenter som PDF. Velg et verktøy under for å komme i gang.
+    ui:
+      doc-title: "Dokumentverktøy"
+      tagline: "Dokumentverktøy"
+      apps-heading: "Apper"
+      links-heading: "Lenker"
