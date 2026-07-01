@@ -279,3 +279,148 @@
   }
   .kb-doctitle { text-align: left; }
 }
+
+/* ── Tabs ──────────────────────────────────────────────────────────────── */
+
+.kb-tablist {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  gap: 0;
+  overflow-x: auto;
+}
+
+.kb-tab {
+  flex-shrink: 0;
+  padding: .5rem 1rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  transition: color .15s, border-color .15s;
+  margin-bottom: -1px;  /* sit flush on the tablist border */
+}
+
+.kb-tab:hover {
+  color: var(--text-1);
+}
+
+.kb-tab[aria-selected="true"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.kb-tab-panel {
+  display: none;
+}
+
+.kb-tab-panel.is-active {
+  display: block;
+}
+
+/* ── Accordion ─────────────────────────────────────────────────────────── */
+
+.kb-accordion {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.kb-accordion__controls {
+  display: flex;
+  justify-content: flex-end;
+  padding: .35rem .75rem;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.kb-accordion__open-all {
+  background: none;
+  border: none;
+  color: var(--text-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--fs-xs);
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.kb-accordion__open-all:hover {
+  color: var(--text-1);
+}
+
+.kb-accordion__item {
+  border-bottom: 1px solid var(--border);
+}
+
+.kb-accordion__item:last-child {
+  border-bottom: none;
+}
+
+.kb-accordion__trigger {
+  align-items: center;
+  background: none;
+  border: none;
+  color: var(--text-1);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  gap: .5rem;
+  justify-content: space-between;
+  padding: .65rem .75rem;
+  text-align: left;
+  width: 100%;
+}
+
+.kb-accordion__trigger:hover {
+  background: var(--surface-2);
+}
+
+.kb-accordion__chevron {
+  flex-shrink: 0;
+  height: 16px;
+  stroke: var(--text-2);
+  transition: transform .2s;
+  width: 16px;
+}
+
+.kb-accordion__trigger[aria-expanded="true"] .kb-accordion__chevron {
+  transform: rotate(180deg);
+}
+
+.kb-accordion__panel {
+  display: none;
+  padding: .75rem;
+}
+
+.kb-accordion__panel.is-open {
+  display: block;
+}
+
+/* ── Print overrides ───────────────────────────────────────────────────── */
+
+@media print {
+  /* Show all tab panels when printing (not just the active one). */
+  .kb-tab-panel {
+    display: block;
+  }
+  /* Always expand all accordion panels when printing,
+     and hide the Open all / Close all control. */
+  .kb-accordion__controls {
+    display: none;
+  }
+  .kb-accordion__panel {
+    display: block;
+  }
+  /* Suppress the chevron animation artifact on print. */
+  .kb-accordion__trigger[aria-expanded="false"] .kb-accordion__chevron {
+    transform: rotate(180deg);
+  }
+}
