@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.bunny.net; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="format-detection" content="telephone=no">
 <title>Document Tools</title>
@@ -17,7 +18,9 @@
   (function(){var t=localStorage.getItem('kb-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
 </script>
 
-<script src="https://unpkg.com/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"
+        integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
+        crossorigin="anonymous"></script>
 
 <!-- Shared design + runtime. app.js MUST load before the inline <script>. -->
 <link rel="stylesheet" href="assets/style.css">
@@ -123,17 +126,14 @@ function buildFooter() {
 }
 
 try {
-  const res = await fetch('config.yml');
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  CFG = jsyaml.load(await res.text());
-  if (!CFG || typeof CFG !== 'object') throw new Error('config.yml did not parse to a valid configuration.');
+  CFG = await loadYamlConfig('config.yml', { requireLocalisation: false });
   applyAccent(CFG);
   initFontScale();
   render();
 } catch (e) {
   document.getElementById('app').innerHTML =
     `<div class="kb-wrap"><div class="kb-note kb-note--error"><span>⚠</span>` +
-    `<div><b>Failed to load config.yml</b><br>${e.message}</div></div></div>`;
+    `<div><b>Failed to load config.yml</b><br>${kbEsc(e.message)}</div></div></div>`;
 }
 })();
 </script>

@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.bunny.net; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Timesheet</title>
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
@@ -11,14 +12,20 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="assets/site.webmanifest">
 <meta name="theme-color" content="#2f6fed">
-<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-<script src="https://unpkg.com/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
-<script src="../assets/app.js"></script>
+<!-- Restore persisted theme BEFORE first paint (and before any blocking
+     network fetch) to avoid a light-mode flash. Keep this first. -->
 <script>
   (function(){var t=localStorage.getItem('kb-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"
+        integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI"
+        crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"
+        integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
+        crossorigin="anonymous"></script>
 <link rel="stylesheet" href="../assets/style.css">
 <link rel="stylesheet" href="../assets/ui.css">
+<script src="../assets/app.js"></script>
 <style>
 /* =============================================================================
  * Timesheet — app-specific styles
@@ -141,13 +148,8 @@ function calcRowMins(row) {
   return outM - inM;
 }
 
+// English day codes — used as identifiers (config `workdays:` list), not copy.
 const DOW_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-const MONTH_NAMES_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const MONTH_NAMES_VI = ['Th1','Th2','Th3','Th4','Th5','Th6','Th7','Th8','Th9','Th10','Th11','Th12'];
-
-function getMonthNames(lang) {
-  return lang === 'vi' ? MONTH_NAMES_VI : MONTH_NAMES_EN;
-}
 
 function parseDateStr(s) {
   const [y, m, d] = s.split('-').map(Number);
@@ -158,17 +160,20 @@ function dateStrDow(s) {
   return parseDateStr(s).getDay();
 }
 
+// Localised month/weekday abbreviations via Intl — works for any configured
+// language, with an English fallback for unknown codes.
+function localePart(d, lang, opts) {
+  try { return d.toLocaleString(lang, opts); }
+  catch (e) { return d.toLocaleString('en', opts); }
+}
+
 function fmtDate(s, lang) {
   const d = parseDateStr(s);
-  const mn = getMonthNames(lang)[d.getMonth()];
-  return `${d.getDate()} ${mn}`;
+  return `${d.getDate()} ${localePart(d, lang, { month: 'short' })}`;
 }
 
 function fmtDow(s, lang) {
-  const dow = DOW_NAMES[parseDateStr(s).getDay()];
-  if (lang !== 'vi') return dow;
-  const map = {Sun:'CN',Mon:'T2',Tue:'T3',Wed:'T4',Thu:'T5',Fri:'T6',Sat:'T7'};
-  return map[dow] || dow;
+  return localePart(parseDateStr(s), lang, { weekday: 'short' });
 }
 
 function dateRange(from, to) {
@@ -230,6 +235,10 @@ function applyLang(lc) {
   CFG['about-title']   = a.title  || 'About';
   CFG['about-content'] = a.content || '';
   CFG['about-button']  = a.button || 'Close';
+  // The footer About button lives in static HTML outside render() — keep it
+  // in step with the active language.
+  const fab = document.getElementById('footer-about-btn');
+  if (fab) fab.textContent = CFG['about-title'];
 }
 
 // Active language for string lookups. During PDF generation this is overridden
@@ -581,7 +590,7 @@ function renderSignatureArea(wrap) {
       canvas.addEventListener('touchend', stopDraw);
 
       const controls = el('div', {className: 'sig-controls'});
-      const clearBtn = el('button', {type:'button', className:'kb-btn kb-btn--ghost'}, 'Clear');
+      const clearBtn = el('button', {type:'button', className:'kb-btn kb-btn--ghost'}, S('sig-clear'));
       clearBtn.style.cssText = 'font-size:12px;padding:4px 12px';
       clearBtn.addEventListener('click', () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -589,7 +598,7 @@ function renderSignatureArea(wrap) {
       });
 
       const fileInput = el('input', {type:'file', accept:'image/*', style:{display:'none'}});
-      const uploadBtn = el('button', {type:'button', className:'kb-btn kb-btn--ghost'}, 'Upload image');
+      const uploadBtn = el('button', {type:'button', className:'kb-btn kb-btn--ghost'}, S('sig-upload'));
       uploadBtn.style.cssText = 'font-size:12px;padding:4px 12px';
       uploadBtn.addEventListener('click', () => fileInput.click());
       fileInput.addEventListener('change', () => {
@@ -655,8 +664,8 @@ function render() {
   const toolbar = el('div', {className:'kb-toolbar'});
 
   const langSeg = el('select', {className:'kb-select', 'aria-label': 'Language'});
-  (CFG.languages || [{code:'en', display:'English'}]).forEach(l => {
-    langSeg.appendChild(el('option', {value: l.code, ...(state.lang === l.code ? {selected:''} : {})}, l.display));
+  (CFG.languages || [{code:'en', name:'English'}]).forEach(l => {
+    langSeg.appendChild(el('option', {value: l.code, ...(state.lang === l.code ? {selected:''} : {})}, l.name || l.display || l.code));
   });
   langSeg.addEventListener('change', () => {
     state.lang = langSeg.value;
@@ -825,7 +834,7 @@ function render() {
 
   // ── Action row
   const genBtn = el('button', {id:'gen-btn', type:'button', className:'kb-btn kb-btn--primary kb-btn--lg', style:{flex:'6'}, onClick: onGenerate});
-  genBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M8 2v9m0 0 4-4M8 11 4 7"/><line x1="2" y1="14" x2="14" y2="14"/></svg>${S('btn-generate')}`;
+  genBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M8 2v9m0 0 4-4M8 11 4 7"/><line x1="2" y1="14" x2="14" y2="14"/></svg>${kbEsc(S('btn-generate'))}`;
 
   const valBtn = el('button', {type:'button', className:'kb-btn kb-btn--ghost kb-btn--lg', style:{flex:'2'}, onClick: () => {
     validationResult = runValidation();
@@ -867,7 +876,7 @@ function renderValBox(box) {
     const note = el('div', {className:'kb-note kb-note--success'});
     const icon = `<svg viewBox="0 0 16 16" fill="currentColor" width="17" height="17"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.061L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/></svg>`;
     const inner = el('div');
-    inner.innerHTML = `<b>${S('val-ok-title')}</b> ${S('val-ok-body')}`;
+    inner.innerHTML = `<b>${kbEsc(S('val-ok-title'))}</b> ${kbEsc(S('val-ok-body'))}`;
     note.innerHTML = icon;
     note.appendChild(inner);
     box.appendChild(note);
@@ -877,7 +886,7 @@ function renderValBox(box) {
     const note = el('div', {className:'kb-note kb-note--error'});
     const icon = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>`;
     const inner = el('div');
-    inner.innerHTML = `<b>${S('val-errors-title')}</b><ul>${errors.map(e=>`<li>${e}</li>`).join('')}</ul>`;
+    inner.innerHTML = `<b>${kbEsc(S('val-errors-title'))}</b><ul>${errors.map(e=>`<li>${kbEsc(e)}</li>`).join('')}</ul>`;
     note.innerHTML = icon;
     note.appendChild(inner);
     box.appendChild(note);
@@ -886,7 +895,7 @@ function renderValBox(box) {
     const note = el('div', {className:'kb-note kb-note--warning'});
     const icon = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/></svg>`;
     const inner = el('div');
-    inner.innerHTML = `<b>${S('val-warnings-title')}</b><ul>${warnings.map(w=>`<li>${w}</li>`).join('')}</ul>`;
+    inner.innerHTML = `<b>${kbEsc(S('val-warnings-title'))}</b><ul>${warnings.map(w=>`<li>${kbEsc(w)}</li>`).join('')}</ul>`;
     note.innerHTML = icon;
     note.appendChild(inner);
     box.appendChild(note);
@@ -1022,7 +1031,7 @@ function renderRow(dateStr, rowIndex, row, isFirst, isLast, totalRows) {
   // Action buttons
   const actionEl = el('div', {className:'ts-actions'});
   if (isLast && !isFirst) {
-    const rmBtn = el('button', {type:'button', className:'kb-circbtn kb-circbtn--rm', title:'Remove row'}, '−');
+    const rmBtn = el('button', {type:'button', className:'kb-circbtn kb-circbtn--rm', title:S('row-remove')}, '−');
     rmBtn.addEventListener('click', () => {
       state.days[dateStr].splice(rowIndex, 1);
       const block = $(`#day-${dateStr}`);
@@ -1032,7 +1041,7 @@ function renderRow(dateStr, rowIndex, row, isFirst, isLast, totalRows) {
     actionEl.appendChild(rmBtn);
   }
   if (isLast) {
-    const addBtn = el('button', {type:'button', className:'kb-circbtn', title:'Add row'}, '+');
+    const addBtn = el('button', {type:'button', className:'kb-circbtn', title:S('row-add')}, '+');
     addBtn.addEventListener('click', () => {
       state.days[dateStr].push({ code: '', timeIn: '', timeOut: '', desc: '', _locked: false });
       const block = $(`#day-${dateStr}`);
@@ -1041,7 +1050,7 @@ function renderRow(dateStr, rowIndex, row, isFirst, isLast, totalRows) {
     });
     actionEl.appendChild(addBtn);
   } else if (!isFirst) {
-    const rmBtn = el('button', {type:'button', className:'kb-circbtn kb-circbtn--rm', title:'Remove row'}, '−');
+    const rmBtn = el('button', {type:'button', className:'kb-circbtn kb-circbtn--rm', title:S('row-remove')}, '−');
     rmBtn.addEventListener('click', () => {
       state.days[dateStr].splice(rowIndex, 1);
       const block = $(`#day-${dateStr}`);
@@ -1170,14 +1179,14 @@ async function onNewTimesheet() {
   state.days    = buildDefaultDays(p.from, p.to, state.empType);
   state.unlocks = {};
   validationResult = null;
-  try { localStorage.setItem('ts-state', ''); } catch(e) {}
+  try { localStorage.removeItem('ts-state'); } catch(e) {}
   render();
 }
 
 // ========== PDF ENGINE ==========
 function parseHexColor(hex) {
-  const h = hex.replace('#','');
-  return PDFLib.rgb(parseInt(h.slice(0,2),16)/255, parseInt(h.slice(2,4),16)/255, parseInt(h.slice(4,6),16)/255);
+  const c = kbHexRgb(hex) || kbHexRgb('#2f6fed');
+  return PDFLib.rgb(c[0]/255, c[1]/255, c[2]/255);
 }
 
 function wrapText(text, font, size, maxW) {
@@ -1204,7 +1213,7 @@ function truncate(text, font, size, maxW) {
 async function loadLogo(doc) {
   for (const ext of ['png','jpg']) {
     try {
-      const res = await fetch(`assets/logo.${ext}`);
+      const res = await fetch(`../assets/logo.${ext}`);
       if (!res.ok) continue;
       const buf = await res.arrayBuffer();
       return ext === 'png' ? await doc.embedPng(buf) : await doc.embedJpg(buf);
@@ -1261,9 +1270,8 @@ async function generatePDF() {
   }
 
   function hexToRgb(hex) {
-    const h = (hex||'').replace('#','');
-    if (h.length !== 6) return null;
-    return rgb(parseInt(h.slice(0,2),16)/255, parseInt(h.slice(2,4),16)/255, parseInt(h.slice(4,6),16)/255);
+    const c = kbHexRgb(hex);
+    return c ? rgb(c[0]/255, c[1]/255, c[2]/255) : null;
   }
 
   const BORDER_W = 3;
@@ -1543,7 +1551,7 @@ async function generatePDF() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const emp = (state.employee || 'employee').replace(/\s+/g,'_');
+  const emp = kbSafeFilename(state.employee) || 'employee';
   a.download = `${emp}_${state.periodFrom}_Timesheet.pdf`;
   a.click();
   URL.revokeObjectURL(url);
@@ -1567,7 +1575,7 @@ async function onGenerate() {
     renderLang = outputLang();
     await generatePDF();
   } catch(e) {
-    alert('Error generating PDF: ' + e.message);
+    kbAlert({ title: 'PDF', message: 'Error generating PDF: ' + e.message });
     console.error(e);
   } finally {
     renderLang = null;
@@ -1609,7 +1617,7 @@ async function init() {
     document.addEventListener('change', scheduleAutoSave);
     document.getElementById('footer-about-btn').addEventListener('click', showAboutModal);
   } catch(e) {
-    $('#app').innerHTML = `<div class="kb-wrap"><div class="kb-note kb-note--error"><span>⚠</span><div><b>Failed to load</b><br>${e.message}</div></div></div>`;
+    $('#app').innerHTML = `<div class="kb-wrap"><div class="kb-note kb-note--error"><span>⚠</span><div><b>Failed to load</b><br>${kbEsc(e.message)}</div></div></div>`;
     console.error(e);
   }
 }

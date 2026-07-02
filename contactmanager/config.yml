@@ -63,6 +63,8 @@ localisation:
       no-existing-found: "No existing contact book found here — starting empty."
       imported-n: "Imported {n} contacts from the uploaded file."
       import-failed: "Could not read contacts from that file."
+      restored-draft: "Restored your unexported working copy ({n} contacts) from this browser."
+      confirm-import: "Replace the current working list ({n} contacts) with the uploaded file\u2019s contacts?"
       no-contacts: "No contacts yet — add one to get started."
       count-n: "{n} contacts"
       name-required: "Name is required."

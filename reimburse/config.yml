@@ -98,6 +98,9 @@ localisation:
       staff: "Staff"
       period-from: "Period from"
       period-to: "Period to"
+      meta-from: "From {d}"
+      meta-until: "Until {d}"
+      fx-per: per
       base-currency: "Base currency"
       ph-fullname: "Full name"
       new-form: "New form"
@@ -194,6 +197,9 @@ localisation:
       staff: "Mitarbeiter"
       period-from: "Zeitraum von"
       period-to: "Zeitraum bis"
+      meta-from: "Ab {d}"
+      meta-until: "Bis {d}"
+      fx-per: pro
       base-currency: "Basiswährung"
       ph-fullname: "Vollständiger Name"
       new-form: "Neues Formular"
@@ -290,6 +296,9 @@ localisation:
       staff: "Employé"
       period-from: "Période du"
       period-to: "Période au"
+      meta-from: "À partir du {d}"
+      meta-until: "Jusqu'au {d}"
+      fx-per: par
       base-currency: "Devise de base"
       ph-fullname: "Nom complet"
       new-form: "Nouveau formulaire"
@@ -385,6 +394,9 @@ localisation:
       staff: "Empleado"
       period-from: "Período desde"
       period-to: "Período hasta"
+      meta-from: "Desde {d}"
+      meta-until: "Hasta {d}"
+      fx-per: por
       base-currency: "Divisa base"
       ph-fullname: "Nombre completo"
       new-form: "Nuevo formulario"

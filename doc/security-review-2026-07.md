@@ -1,7 +1,21 @@
 # Codebase review — security, consistency, correctness
 
 Date: 2026-07-01 · Scope: full repository (all apps, shared `assets/`, `_template/`, root page, configs, docs).
-No code was changed; this is the findings report. Suggested fixes accompany each item.
+Suggested fixes accompany each item.
+
+> **Status (2026-07-02): all findings fixed** on this branch, with two scoping
+> notes. **C4** (invoice's hand-assembled chrome / classic-script structure) is
+> deferred as the report itself recommended — it is a structural refactor to be
+> folded in when the app is next reworked. **C5** is addressed by documenting
+> the real key inventory in CLAUDE.md rather than renaming keys, since renames
+> would orphan users' saved data without a migration. Everything else — the
+> `markdown()` injection, error/config-string escaping, SRI + single CDN + CSP
+> on every page, logo-path and theme-order bugs, `name:` schema, dead code,
+> listener leak, contactmanager draft persistence, localisation of hardcoded
+> strings (new keys in all language blocks), shared filename/hex helpers, and
+> the doc gaps — is implemented and verified in-browser (all six pages render
+> clean under the new CSP; markdown sanitisation checked at DOM level;
+> language switching, draft restore, and save-validation exercised headlessly).
 
 Threat-model note: these apps have no backend — the browser user, the deployed
 `config.yml`, and the CDN are the only inputs. "Config-controlled" findings are

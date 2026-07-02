@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.bunny.net; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="format-detection" content="telephone=no">
 <title>Reimbursement</title>
@@ -12,14 +13,20 @@
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="assets/site.webmanifest">
 <meta name="theme-color" content="#2f6fed">
-<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-<script src="https://unpkg.com/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
-<script src="../assets/app.js"></script>
+<!-- Restore persisted theme BEFORE first paint (and before any blocking
+     network fetch) to avoid a light-mode flash. Keep this first. -->
 <script>
   (function(){var t=localStorage.getItem('kb-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"
+        integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI"
+        crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"
+        integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
+        crossorigin="anonymous"></script>
 <link rel="stylesheet" href="../assets/style.css">
 <link rel="stylesheet" href="../assets/ui.css">
+<script src="../assets/app.js"></script>
 <style>
 /* =============================================================================
  * Reimbursement — app-specific styles
@@ -100,7 +107,8 @@
 
 // ========== UTILITIES ==========
 // $, $$, el, uid live in app.js
-function fmtAmt(n) { return formatAmount(n, { fallback: '–', locale: undefined }); }
+// Same grouping/locale as the other apps (formatAmount defaults to en-US).
+function fmtAmt(n) { return formatAmount(n, { fallback: '–' }); }
 function defaultPeriod() {
   const d = new Date();
   const isLastDay = d.getDate() === new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
@@ -198,6 +206,10 @@ function applyLang(lc) {
   CFG['fx-rate-message-other'] = L['fx-rate-message-other'] || (loc[def] && loc[def]['fx-rate-message-other']) || '';
   const names = L.currencies || (loc[def] && loc[def].currencies) || {};
   (CFG.currencies || []).forEach(c => { if (names[c.code] != null) c.name = names[c.code]; });
+  // The footer About link lives in static HTML outside render() — keep it in
+  // step with the active language.
+  const al = document.getElementById('about-link');
+  if (al) al.textContent = CFG['about-title'] || 'About';
 }
 
 // ========== STATE ==========
@@ -339,11 +351,6 @@ function getCurrencyName(code) {
   const c = (CFG.currencies || []).find(c => c.code === code);
   return c ? c.name : code;
 }
-function buildFxTip(code, base) {
-  if (!code || code === base || code.length < 3) return '';
-  const fn = getCurrencyName(code), bn = getCurrencyName(base);
-  return `Enter the exchange rate expressed as the amount of ${fn} you pay for 1 ${bn}. E.g., XX.XX ${fn} per 1 ${bn} if your expense was in ${fn} and you submit your reimbursement form in ${bn}.`;
-}
 
 // ========== CURRENCY DROPDOWN ==========
 function makeCDD(currencies, value, onChange) {
@@ -359,7 +366,13 @@ function makeCDD(currencies, value, onChange) {
     panel.appendChild(opt);
   });
   trigger.addEventListener('click', e => { e.stopPropagation(); panel.classList.toggle('open'); });
-  document.addEventListener('click', () => panel.classList.remove('open'));
+  // Close on outside click; self-detach once this dropdown leaves the DOM so
+  // re-renders don't accumulate document-level listeners.
+  const onDocClick = () => {
+    if (!wrap.isConnected) { document.removeEventListener('click', onDocClick); return; }
+    panel.classList.remove('open');
+  };
+  document.addEventListener('click', onDocClick);
   wrap.append(trigger, panel);
   wrap._setValue = code => { trigger.textContent = code; };
   return wrap;
@@ -462,13 +475,16 @@ function render() {
   const periodMeta = el('div', {className:'meta'});
   function fmtPeriodDate(iso) {
     const [y, m, d] = iso.split('-').map(Number);
-    return `${d} ${new Date(y, m-1, 1).toLocaleString('en-GB', {month:'long'})}`;
+    let month;
+    try { month = new Date(y, m - 1, 1).toLocaleString(curLang(), { month: 'long' }); }
+    catch (e) { month = new Date(y, m - 1, 1).toLocaleString('en', { month: 'long' }); }
+    return `${d} ${month}`;
   }
   function updatePeriodMeta() {
     const from = state.periodFrom, to = state.periodTo;
     if (from && to) periodMeta.textContent = `${fmtPeriodDate(from)} – ${fmtPeriodDate(to)}`;
-    else if (from) periodMeta.textContent = `From ${fmtPeriodDate(from)}`;
-    else if (to) periodMeta.textContent = `Until ${fmtPeriodDate(to)}`;
+    else if (from) periodMeta.textContent = T('meta-from', { d: fmtPeriodDate(from) });
+    else if (to) periodMeta.textContent = T('meta-until', { d: fmtPeriodDate(to) });
     else periodMeta.textContent = '';
   }
   updatePeriodMeta();
@@ -547,7 +563,7 @@ function render() {
   const actionFeedback = el('div', {style:{marginTop:'8px'}});
 
   const saveBtn = el('button', {className:'kb-btn kb-btn--ghost kb-btn--lg', style:{flex:'2'}}, T('save'));
-  saveBtn.addEventListener('click', () => { saveState(); });
+  saveBtn.addEventListener('click', onSave);
 
   const validateBtn = el('button', {className:'kb-btn kb-btn--ghost kb-btn--lg', style:{flex:'2'}}, T('validate'));
   validateBtn.addEventListener('click', () => {
@@ -557,18 +573,18 @@ function render() {
       const note = el('div', {className:'kb-note kb-note--error'});
       note.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>`;
       const txt = el('div');
-      txt.innerHTML = '<strong>'+T('val-fix')+'</strong><br>' + errs.join('<br>');
+      txt.innerHTML = '<strong>'+kbEsc(T('val-fix'))+'</strong><br>' + errs.map(kbEsc).join('<br>');
       note.appendChild(txt);
       actionFeedback.appendChild(note);
     } else {
       const note = el('div', {className:'kb-note kb-note--success'});
-      note.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.061L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/></svg><div><strong>${T('val-ok-head')}</strong> ${T('val-ok-body')}</div>`;
+      note.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.061L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/></svg><div><strong>${kbEsc(T('val-ok-head'))}</strong> ${kbEsc(T('val-ok-body'))}</div>`;
       actionFeedback.appendChild(note);
     }
   });
 
   const genBtn = el('button', {className:'kb-btn kb-btn--primary kb-btn--lg', id:'gen-btn', style:{flex:'6'}, onClick: onGenerate});
-  genBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M8 2v9m0 0 4-4M8 11 4 7"/><line x1="2" y1="14" x2="14" y2="14"/></svg>${T('download')}`;
+  genBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M8 2v9m0 0 4-4M8 11 4 7"/><line x1="2" y1="14" x2="14" y2="14"/></svg>${kbEsc(T('download'))}`;
 
   actionRow.append(saveBtn, validateBtn, genBtn);
   wrap.appendChild(actCard);
@@ -671,11 +687,11 @@ function renderLine(ln, item) {
     fxDirDD = makeCDD(opts, initCode, code => {
       ln.fxDir = code === baseCur ? 'base' : 'foreign';
       fxIn.value = fxDisplayVal();
-      fxPerLbl.textContent = 'per ' + (ln.fxDir === 'foreign' ? baseCur : ln.currency || '???');
+      fxPerLbl.textContent = T('fx-per') + ' ' + (ln.fxDir === 'foreign' ? baseCur : ln.currency || '???');
     });
     fxDirContainer.innerHTML = '';
     fxDirContainer.appendChild(fxDirDD);
-    fxPerLbl.textContent = 'per ' + (ln.fxDir === 'foreign' ? baseCur : fcy);
+    fxPerLbl.textContent = T('fx-per') + ' ' + (ln.fxDir === 'foreign' ? baseCur : fcy);
   }
   function showFxControls(show) {
     fxDirContainer.style.display = show ? '' : 'none';
@@ -1335,7 +1351,7 @@ async function generatePDF() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const staff = (state.staff || 'staff').replace(/\s+/g,'_');
+  const staff = kbSafeFilename(state.staff) || 'staff';
   a.download = `${staff}_${state.periodFrom}_Reimbursement.pdf`;
   a.click();
   URL.revokeObjectURL(url);
@@ -1343,8 +1359,8 @@ async function generatePDF() {
 
 // PDF helpers
 function parseHex(hex) {
-  const h = hex.replace('#','');
-  return PDFLib.rgb(parseInt(h.slice(0,2),16)/255, parseInt(h.slice(2,4),16)/255, parseInt(h.slice(4,6),16)/255);
+  const c = kbHexRgb(hex) || kbHexRgb('#2F6FED');
+  return PDFLib.rgb(c[0]/255, c[1]/255, c[2]/255);
 }
 function wrapText(text, font, size, maxW) {
   const words = text.split(/\s+/);
@@ -1367,7 +1383,7 @@ function truncate(text, font, size, maxW) {
 async function loadLogo(doc) {
   for (const ext of ['png','jpg']) {
     try {
-      const res = await fetch(`assets/logo.${ext}`);
+      const res = await fetch(`../assets/logo.${ext}`);
       if (!res.ok) continue;
       const buf = await res.arrayBuffer();
       return ext === 'png' ? await doc.embedPng(buf) : await doc.embedJpg(buf);
@@ -1385,7 +1401,7 @@ async function onGenerate() {
     const note = el('div', {className:'kb-note kb-note--error'});
     note.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>`;
     const txt = el('div');
-    txt.innerHTML = '<strong>'+T('val-fix')+'</strong><br>' + errs.join('<br>');
+    txt.innerHTML = '<strong>'+kbEsc(T('val-fix'))+'</strong><br>' + errs.map(kbEsc).join('<br>');
     note.appendChild(txt);
     valBox.appendChild(note);
     valBox.scrollIntoView({behavior:'smooth'});
@@ -1397,7 +1413,7 @@ async function onGenerate() {
     renderLang = outputLang();
     await generatePDF();
   } catch (e) {
-    alert('Error generating PDF: ' + e.message);
+    kbAlert({ title: 'PDF', message: 'Error generating PDF: ' + e.message });
     console.error(e);
   } finally {
     renderLang = null;
@@ -1427,7 +1443,7 @@ async function onSave() {
     const note = el('div', {className:'kb-note kb-note--error'});
     note.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>`;
     const txt = el('div');
-    txt.innerHTML = '<strong>'+T('val-fix')+'</strong><br>' + errs.join('<br>');
+    txt.innerHTML = '<strong>'+kbEsc(T('val-fix'))+'</strong><br>' + errs.map(kbEsc).join('<br>');
     note.appendChild(txt);
     valBox.appendChild(note);
     valBox.scrollIntoView({behavior:'smooth'});
@@ -1449,16 +1465,16 @@ async function init() {
     const p = defaultPeriod();
     state.periodFrom = p.from; state.periodTo = p.to;
     const hasState = await loadState();
-    if (!hasState) state.items.push(newItem());
+    if (!hasState || state.items.length === 0) state.items.push(newItem());
     render();
     document.addEventListener('input', scheduleAutoSave);
     document.addEventListener('change', scheduleAutoSave);
     const canSaveReceipts = !!db;
     let entryMsg = T('msg-entry');
-    if (!canSaveReceipts) entryMsg += '<br><br>' + T('msg-entry-noreceipt');
+    if (!canSaveReceipts) entryMsg += '\n\n' + T('msg-entry-noreceipt');
     await showWarningModal(entryMsg);
   } catch (e) {
-    $('#app').innerHTML = `<div class="kb-wrap"><div class="kb-note kb-note--error"><span>Failed to load: ${e.message}</span></div></div>`;
+    $('#app').innerHTML = `<div class="kb-wrap"><div class="kb-note kb-note--error"><span>Failed to load: ${kbEsc(e.message)}</span></div></div>`;
     console.error(e);
   }
 }
