@@ -79,6 +79,7 @@ localisation:
       field-notes: "Notes"
       ph-name: "Full name"
       ph-nickname: "What they go by"
+      ph-category: "Comma-separated, e.g. Legal, Partner"
       add-phone: "Add phone"
       phone-number: "Number"
       remove: "Remove"
