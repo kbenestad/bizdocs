@@ -16,6 +16,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.bunny.net; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="format-detection" content="telephone=no">
 <title>Template</title>
@@ -31,8 +32,12 @@
 </script>
 
 <!-- CDN libraries: js-yaml (all apps) + pdf-lib (PDF output; new apps use pdf-lib). -->
-<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-<script src="https://unpkg.com/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"
+        integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI"
+        crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"
+        integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
+        crossorigin="anonymous"></script>
 
 <!-- Shared design + runtime. app.js MUST load before this app's inline <script>. -->
 <link rel="stylesheet" href="../assets/style.css">
@@ -223,7 +228,7 @@ try {
 } catch (e) {
   document.getElementById('app').innerHTML =
     `<div class="kb-wrap"><div class="kb-note kb-note--error"><span>⚠</span>` +
-    `<div><b>Failed to load config.yml</b><br>${e.message}</div></div></div>`;
+    `<div><b>Failed to load config.yml</b><br>${kbEsc(e.message)}</div></div></div>`;
 }
 })();
 </script>

@@ -112,13 +112,13 @@ localisation:
   # ── Language declarations ──────────────────────────────────────────────────
   languages:
     - code: en
-      display: "English"
+      name: "English"
     - code: de
-      display: "Deutsch"
+      name: "Deutsch"
     - code: fr
-      display: "Français"
+      name: "Français"
     - code: es
-      display: "Español"
+      name: "Español"
 
   # ── English ────────────────────────────────────────────────────────────────
   en:
@@ -182,6 +182,10 @@ localisation:
       period-to: "to"
       generating: "Generating PDF…"
       signature-employee: "Employee signature"
+      sig-clear: "Clear"
+      sig-upload: "Upload image"
+      row-add: "Add row"
+      row-remove: "Remove row"
       signature-authorised: "Authorised signature"
       signature-date: "Date"
       pdf-title: "TIMESHEET"
@@ -262,6 +266,10 @@ localisation:
       period-to: "bis"
       generating: "PDF wird erstellt…"
       signature-employee: "Unterschrift Mitarbeiter"
+      sig-clear: "Löschen"
+      sig-upload: "Bild hochladen"
+      row-add: "Zeile hinzufügen"
+      row-remove: "Zeile entfernen"
       signature-authorised: "Bevollmächtigte Unterschrift"
       signature-date: "Datum"
       pdf-title: "STUNDENZETTEL"
@@ -342,6 +350,10 @@ localisation:
       period-to: "au"
       generating: "Génération du PDF…"
       signature-employee: "Signature de l'employé"
+      sig-clear: "Effacer"
+      sig-upload: "Charger une image"
+      row-add: "Ajouter une ligne"
+      row-remove: "Supprimer la ligne"
       signature-authorised: "Signature autorisée"
       signature-date: "Date"
       pdf-title: "FEUILLE DE TEMPS"
@@ -422,6 +434,10 @@ localisation:
       period-to: "a"
       generating: "Generando PDF…"
       signature-employee: "Firma del empleado"
+      sig-clear: "Borrar"
+      sig-upload: "Subir imagen"
+      row-add: "Añadir fila"
+      row-remove: "Eliminar fila"
       signature-authorised: "Firma autorizada"
       signature-date: "Fecha"
       pdf-title: "HOJA DE HORAS"

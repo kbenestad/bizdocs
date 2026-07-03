@@ -2,6 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.bunny.net; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="format-detection" content="telephone=no">
   <title>Invoice</title>
@@ -112,9 +113,11 @@
 
 <!-- js-yaml -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"
+        integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
         crossorigin="anonymous"></script>
 <!-- jsPDF -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
+        integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk"
         crossorigin="anonymous"></script>
 <!-- Shared app runtime (DOM helpers, markdown, theme, modals) -->
 <script src="../assets/app.js"></script>
@@ -173,11 +176,8 @@ function fmt(n) { return formatAmount(n); }
 function pn(s)  { return parseAmount(s); }
 function fmtDate(v) { return formatDate(v, cfg?.["date-format"] || "d MMMM YYYY"); }
 
-// ── HTML escape ───────────────────────────────────────────────────────────────
-function h(s) {
-  if (s == null) return "";
-  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-}
+// ── HTML escape (delegates to the shared kbEsc in app.js) ─────────────────────
+function h(s) { return kbEsc(s); }
 
 // ── Countries ─────────────────────────────────────────────────────────────────
 const COUNTRIES = [
@@ -275,7 +275,7 @@ async function loadCfg() {
   } catch (err) {
     document.getElementById("loading").innerHTML =
       `<div class="error-box"><strong>Could not load config.yml:</strong> ${h(err.message)}<br>
-       Serve the <code>app/</code> folder from a web server (e.g. <code>npx serve .</code>).</div>`;
+       Serve this folder over HTTP (e.g. <code>python3 -m http.server</code> from the repo root).</div>`;
   }
 }
 
@@ -312,6 +312,7 @@ function buildHeader() {
   const hdrEl   = document.querySelector(".kb-header");
   const brandEl = document.getElementById("hdr-brand");
   brandEl.className = "kb-brand";
+  brandEl.innerHTML = "";
 
   if (!org) {
     brandEl.innerHTML = `<span class="logo">${KB_BRAND_SVG}</span><span class="org">kbenestad/invoice<small>Invoice generator</small></span>`;
@@ -334,7 +335,7 @@ function buildHeader() {
   }
 
   const titleEl = document.getElementById("inv-title");
-  titleEl.innerHTML = LOGO_SVG.replace("<svg ", '<svg width="24" height="24" ') + "invoice";
+  titleEl.innerHTML = LOGO_SVG.replace("<svg ", '<svg width="24" height="24" ') + h(t("doc-title"));
   updateInvMeta();
 }
 
@@ -387,44 +388,44 @@ function buildForm() {
   <!-- Row 1: Sender + Invoice details -->
   <div class="kb-grid cols-2" style="margin-bottom:14px;align-items:start">
     <section class="kb-card" style="margin:0">
-      <h2 class="kb-card__title" id="sec-sender">${t("sender-section")}</h2>
+      <h2 class="kb-card__title" id="sec-sender">${h(t("sender-section"))}</h2>
       <div class="kb-grid">
         <div class="kb-field">
-          <label class="kb-label" id="lbl-sn" for="sn">${t("sender-name")}</label>
+          <label class="kb-label" id="lbl-sn" for="sn">${h(t("sender-name"))}</label>
           <input id="sn" type="text" class="kb-input" data-ls="sn" autocomplete="name">
         </div>
         <div class="kb-field">
-          <label class="kb-label" id="lbl-sa1" for="sa1">${t("sender-address1")}</label>
+          <label class="kb-label" id="lbl-sa1" for="sa1">${h(t("sender-address1"))}</label>
           <input id="sa1" type="text" class="kb-input" data-ls="sa1" autocomplete="address-line1">
         </div>
         <div class="kb-field">
-          <label class="kb-label" id="lbl-sa2" for="sa2">${t("sender-address2")}</label>
+          <label class="kb-label" id="lbl-sa2" for="sa2">${h(t("sender-address2"))}</label>
           <input id="sa2" type="text" class="kb-input" data-ls="sa2" autocomplete="address-line2">
         </div>
         <div class="kb-field">
-          <label class="kb-label" id="lbl-sa3" for="sa3">${t("sender-address3")}</label>
+          <label class="kb-label" id="lbl-sa3" for="sa3">${h(t("sender-address3"))}</label>
           <input id="sa3" type="text" class="kb-input" data-ls="sa3">
         </div>
         <div class="kb-field">
-          <label class="kb-label" id="lbl-sa4" for="sa4">${t("sender-address4")}</label>
+          <label class="kb-label" id="lbl-sa4" for="sa4">${h(t("sender-address4"))}</label>
           <input id="sa4" type="text" class="kb-input" data-ls="sa4">
         </div>
         <div class="kb-field">
-          <label class="kb-label" id="lbl-sc" for="sc">${t("sender-country")}</label>
+          <label class="kb-label" id="lbl-sc" for="sc">${h(t("sender-country"))}</label>
           <select id="sc" class="kb-select" data-ls="sc">${countryOpts("")}</select>
         </div>
         <div class="kb-grid cols-2">
           <div class="kb-field">
-            <label class="kb-label" id="lbl-sp" for="sp">${t("sender-phone")}</label>
+            <label class="kb-label" id="lbl-sp" for="sp">${h(t("sender-phone"))}</label>
             <input id="sp" type="tel" class="kb-input" data-ls="sp" autocomplete="tel">
           </div>
           <div class="kb-field">
-            <label class="kb-label" id="lbl-se" for="se">${t("sender-email")}</label>
+            <label class="kb-label" id="lbl-se" for="se">${h(t("sender-email"))}</label>
             <input id="se" type="email" class="kb-input" data-ls="se" autocomplete="email">
           </div>
         </div>
         <div class="kb-field">
-          <label class="kb-label" id="lbl-stax" for="stax">${t("vat-id")}</label>
+          <label class="kb-label" id="lbl-stax" for="stax">${h(t("vat-id"))}</label>
           <input id="stax" type="text" class="kb-input" data-ls="stax">
         </div>
       </div>
@@ -432,70 +433,70 @@ function buildForm() {
 
     <div>
       <section class="kb-card">
-        <h2 class="kb-card__title" id="sec-invdet">${t("invoice-details-section")}</h2>
+        <h2 class="kb-card__title" id="sec-invdet">${h(t("invoice-details-section"))}</h2>
         <div class="kb-grid cols-2">
           <div class="kb-field">
-            <label class="kb-label" id="lbl-idate" for="idate">${t("invoice-date")}</label>
+            <label class="kb-label" id="lbl-idate" for="idate">${h(t("invoice-date"))}</label>
             <input id="idate" type="date" class="kb-input" value="${dateDef}">
           </div>
           <div class="kb-field">
-            <label class="kb-label" id="lbl-ino" for="ino">${t("invoice-no")}</label>
+            <label class="kb-label" id="lbl-ino" for="ino">${h(t("invoice-no"))}</label>
             <input id="ino" type="text" class="kb-input" data-ls="ino">
           </div>
           <div class="kb-field">
-            <label class="kb-label" id="lbl-icur" for="icur">${t("invoice-currency")}</label>
+            <label class="kb-label" id="lbl-icur" for="icur">${h(t("invoice-currency"))}</label>
             <select id="icur" class="kb-select" data-ls="icur">${curOpts}</select>
           </div>
           <div class="kb-field">
-            <label class="kb-label" id="lbl-pcode" for="pcode">${t("project-code")}</label>
+            <label class="kb-label" id="lbl-pcode" for="pcode">${h(t("project-code"))}</label>
             <select id="pcode" class="kb-select" data-ls="pcode">
-              <option value="">${t("select")}</option>
+              <option value="">${h(t("select"))}</option>
               ${pcOpts}
-              <option value="__other__">${t("other")}</option>
+              <option value="__other__">${h(t("other"))}</option>
             </select>
           </div>
         </div>
         <div class="kb-field" id="pcode-other-wrap" style="display:none;margin-top:12px">
-          <label class="kb-label" id="lbl-pcode-other" for="pcode-other">${t("project-code")} (${t("other")})</label>
+          <label class="kb-label" id="lbl-pcode-other" for="pcode-other">${h(t("project-code"))} (${h(t("other"))})</label>
           <input id="pcode-other" type="text" class="kb-input" data-ls="pcode-other">
         </div>
       </section>
 
       <section class="kb-card" style="margin-bottom:0">
-        <h2 class="kb-card__title" id="lbl-pay-sec">${t("payment")}</h2>
+        <h2 class="kb-card__title" id="lbl-pay-sec">${h(t("payment"))}</h2>
         <div class="pay-terms-row">
-          <label class="kb-label" id="lbl-pterm">${t("payment-terms")}</label>
+          <label class="kb-label" id="lbl-pterm">${h(t("payment-terms"))}</label>
           <input id="pterm" type="number" min="0" value="7" class="kb-input" style="width:64px"
                  oninput="calcPayBy()" data-ls="pterm">
-          <span id="lbl-days" style="font-size:var(--fs-small);color:var(--text-muted)">${t("payment-days")}</span>
+          <span id="lbl-days" style="font-size:var(--fs-small);color:var(--text-muted)">${h(t("payment-days"))}</span>
         </div>
         <div class="pay-by-row">
-          <span style="font-size:var(--fs-small);color:var(--text-muted)" id="lbl-paybyl">${t("pay-by")}:</span>
+          <span style="font-size:var(--fs-small);color:var(--text-muted)" id="lbl-paybyl">${h(t("pay-by"))}:</span>
           <span id="paybydisp"></span>
         </div>
         <div id="bank-section" style="display:none;margin-top:14px">
           <div class="kb-grid">
             <div class="kb-field">
-              <label class="kb-label" id="lbl-pacct" for="pacct">${t("account-holder")}</label>
+              <label class="kb-label" id="lbl-pacct" for="pacct">${h(t("account-holder"))}</label>
               <input id="pacct" type="text" class="kb-input" data-ls="pacct">
             </div>
             <div class="kb-grid cols-2">
               <div class="kb-field">
-                <label class="kb-label" id="lbl-piban" for="piban">${t("account-no")}</label>
+                <label class="kb-label" id="lbl-piban" for="piban">${h(t("account-no"))}</label>
                 <input id="piban" type="text" class="kb-input kb-mono" data-ls="piban">
               </div>
               <div class="kb-field">
-                <label class="kb-label" id="lbl-pbic" for="pbic">${t("bank-bic")}</label>
+                <label class="kb-label" id="lbl-pbic" for="pbic">${h(t("bank-bic"))}</label>
                 <input id="pbic" type="text" class="kb-input kb-mono" data-ls="pbic">
               </div>
             </div>
             <div class="kb-field">
-              <label class="kb-label" id="lbl-pbadr">${t("bank-address")}</label>
+              <label class="kb-label" id="lbl-pbadr">${h(t("bank-address"))}</label>
               <input id="pbadr1" type="text" class="kb-input" data-ls="pbadr1">
               <input id="pbadr2" type="text" class="kb-input" style="margin-top:6px" data-ls="pbadr2">
             </div>
             <div class="kb-field">
-              <label class="kb-label" id="lbl-pref" for="pref">${t("payment-ref")}</label>
+              <label class="kb-label" id="lbl-pref" for="pref">${h(t("payment-ref"))}</label>
               <input id="pref" type="text" class="kb-input" data-ls="pref">
             </div>
           </div>
@@ -507,12 +508,12 @@ function buildForm() {
   <!-- Row 2: Bill-to -->
   <section class="kb-card">
     <h2 class="kb-card__title">
-      <span id="sec-ct">${t("charge-to")}</span>
+      <span id="sec-ct">${h(t("charge-to"))}</span>
       <select id="ct-pick" class="kb-select" data-ls="ct-pick"
               style="width:auto;font-size:var(--fs-small);margin-left:8px;padding:4px 28px 4px 8px">
-        <option value="">${t("select")}</option>
+        <option value="">${h(t("select"))}</option>
         ${ctOpts}
-        <option value="__other__">${t("other")}</option>
+        <option value="__other__">${h(t("other"))}</option>
       </select>
     </h2>
     <div id="ct-fields" class="locked">
@@ -520,28 +521,28 @@ function buildForm() {
         <!-- Left: address -->
         <div class="kb-grid">
           <div class="kb-field">
-            <label class="kb-label" id="lbl-ctn" for="ctn">${t("charge-to-name")}</label>
+            <label class="kb-label" id="lbl-ctn" for="ctn">${h(t("charge-to-name"))}</label>
             <input id="ctn" type="text" class="kb-input">
           </div>
           <div class="kb-field">
-            <label class="kb-label" id="lbl-ca1" for="ca1">${t("charge-to-address1")}</label>
+            <label class="kb-label" id="lbl-ca1" for="ca1">${h(t("charge-to-address1"))}</label>
             <input id="ca1" type="text" class="kb-input">
           </div>
           <div class="kb-field">
-            <label class="kb-label" id="lbl-ca2" for="ca2">${t("charge-to-address2")}</label>
+            <label class="kb-label" id="lbl-ca2" for="ca2">${h(t("charge-to-address2"))}</label>
             <input id="ca2" type="text" class="kb-input">
           </div>
           <div class="kb-field">
-            <label class="kb-label" id="lbl-ca3" for="ca3">${t("charge-to-address3")}</label>
+            <label class="kb-label" id="lbl-ca3" for="ca3">${h(t("charge-to-address3"))}</label>
             <input id="ca3" type="text" class="kb-input">
           </div>
           <div class="kb-grid cols-2" style="gap:10px">
             <div class="kb-field">
-              <label class="kb-label" id="lbl-ca4" for="ca4">${t("charge-to-address4")}</label>
+              <label class="kb-label" id="lbl-ca4" for="ca4">${h(t("charge-to-address4"))}</label>
               <input id="ca4" type="text" class="kb-input">
             </div>
             <div class="kb-field">
-              <label class="kb-label" id="lbl-cc" for="cc">${t("charge-to-country")}</label>
+              <label class="kb-label" id="lbl-cc" for="cc">${h(t("charge-to-country"))}</label>
               <select id="cc" class="kb-select">${countryOpts("")}</select>
             </div>
           </div>
@@ -549,19 +550,19 @@ function buildForm() {
         <!-- Right: contact + IDs -->
         <div class="kb-grid">
           <div class="kb-field">
-            <label class="kb-label" id="lbl-cph" for="cph">${t("charge-to-phone")}</label>
+            <label class="kb-label" id="lbl-cph" for="cph">${h(t("charge-to-phone"))}</label>
             <input id="cph" type="tel" class="kb-input">
           </div>
           <div class="kb-field">
-            <label class="kb-label" id="lbl-cem" for="cem">${t("charge-to-email")}</label>
+            <label class="kb-label" id="lbl-cem" for="cem">${h(t("charge-to-email"))}</label>
             <input id="cem" type="email" class="kb-input">
           </div>
           <div class="kb-field">
-            <label class="kb-label" id="lbl-cvat" for="cvat">${t("vat-id")}</label>
+            <label class="kb-label" id="lbl-cvat" for="cvat">${h(t("vat-id"))}</label>
             <input id="cvat" type="text" class="kb-input">
           </div>
           <div class="kb-field">
-            <label class="kb-label" id="lbl-creg" for="creg">${t("registration-no")}</label>
+            <label class="kb-label" id="lbl-creg" for="creg">${h(t("registration-no"))}</label>
             <input id="creg" type="text" class="kb-input">
           </div>
         </div>
@@ -572,16 +573,16 @@ function buildForm() {
   <!-- Row 3: Line items -->
   <section class="kb-card">
     <h2 class="kb-card__title">
-      <span id="sec-lines">${t("invoice-lines")}</span>
+      <span id="sec-lines">${h(t("invoice-lines"))}</span>
       <button type="button" id="btn-reset-lines" class="kb-btn kb-btn--ghost kb-btn--sm"
-              style="margin-left:auto" onclick="resetLines()">${t("reset-lines")}</button>
+              style="margin-left:auto" onclick="resetLines()">${h(t("reset-lines"))}</button>
     </h2>
     <div class="kb-rowhead kb-row inv-lines-head">
-      <span id="th-qty">${t("qty")}</span>
-      <span id="th-uom">${t("uom")}</span>
-      <span id="th-desc">${t("description")}</span>
-      <span class="r" id="th-price">${t("price")}</span>
-      <span class="r" id="th-tot">${t("line-total")}</span>
+      <span id="th-qty">${h(t("qty"))}</span>
+      <span id="th-uom">${h(t("uom"))}</span>
+      <span id="th-desc">${h(t("description"))}</span>
+      <span class="r" id="th-price">${h(t("price"))}</span>
+      <span class="r" id="th-tot">${h(t("line-total"))}</span>
       <span></span>
     </div>
     <div id="tbody"></div>
@@ -590,38 +591,38 @@ function buildForm() {
   <!-- Row 4: Tax + Summary -->
   <div class="kb-grid cols-2" style="align-items:start;margin-bottom:14px">
     <section class="kb-card" style="margin:0">
-      <h2 class="kb-card__title">Tax</h2>
+      <h2 class="kb-card__title" id="sec-tax">${h(t("tax-section"))}</h2>
       <div class="kb-rowhead kb-row inv-tax-head">
-        <span>Rate &amp; type</span>
-        <span class="r">Amount</span>
+        <span id="th-taxrate">${h(t("tax-rate-type"))}</span>
+        <span class="r" id="th-taxamt">${h(t("tax-amount-col"))}</span>
         <span></span>
       </div>
       <div id="tax-tbody"></div>
       <div style="margin-top:10px">
         <button type="button" class="kb-btn kb-btn--dashed" id="btn-add-tax"
-                onclick="addTaxLine()">${t("add-tax")}</button>
+                onclick="addTaxLine()">${h(t("add-tax"))}</button>
       </div>
     </section>
 
     <section class="kb-card kb-card--flex" style="margin:0">
-      <h2 class="kb-card__title">Summary</h2>
+      <h2 class="kb-card__title" id="sec-summary">${h(t("summary-section"))}</h2>
       <div class="kb-totals">
         <div id="tot-pre">
           <div class="row">
-            <span class="lab" id="lbl-sub">${t("subtotal")}</span>
+            <span class="lab" id="lbl-sub">${h(t("subtotal"))}</span>
             <span class="val" id="v-sub">0.00</span>
           </div>
         </div>
         <div id="tot-post">
           <div class="row">
-            <span class="lab" id="lbl-paid">${t("paid")}</span>
+            <span class="lab" id="lbl-paid">${h(t("paid"))}</span>
             <span class="val">
               <input id="paid-inp" type="number" value="0" min="0" step="0.01"
                      class="kb-input num" style="width:110px;padding:5px 8px">
             </span>
           </div>
           <div class="grand">
-            <span class="lab" id="lbl-topay">${t("to-pay")}</span>
+            <span class="lab" id="lbl-topay">${h(t("to-pay"))}</span>
             <span class="val" id="v-topay">0.00</span>
           </div>
         </div>
@@ -631,14 +632,14 @@ function buildForm() {
 
   <!-- Action row -->
   <div id="action-row" style="display:flex;gap:10px;margin-top:8px">
-    <button type="button" id="btn-save" class="kb-btn kb-btn--ghost kb-btn--lg" style="flex:2" onclick="saveInvoice()">${t("save")}</button>
-    <button type="button" id="btn-validate" class="kb-btn kb-btn--ghost kb-btn--lg" style="flex:2" onclick="validateInvoice()">${t("validate")}</button>
+    <button type="button" id="btn-save" class="kb-btn kb-btn--ghost kb-btn--lg" style="flex:2" onclick="saveInvoice()">${h(t("save"))}</button>
+    <button type="button" id="btn-validate" class="kb-btn kb-btn--ghost kb-btn--lg" style="flex:2" onclick="validateInvoice()">${h(t("validate"))}</button>
     <button type="submit" id="btn-generate" class="kb-btn kb-btn--primary kb-btn--lg" style="flex:6">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
         <path d="M8 2v9m0 0 4-4M8 11 4 7"/><line x1="2" y1="14" x2="14" y2="14"/>
       </svg>
-      <span id="btn-generate-lbl">${t("generate-invoice")}</span>
+      <span id="btn-generate-lbl">${h(t("generate-invoice"))}</span>
     </button>
   </div>
 </form>`;
@@ -666,9 +667,9 @@ function updateProjectCodes(codes) {
   const sel = document.getElementById("pcode");
   if (!sel) return;
   const prev = sel.value;
-  sel.innerHTML = `<option value="">${t("select")}</option>`
+  sel.innerHTML = `<option value="">${h(t("select"))}</option>`
     + arr.map(pc => `<option value="${h(pc)}">${h(pc)}</option>`).join("")
-    + `<option value="__other__">${t("other")}</option>`;
+    + `<option value="__other__">${h(t("other"))}</option>`;
   sel.value = arr.includes(prev) ? prev : "";
   const wrap = document.getElementById("pcode-other-wrap");
   if (wrap) wrap.style.display = sel.value === "__other__" ? "block" : "none";
@@ -710,7 +711,7 @@ function fillChargeTo(v) {
 
 // ── Select option helpers ─────────────────────────────────────────────────────
 function uomOpts(sel) {
-  let o = `<option value="">${t("select")}</option>`;
+  let o = `<option value="">${h(t("select"))}</option>`;
   (cfg.uom || []).forEach(u => {
     const lbl = u.labels?.[lang] ?? u.labels?.[cfg["default-code"]] ?? u.code;
     o += `<option value="${h(u.code)}" ${u.code === sel ? "selected" : ""}>${h(lbl)} (${h(u.code)})</option>`;
@@ -719,18 +720,18 @@ function uomOpts(sel) {
 }
 
 function prodOpts(sel) {
-  let o = `<option value="">${t("select")}</option>`;
+  let o = `<option value="">${h(t("select"))}</option>`;
   (cfg.products || []).forEach((p, i) => {
     const desc = p.description?.[lang] ?? p.description?.[cfg["default-code"]] ?? p.code;
     o += `<option value="${i}" ${String(i) === String(sel) ? "selected" : ""}>${h(desc)}</option>`;
   });
-  o += `<option value="__other__" ${"__other__" === sel ? "selected" : ""}>${t("other")}</option>`;
+  o += `<option value="__other__" ${"__other__" === sel ? "selected" : ""}>${h(t("other"))}</option>`;
   return o;
 }
 
 function currOpts(sel) {
   return (cfg.currencies || ["USD","EUR","GBP"]).map(c =>
-    `<option value="${c}" ${c === sel ? "selected" : ""}>${c}</option>`
+    `<option value="${h(c)}" ${c === sel ? "selected" : ""}>${h(c)}</option>`
   ).join("");
 }
 
@@ -754,8 +755,8 @@ function addTaxLine() {
       <input type="number" id="tv-${i}" class="kb-input num" value="" placeholder="0"
              min="0" step="any" oninput="calcTotals()" style="width:60px">
       <select id="tt-${i}" class="kb-select" style="width:auto" onchange="calcTotals()">
-        <option value="pct">${t("tax-pct")}</option>
-        <option value="amt">${t("tax-amount")}</option>
+        <option value="pct">${h(t("tax-pct"))}</option>
+        <option value="amt">${h(t("tax-amount"))}</option>
       </select>
       <select id="tk-${i}" class="kb-select" style="width:auto" onchange="calcTotals()">
         ${getTaxTypeOpts(defaultKey)}
@@ -798,10 +799,10 @@ function addLine() {
              style="margin-top:5px;display:none" oninput="calcLine(${i});saveLines()">
       <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
         <label style="font-size:var(--fs-label);font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--text-muted);white-space:nowrap"
-               id="lbl-fx-${i}">${t("foreign-currency")}:</label>
+               id="lbl-fx-${i}">${h(t("foreign-currency"))}:</label>
         <select id="fx-${i}" class="kb-select" style="width:auto" onchange="toggleFx(${i})">
-          <option value="no">${t("no-option")}</option>
-          <option value="yes">${t("yes")}</option>
+          <option value="no">${h(t("no-option"))}</option>
+          <option value="yes">${h(t("yes"))}</option>
         </select>
       </div>
     </div>
@@ -817,7 +818,7 @@ function addLine() {
   alNew.id = "al-row";
   alNew.style.cssText = "padding:10px 4px 4px";
   alNew.innerHTML = `<button type="button" class="kb-btn kb-btn--dashed" id="btn-al"
-    onclick="addLine()">${t("add-line")}</button>`;
+    onclick="addLine()">${h(t("add-line"))}</button>`;
   tbody.appendChild(alNew);
   calcTotals();
   return i;
@@ -891,14 +892,14 @@ function toggleFx(i) {
   fxDiv.innerHTML = `
     <div class="kb-grid cols-3">
       <div class="kb-field">
-        <span class="kb-label" id="fcur-lbl-${i}">${t("currency-code")}</span>
+        <span class="kb-label" id="fcur-lbl-${i}">${h(t("currency-code"))}</span>
         <select id="fcur-${i}" class="kb-select"
                 onchange="updateFxLabels(${i});calcLine(${i});saveLines()">
           ${currOpts(defaultFcy)}
         </select>
       </div>
       <div class="kb-field">
-        <span class="kb-label" id="frate-lbl-${i}">${t("exchange-rate")}</span>
+        <span class="kb-label" id="frate-lbl-${i}">${h(t("exchange-rate"))}</span>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <input type="number" id="frate-${i}" class="kb-input num" value="" min="0" step="any"
                  style="flex:1;min-width:70px" oninput="calcFxFromPer(${i})">
@@ -907,17 +908,17 @@ function toggleFx(i) {
             <option value="${h(lcy)}">${h(lcy)}</option>
             <option value="${h(defaultFcy)}">${h(defaultFcy)}</option>
           </select>
-          <span class="kb-label" style="margin:0">per</span>
+          <span class="kb-label" style="margin:0" id="fxper-${i}">${h(t("fx-per"))}</span>
           <span id="rother-${i}" style="font-size:var(--fs-small);font-weight:600;color:var(--text)">${h(defaultFcy)}</span>
         </div>
       </div>
       <div class="kb-field">
-        <span class="kb-label" id="fper-lbl-${i}">${t("per-item")} ${h(defaultFcy)}</span>
+        <span class="kb-label" id="fper-lbl-${i}">${h(t("per-item"))} ${h(defaultFcy)}</span>
         <input type="number" id="fper-${i}" class="kb-input num" value="" min="0" step="any"
                oninput="calcFxFromPer(${i})">
       </div>
     </div>
-    <div class="fx-note"><span id="ftot-lbl-${i}">${t("total-foreign")} ${h(defaultFcy)}</span>: <strong id="fltot-${i}">0.00</strong></div>`;
+    <div class="fx-note"><span id="ftot-lbl-${i}">${h(t("total-foreign"))} ${h(defaultFcy)}</span>: <strong id="fltot-${i}">0.00</strong></div>`;
   lr?.insertAdjacentElement("afterend", fxDiv);
   calcLine(i);
   saveLines();
@@ -1050,6 +1051,8 @@ function relabel() {
     "lbl-language":"language",
     "sec-sender":"sender-section","sec-invdet":"invoice-details-section",
     "sec-ct":"charge-to","sec-lines":"invoice-lines",
+    "sec-tax":"tax-section","th-taxrate":"tax-rate-type",
+    "th-taxamt":"tax-amount-col","sec-summary":"summary-section",
     "lbl-sn":"sender-name","lbl-sa1":"sender-address1","lbl-sa2":"sender-address2",
     "lbl-sa3":"sender-address3","lbl-sa4":"sender-address4","lbl-sc":"sender-country",
     "lbl-sp":"sender-phone","lbl-se":"sender-email","lbl-stax":"vat-id",
@@ -1084,7 +1087,7 @@ function relabel() {
     const fe = document.getElementById(`fx-${i}`);
     if (fe) {
       const s = fe.value;
-      fe.innerHTML = `<option value="no">${t("no-option")}</option><option value="yes">${t("yes")}</option>`;
+      fe.innerHTML = `<option value="no">${h(t("no-option"))}</option><option value="yes">${h(t("yes"))}</option>`;
       fe.value = s;
     }
     if (document.getElementById(`rcur-${i}`)) updateFxLabels(+i);
@@ -1103,7 +1106,7 @@ function relabel() {
     const ttEl = document.getElementById(`tt-${i}`);
     if (ttEl) {
       const sv = ttEl.value;
-      ttEl.innerHTML = `<option value="pct">${t("tax-pct")}</option><option value="amt">${t("tax-amount")}</option>`;
+      ttEl.innerHTML = `<option value="pct">${h(t("tax-pct"))}</option><option value="amt">${h(t("tax-amount"))}</option>`;
       ttEl.value = sv;
     }
     const tkEl = document.getElementById(`tk-${i}`);
@@ -1120,9 +1123,11 @@ function relabel() {
     const cur = ctPick.value;
     const ctOpts = (cfg["charge-to"] || []).map((ct, i) =>
       `<option value="${i}">${h(ct.display || ct.name)}</option>`).join("");
-    ctPick.innerHTML = `<option value="">${t("select")}</option>${ctOpts}<option value="__other__">${t("other")}</option>`;
+    ctPick.innerHTML = `<option value="">${h(t("select"))}</option>${ctOpts}<option value="__other__">${h(t("other"))}</option>`;
     ctPick.value = cur;
   }
+
+  buildHeader();   // localised doc-title (h1)
 }
 
 // ── Generate invoice ──────────────────────────────────────────────────────────
@@ -1271,7 +1276,7 @@ function gatherData(renderLang) {
 
 // ── Build PDF with jsPDF + Helvetica ─────────────────────────────────────────
 function buildPDF() {
-  if (!window.jspdf) { alert("PDF library not loaded — check your internet connection."); return; }
+  if (!window.jspdf) { kbAlert({ title: "PDF", message: "PDF library not loaded — check your internet connection." }); return; }
 
   const { jsPDF } = window.jspdf;
   const paperFmt = (cfg["paper-format"] || "a4").toLowerCase();
@@ -1312,8 +1317,7 @@ function buildPDF() {
   let y = MT;
   let ly = y, ry = y;
 
-  const _hexRgb = h => { const x=h.replace('#',''); return [parseInt(x,16)>>16, (parseInt(x,16)>>8)&0xff, parseInt(x,16)&0xff]; };
-  const ACCENT  = _hexRgb(cfg['accent-colour'] || '#2F6FED');
+  const ACCENT  = kbHexRgb(cfg['accent-colour']) || kbHexRgb('#2F6FED');
   const BODY    = [17,24,39];
   const MUTED   = [107,114,128];
   const BORDER  = [209,213,219];
@@ -1492,8 +1496,7 @@ function buildPDF() {
   fb(11); tc(...WHITE);    tR(fmt(toPay),   XR-2, y+5.8);
   y += 9;
 
-  const safeName = s => (s || "").replace(/[^a-zA-Z0-9_\-]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
-  const fnIssuer = safeName(sName);
+  const fnIssuer = kbSafeFilename(sName);
   const fnDate   = iDate || "";
   const filename = fnIssuer && fnDate
     ? `${fnIssuer}_${fnDate}_Invoice ${iNo || ""}.pdf`.replace(/\s+/g, " ").trimEnd()
@@ -1517,6 +1520,8 @@ function updateFxLabels(i) {
   if (cl) cl.textContent = t("currency-code");
   const rl = document.getElementById(`frate-lbl-${i}`);
   if (rl) rl.textContent = t("exchange-rate");
+  const pp = document.getElementById(`fxper-${i}`);
+  if (pp) pp.textContent = t("fx-per");
   const pl = document.getElementById(`fper-lbl-${i}`);
   if (pl) pl.textContent = t("per-item") + " " + fcy;
   const tl = document.getElementById(`ftot-lbl-${i}`);
@@ -1613,8 +1618,8 @@ function loadLines() {
   }
 }
 
-function resetLines() {
-  if (!confirm(t("reset-lines") + "?")) return;
+async function resetLines() {
+  if (!await kbConfirm({ title: t("reset-lines"), message: t("reset-lines") + "?" })) return;
   Object.keys(lines).forEach(k => {
     document.getElementById(`lr-${+k}`)?.remove();
     document.getElementById(`fx-row-${+k}`)?.remove();

@@ -7,13 +7,14 @@ architecture rationale, see [DESIGN.md](DESIGN.md).
 
 **bizdocs** is a collection of small, self-contained web apps that help
 individuals and small organisations produce common business documents as PDFs.
-There are currently three:
+There are currently four:
 
-| App          | Purpose                                              | PDF engine |
-| ------------ | ---------------------------------------------------- | ---------- |
-| `invoice/`   | Freelance/consulting invoices (taxes, FX, payment)   | jsPDF      |
-| `reimburse/` | Expense reimbursement with attached receipts         | pdf-lib    |
-| `timesheet/` | Timesheets by employee type, work codes, signatures  | pdf-lib    |
+| App               | Purpose                                                   | PDF engine |
+| ----------------- | --------------------------------------------------------- | ---------- |
+| `invoice/`        | Freelance/consulting invoices (taxes, FX, payment)        | jsPDF      |
+| `reimburse/`      | Expense reimbursement with attached receipts              | pdf-lib    |
+| `timesheet/`      | Timesheets by employee type, work codes, signatures       | pdf-lib    |
+| `contactmanager/` | Contact directory editor + exported contact-book viewers  | pdf-lib    |
 
 Each app is **one `index.html`** (all HTML/CSS/JS inline) plus a `config.yml`
 and an `assets/` folder of favicons/PWA icons. There is **no build step and no
@@ -27,9 +28,12 @@ assets/            ← SHARED across all apps (referenced as ../assets/…)
   ui.css             reusable kb-* UI components
   app.js             shared runtime (DOM helpers, theme, modals, i18n, …)
 _template/         CANONICAL STARTER — copy this to create a new app
-invoice/   index.html · config.yml · assets/ (favicons)
-reimburse/ index.html · config.yml · assets/ (favicons)
-timesheet/ index.html · config.yml · assets/ (favicons)
+invoice/        index.html · config.yml · assets/ (favicons)
+reimburse/      index.html · config.yml · assets/ (favicons)
+timesheet/      index.html · config.yml · assets/ (favicons)
+contactmanager/ index.html · config.yml · assets/ (favicons)
+index.html · config.yml   ← landing page (app navigation; no localisation block)
+doc/            notes & review reports
 README.md · LICENSE (Apache-2.0)
 ```
 
@@ -46,8 +50,12 @@ Each app links the shared files in its `<head>`:
 
 1. A tiny inline pre-paint script in `<head>` reads `localStorage['kb-theme']`
    and sets `data-theme` before first paint (avoids a flash).
-2. CDN libraries load: `js-yaml` (all apps), plus `jspdf` (invoice) or
-   `pdf-lib` (reimburse, timesheet).
+2. CDN libraries load from cdnjs: `js-yaml` (all apps), plus `jspdf` (invoice)
+   or `pdf-lib` (the others). Every CDN `<script>` is version-pinned **and
+   carries an `integrity` (SRI) hash + `crossorigin`** — when bumping a library
+   version, recompute the sha384 hash. Each page also ships a
+   Content-Security-Policy `<meta>` allowing scripts only from `'self'` and
+   cdnjs.
 3. `../assets/app.js` loads and defines the shared globals.
 4. The app's inline `<script>` runs: `loadYamlConfig()` fetches, parses **and
    validates** `config.yml` (see below), an adapter normalises the
@@ -111,8 +119,21 @@ the About modal, and a non-English language.
   declarations *are* globals (and must not collide with names defined in
   `app.js`). Globals from `app.js` are visible inside the IIFEs.
 - **localStorage keys.** Theme = `kb-theme`, font scale = `kb-font-scale`
-  (shared). Per-app data uses app-specific keys (e.g. `reimb-state`,
-  `timesheet-lang`, invoice's `LS_*`).
+  (shared). Per-app data uses app-specific keys — the full set currently in
+  use (do not rename without a migration path, users have live data):
+  invoice `inv_data_v1` / `inv_lines_v1` / `inv_generated_v1`; reimburse
+  `reimb-state` / `reimb-staff` / `reimb-lang` (+ IndexedDB `reimb-db` for
+  receipts); timesheet `ts-state` / `ts-signature` / `timesheet-lang` /
+  `timesheet-employee` / `timesheet-type`; contactmanager
+  `contactmanager-lang` / `contactmanager-contacts`; template `template-lang`.
+- **Escape everything you interpolate into HTML.** Any dynamic value — config
+  strings, user input, error messages — that goes into an `innerHTML` /
+  template-literal build must pass through `kbEsc()` (app.js; invoice aliases
+  it as `h()`), or be added via `el()`/text nodes. `kbConfirm`/`kbAlert` treat
+  `message` as plain text; rich config content belongs in `kbAbout` (markdown).
+- **Language declarations use `name:`.** `localisation.languages` entries are
+  `{ code, name, direction? }` in every app — don't reintroduce per-app
+  variants like `display:`.
 - **User-facing strings go through localisation**, never hardcoded literals —
   add a key to every language block in that app's `config.yml` `ui:` section
   and look it up via the app's `t()`/`T()`/`S()`. Use `{placeholder}` tokens

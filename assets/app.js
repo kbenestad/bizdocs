@@ -38,19 +38,33 @@ const el = (tag, attrs, children) => {
   return e;
 };
 
+/** Escape a string for interpolation into HTML (element and attribute
+ *  contexts). Use for ANY dynamic value — error messages, config strings,
+ *  user input — that ends up inside an innerHTML/template-literal build. */
+function kbEsc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 /* ── Minimal markdown → HTML (for About boxes) ─────────────────────────────── */
 /* Supports #/##/### headings, **bold**, *italic*, [text](url), - bullet lists,
- * and blank-line-separated paragraphs. Escapes HTML first. */
+ * and blank-line-separated paragraphs. Escapes HTML (including quotes, so the
+ * link href attribute can't be broken out of) first, and only linkifies
+ * http(s)/mailto/relative URLs — anything else (javascript:, data:, …) is left
+ * as plain text. */
 function markdown(md) {
   if (!md) return '';
+  const safeUrl = u => /^(https?:|mailto:)/i.test(u) || !/^[a-z][a-z0-9+.-]*:/i.test(u);
   let html = md
-    .replace(/&(?!#?\w+;)/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/&(?!#?\w+;)/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
     .replace(/^#{3}\s+(.+)$/gm, '<h3>$1</h3>')
     .replace(/^#{2}\s+(.+)$/gm, '<h2>$1</h2>')
     .replace(/^#{1}\s+(.+)$/gm, '<h1>$1</h1>')
     .replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([\s\S]+?)\*/g, '<em>$1</em>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, text, url) =>
+      safeUrl(url.trim()) ? `<a href="${url.trim()}" target="_blank" rel="noopener">${text}</a>` : m);
   html = html.replace(/((?:^- .+\n?)+)/gm, m => '<ul>' + m.replace(/^- (.+)$/gm, '<li>$1</li>') + '</ul>');
   html = html.split(/\n{2,}/).map(b => b.trim()).filter(Boolean)
              .map(b => /^<[hul]/.test(b) ? b : `<p>${b.replace(/\n/g, '<br>')}</p>`).join('\n');
@@ -156,11 +170,18 @@ function kbModal(opts) {
   });
 }
 
+/* kbConfirm/kbAlert treat `message` as PLAIN TEXT (escaped; newlines become
+ * <br>). Callers with genuinely rich content should pass a bodyNode to
+ * kbModal, or route config markdown through kbAbout. */
+function kbMessageHTML(message) {
+  return message == null ? message : kbEsc(message).replace(/\n/g, '<br>');
+}
+
 /** Confirm dialog → resolves true (confirm) / false (cancel or dismiss). */
 function kbConfirm({ title, message, confirmLabel, cancelLabel, icon } = {}) {
   return kbModal({
     title, icon: title != null ? (icon || KB_ICON.warn) : undefined,
-    bodyHTML: message, dismissValue: false,
+    bodyHTML: kbMessageHTML(message), dismissValue: false,
     buttons: [
       { label: cancelLabel || 'Cancel', value: false, variant: 'kb-btn--ghost', autofocus: true },
       { label: confirmLabel || 'OK', value: true, variant: 'kb-btn--primary' },
@@ -172,7 +193,7 @@ function kbConfirm({ title, message, confirmLabel, cancelLabel, icon } = {}) {
 function kbAlert({ title, message, okLabel, icon } = {}) {
   return kbModal({
     title, icon: title != null ? (icon || KB_ICON.info) : undefined,
-    bodyHTML: message,
+    bodyHTML: kbMessageHTML(message),
     buttons: [{ label: okLabel || 'OK', value: true, variant: 'kb-btn--primary', autofocus: true }],
   });
 }
@@ -195,11 +216,11 @@ function kbAbout({ title, contentMD, closeLabel } = {}) {
  *  undefined, each app's adapter silently early-returns, and the app renders its
  *  chrome with every label as a raw key and an empty language dropdown — with no
  *  error at all. Fail loudly and actionably instead. */
-async function loadYamlConfig(url = 'config.yml') {
+async function loadYamlConfig(url = 'config.yml', { requireLocalisation = true } = {}) {
   const res = await fetch(url);
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const cfg = jsyaml.load(await res.text());
-  if (!cfg || typeof cfg !== 'object' || !cfg.localisation) {
+  if (!cfg || typeof cfg !== 'object' || (requireLocalisation && !cfg.localisation)) {
     throw new Error(
       'config.yml loaded but did not parse to a valid configuration. The server ' +
       'most likely returned an HTML page (a 404 or single-page-app fallback, or a ' +
@@ -216,6 +237,24 @@ function applyAccent(cfg) {
   if (cfg && cfg['accent-colour']) {
     document.documentElement.style.setProperty('--accent', cfg['accent-colour']);
   }
+}
+
+/** Parse a #rgb / #rrggbb hex colour to [r, g, b] (0–255), or null if it isn't
+ *  one. PDF builders should fall back to their default accent on null rather
+ *  than emit NaN colours. */
+function kbHexRgb(hex) {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(hex || '').trim());
+  if (!m) return null;
+  let x = m[1];
+  if (x.length === 3) x = x[0] + x[0] + x[1] + x[1] + x[2] + x[2];
+  const n = parseInt(x, 16);
+  return [n >> 16, (n >> 8) & 0xff, n & 0xff];
+}
+
+/** Sanitise a fragment (e.g. a person/org name) for use in a download
+ *  filename: strip anything outside [a-zA-Z0-9_-]. */
+function kbSafeFilename(s) {
+  return String(s || '').replace(/[^a-zA-Z0-9_\-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
 }
 
 /* ── Numbers & dates ───────────────────────────────────────────────────────── */
@@ -277,10 +316,15 @@ function setFontScale(scale) {
   return s;
 }
 function bumpFontScale(dir) { return setFontScale(currentScale() + dir * KB_SCALE_STEP); }
-/** Apply the persisted font scale + refresh labels (call once at startup). */
+/** Apply the persisted font scale + refresh labels (call once at startup).
+ *  The stored value is re-clamped so a stale/corrupt entry can't apply an
+ *  arbitrary CSS value. */
 function initFontScale() {
-  const v = localStorage.getItem(KB_SCALE_KEY);
-  if (v) document.documentElement.style.setProperty('--font-scale', v);
+  const v = parseFloat(localStorage.getItem(KB_SCALE_KEY));
+  if (!isNaN(v)) {
+    const s = Math.round(Math.max(KB_SCALE_MIN, Math.min(KB_SCALE_MAX, v)) * 10) / 10;
+    document.documentElement.style.setProperty('--font-scale', String(s));
+  }
   applyScaleLabels();
 }
 /** Build an A− / A+ text-size segment plus its % label → { seg, label }. */

@@ -218,6 +218,12 @@ localisation:
       total-foreign: Line total in
       add-line: "+ Add new line"
       subtotal: Subtotal
+      doc-title: invoice
+      tax-section: Tax
+      tax-rate-type: "Rate & type"
+      tax-amount-col: Amount
+      summary-section: Summary
+      fx-per: per
       tax: Tax
       paid: Paid
       to-pay: To Pay
@@ -325,6 +331,12 @@ localisation:
       total-foreign: Zeilenbetrag in
       add-line: "+ Neue Zeile hinzufügen"
       subtotal: Zwischensumme
+      doc-title: rechnung
+      tax-section: Steuern
+      tax-rate-type: "Satz & Art"
+      tax-amount-col: Betrag
+      summary-section: Zusammenfassung
+      fx-per: pro
       tax: Steuer
       paid: Bezahlt
       to-pay: Zu zahlen
@@ -432,6 +444,12 @@ localisation:
       total-foreign: Total ligne en
       add-line: "+ Ajouter une ligne"
       subtotal: Sous-total
+      doc-title: facture
+      tax-section: Taxes
+      tax-rate-type: "Taux et type"
+      tax-amount-col: Montant
+      summary-section: "Résumé"
+      fx-per: par
       tax: Taxe
       paid: Payé
       to-pay: À payer
@@ -539,6 +557,12 @@ localisation:
       total-foreign: Total línea en
       add-line: "+ Agregar nueva línea"
       subtotal: Subtotal
+      doc-title: factura
+      tax-section: Impuestos
+      tax-rate-type: "Tasa y tipo"
+      tax-amount-col: Importe
+      summary-section: Resumen
+      fx-per: por
       tax: Impuesto
       paid: Pagado
       to-pay: A pagar

@@ -17,6 +17,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.bunny.net; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="format-detection" content="telephone=no">
 <title>Contact Manager</title>
@@ -36,8 +37,12 @@
 </script>
 
 <!-- CDN libraries: js-yaml (config) + pdf-lib (the server viewer's PDF export). -->
-<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-<script src="https://unpkg.com/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"
+        integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI"
+        crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"
+        integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
+        crossorigin="anonymous"></script>
 
 <!-- Shared design + runtime. app.js MUST load before this app's inline <script>. -->
 <link rel="stylesheet" href="../assets/style.css">
@@ -95,7 +100,7 @@
 
 let CFG;                 // parsed config.yml (editor side)
 let lang = 'en';         // active editor UI language
-let contacts = [];       // working contact list (in-memory)
+let contacts = [];       // working contact list (persisted as a draft, see saveDraft)
 let statusKey = null;    // one-shot status note key (loaded / empty / imported)
 let statusVars = null;
 
@@ -122,6 +127,21 @@ function applyLang(lc) {
 
 function showAboutModal() {
   return kbAbout({ title: CFG['about-title'], contentMD: CFG['about-content'], closeLabel: CFG['about-button'] });
+}
+
+// ── Draft persistence ────────────────────────────────────────────────────────
+// The editor has no backend: without this, a reload throws away every
+// unexported edit. The working list is mirrored to localStorage on each
+// mutation and restored (in preference to a deployed contactbook.html) at boot.
+const DRAFT_KEY = 'contactmanager-contacts';
+function saveDraft() {
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(contacts)); } catch (e) {}
+}
+function loadDraft() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(DRAFT_KEY));
+    return Array.isArray(arr) && arr.length ? arr : null;
+  } catch (e) { return null; }
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────
@@ -357,6 +377,7 @@ async function openContactForm(existing) {
     next.id = uid();
     contacts.push(next);
   }
+  saveDraft();
   statusKey = null;
   render();
 }
@@ -370,12 +391,22 @@ async function removeContact(c) {
   });
   if (!ok) return;
   contacts = contacts.filter(x => x.id !== c.id);
+  saveDraft();
   statusKey = null;
   render();
 }
 
 // ── Import (manual upload fallback) ──────────────────────────────────────────
-function pickFileToImport() {
+async function pickFileToImport() {
+  if (contacts.length) {
+    const ok = await kbConfirm({
+      title: S('upload-existing'),
+      message: S('confirm-import', { n: contacts.length }),
+      confirmLabel: S('upload-existing'),
+      cancelLabel: S('cancel'),
+    });
+    if (!ok) return;
+  }
   const input = el('input', { type: 'file', accept: '.html,text/html', style: { display: 'none' } });
   input.addEventListener('change', () => {
     const file = input.files && input.files[0];
@@ -385,6 +416,7 @@ function pickFileToImport() {
       try {
         const imported = extractContacts(String(reader.result));
         contacts = imported;
+        saveDraft();
         statusKey = 'imported-n'; statusVars = { n: imported.length };
       } catch (e) {
         statusKey = 'import-failed'; statusVars = null;
@@ -457,7 +489,9 @@ async function buildViewerHTML({ inline, hasPDF }) {
       '<scr' + 'ipt src="../assets/app.js"></scr' + 'ipt>';
   }
   const pdfLibTag = hasPDF
-    ? '<scr' + 'ipt src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></scr' + 'ipt>\n'
+    ? '<scr' + 'ipt src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" ' +
+      'integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI" ' +
+      'crossorigin="anonymous"></scr' + 'ipt>\n'
     : '';
 
   return '<!DOCTYPE html>\n' +
@@ -770,7 +804,9 @@ function viewerRuntime() {
   function buildFooter() {
     const sep = () => el('span', { className: 'sep' }, '·');
     const footer = el('footer', { className: 'kb-footer' });
-    const mark = el('span', { className: 'kb-mark' }); mark.innerHTML = KB_FOOTER_MARK_SVG + (CFG['footer-mark'] || CFG.organization || '');
+    const mark = el('span', { className: 'kb-mark' });
+    mark.innerHTML = KB_FOOTER_MARK_SVG;
+    mark.appendChild(document.createTextNode(CFG['footer-mark'] || CFG.organization || ''));
     footer.append(mark, sep(), el('span', null, '© ' + new Date().getFullYear() + ' ' + (CFG.organization || '')));
     footer.append(sep(), el('a', { href: 'index.html?edit' }, S('edit-contacts')));
     footer.append(sep(), el('button', { type: 'button', onClick: showAboutModal }, CFG['about-title']));
@@ -790,7 +826,7 @@ function viewerRuntime() {
   } catch (e) {
     document.getElementById('app').innerHTML =
       '<div class="kb-wrap"><div class="kb-note kb-note--error"><span>&#9888;</span>' +
-      '<div><b>Error</b><br>' + (e && e.message || e) + '</div></div></div>';
+      '<div><b>Error</b><br>' + kbEsc(e && e.message || e) + '</div></div></div>';
   }
 }
 
@@ -816,7 +852,11 @@ try {
     initFontScale();
     lang = localStorage.getItem('contactmanager-lang') || CFG['default-code'] || 'en';
     applyLang(lang);
-    if (found) {
+    const draft = loadDraft();
+    if (draft) {
+      contacts = draft;
+      statusKey = 'restored-draft'; statusVars = { n: draft.length };
+    } else if (found) {
       try { contacts = extractContacts(cbText); statusKey = 'loaded-from-folder'; }
       catch (e) { statusKey = 'no-existing-found'; }
     } else {
@@ -827,7 +867,7 @@ try {
 } catch (e) {
   document.getElementById('app').innerHTML =
     `<div class="kb-wrap"><div class="kb-note kb-note--error"><span>⚠</span>` +
-    `<div><b>Failed to load config.yml</b><br>${e.message}</div></div></div>`;
+    `<div><b>Failed to load config.yml</b><br>${kbEsc(e.message)}</div></div></div>`;
 }
 })();
 </script>
