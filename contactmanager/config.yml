@@ -17,16 +17,6 @@ logo-maxwidth: 4
 tagline: "Contact manager"
 footer-mark: "CAP"           # short wordmark shown in the generated viewer footer
 
-# Page setup
-page-size: A4
-output-language: default
-
-# Typography (PDF, server variant only)
-font-body: Helvetica
-font-heading: Helvetica
-font-monospace: Courier
-font-size: 10
-
 # Branding — confirm CAP's actual accent colour; this is the template default.
 accent-colour: "#2f6fed"
 
@@ -90,10 +80,12 @@ localisation:
       phone-type-other: "Other"
       export-title: "Export contact book"
       download-standalone: "Download standalone file"
+      download-csv: "Download CSV"
       download-server: "Download contactbook.html (for the server)"
       export-hint: >
         Standalone is one self-contained file (email it, or use it offline).
-        contactbook.html is for deploying next to this tool on the web server.
+        CSV opens the list in a spreadsheet. contactbook.html is for
+        deploying next to this tool on the web server.
 
 # ── viewer-localisation: baked into the GENERATED contactbook.html /────────
 # standalone files at export time. Same shape as `localisation:` above, so
@@ -123,7 +115,7 @@ viewer-localisation:
       filter-all: "All"
       count-n: "{n} contacts"
       dl-vcf-list: "Download list (VCF)"
-      dl-pdf-list: "Download list (PDF)"
+      dl-csv-list: "Download list (CSV)"
       dl-vcf-contact: "Download vCard"
       back: "Back"
       edit-contacts: "Edit contacts"
@@ -141,4 +133,3 @@ viewer-localisation:
       phone-type-fax: "Fax"
       phone-type-other: "Other"
       empty: "No contacts match your search."
-      pdf-title: "Contact list"

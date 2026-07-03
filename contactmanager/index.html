@@ -9,9 +9,11 @@
       this file and the URL has no ?edit, it redirects there (the viewer).
 
   It exports the same contact data as two viewer files (see buildViewerHTML):
-    • standalone   — shared CSS/JS inlined, no pdf-lib, VCF only (email/offline).
-    • contactbook.html (server) — links ../assets/*, loads pdf-lib, full PDF.
-  The viewer core is assembled ONCE (viewerRuntime + VIEWER_CSS) for both.
+    • standalone   — shared CSS/JS inlined, for email/offline use.
+    • contactbook.html (server) — links ../assets/*, for deploying on the server.
+  Both variants offer VCF and CSV downloads. The viewer core is assembled ONCE
+  (viewerRuntime + VIEWER_CSS) for both. The editor also accepts CSV (and the
+  legacy contactbook.html JSON) as an import format — see pickFileToImport.
   ════════════════════════════════════════════════════════════════════════════
 -->
 <html lang="en">
@@ -36,10 +38,7 @@
   (function(){var t=localStorage.getItem('kb-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
 </script>
 
-<!-- CDN libraries: js-yaml (config) + pdf-lib (the server viewer's PDF export). -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"
-        integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI"
-        crossorigin="anonymous"></script>
+<!-- CDN library: js-yaml (config). -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"
         integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
         crossorigin="anonymous"></script>
@@ -262,6 +261,7 @@ function buildExportCard() {
   const actions = el('div', { className: 'kb-actions' });
   actions.append(
     el('button', { className: 'kb-btn kb-btn--ghost', onClick: () => downloadViewer({ inline: true }) }, S('download-standalone')),
+    el('button', { className: 'kb-btn kb-btn--ghost', onClick: () => downloadFile(contactsToCSV(contacts), 'contacts.csv', 'text/csv') }, S('download-csv')),
     el('button', { className: 'kb-btn kb-btn--primary', onClick: () => downloadViewer({ inline: false }) }, S('download-server'))
   );
   card.appendChild(actions);
@@ -295,6 +295,13 @@ function contactPhones(c) {
 // non-empty category names (so a contact can belong to several categories).
 function contactCategories(c) {
   return String(c.category || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
+function downloadFile(data, filename, mime) {
+  const url = URL.createObjectURL(new Blob([data], { type: mime }));
+  const a = el('a', { href: url, download: filename });
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
 }
 
 // ── Add / edit / delete ──────────────────────────────────────────────────────
@@ -450,14 +457,15 @@ async function pickFileToImport() {
     });
     if (!ok) return;
   }
-  const input = el('input', { type: 'file', accept: '.html,text/html', style: { display: 'none' } });
+  const input = el('input', { type: 'file', accept: '.html,text/html,.csv,text/csv', style: { display: 'none' } });
   input.addEventListener('change', () => {
     const file = input.files && input.files[0];
     if (!file) return;
+    const isCSV = /\.csv$/i.test(file.name) || /csv/i.test(file.type);
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const imported = extractContacts(String(reader.result));
+        const imported = isCSV ? csvToContacts(String(reader.result)) : extractContacts(String(reader.result));
         contacts = imported;
         saveDraft();
         statusKey = 'imported-n'; statusVars = { n: imported.length };
@@ -483,6 +491,76 @@ function extractContacts(htmlText) {
   return arr.map(c => Object.assign({ id: c.id || uid() }, c));
 }
 
+// ── CSV import / export ───────────────────────────────────────────────────────
+// One column per standard phone type (rather than a nested structure) so the
+// file opens cleanly in a spreadsheet. Multiple numbers of the same type are
+// joined with "; " on export and split back apart on import.
+const CSV_HEADERS = ['Name', 'Nickname', 'Organisation', 'Role', 'Mobile', 'Office', 'Home', 'Fax', 'Other', 'Email', 'Address', 'Category', 'Notes'];
+
+function csvEscape(v) {
+  const s = String(v == null ? '' : v);
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function contactsToCSV(list) {
+  const rows = [CSV_HEADERS];
+  list.forEach(c => {
+    const byType = {};
+    contactPhones(c).forEach(p => {
+      const t = p.type || 'other';
+      byType[t] = byType[t] ? byType[t] + '; ' + p.value : p.value;
+    });
+    rows.push([
+      c.name, c.nickname, c.organisation, c.role,
+      byType.mobile, byType.office, byType.home, byType.fax, byType.other,
+      c.email, c.address, c.category, c.notes,
+    ]);
+  });
+  return rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
+}
+
+// Minimal RFC4180-ish parser: handles quoted fields with embedded commas,
+// newlines and escaped ("") quotes.
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; }
+      else field += ch;
+    } else if (ch === '"') inQuotes = true;
+    else if (ch === ',') { row.push(field); field = ''; }
+    else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+    else if (ch === '\r') { /* line end is \n; \r is just skipped */ }
+    else field += ch;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.length > 1 || r[0] !== '');
+}
+
+function csvToContacts(text) {
+  const rows = parseCSV(text);
+  if (!rows.length) return [];
+  const header = rows[0].map(h => h.trim().toLowerCase());
+  const col = name => header.indexOf(name);
+  const iName = col('name'), iNick = col('nickname'), iOrg = col('organisation'), iRole = col('role'),
+    iMobile = col('mobile'), iOffice = col('office'), iHome = col('home'), iFax = col('fax'), iOther = col('other'),
+    iEmail = col('email'), iAddress = col('address'), iCategory = col('category'), iNotes = col('notes');
+  const get = (r, i) => (i >= 0 && r[i] != null) ? r[i].trim() : '';
+  return rows.slice(1).filter(r => r.some(v => (v || '').trim())).map(r => {
+    const phones = [];
+    [['mobile', iMobile], ['office', iOffice], ['home', iHome], ['fax', iFax], ['other', iOther]].forEach(([type, i]) => {
+      get(r, i).split(';').map(s => s.trim()).filter(Boolean).forEach(value => phones.push({ type, value }));
+    });
+    return {
+      id: uid(),
+      name: get(r, iName), nickname: get(r, iNick), organisation: get(r, iOrg), role: get(r, iRole),
+      phones, email: get(r, iEmail), address: get(r, iAddress), category: get(r, iCategory), notes: get(r, iNotes),
+    };
+  });
+}
+
 // ── Export: assemble a viewer file (shared by both variants) ─────────────────
 function escAttr(s) {
   return String(s == null ? '' : s)
@@ -501,7 +579,7 @@ function viewerConfigObject() {
   };
 }
 
-async function buildViewerHTML({ inline, hasPDF }) {
+async function buildViewerHTML({ inline }) {
   const cfgObj = viewerConfigObject();
   const lc = (cfgObj.localisation && cfgObj.localisation['default-language']) || 'en';
   const subtitle = (((cfgObj.localisation || {})[lc] || {}).ui || {}).subtitle || 'Contact Book';
@@ -531,11 +609,6 @@ async function buildViewerHTML({ inline, hasPDF }) {
       '<link rel="stylesheet" href="../assets/ui.css">\n' +
       '<scr' + 'ipt src="../assets/app.js"></scr' + 'ipt>';
   }
-  const pdfLibTag = hasPDF
-    ? '<scr' + 'ipt src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" ' +
-      'integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI" ' +
-      'crossorigin="anonymous"></scr' + 'ipt>\n'
-    : '';
 
   return '<!DOCTYPE html>\n' +
 '<html lang="' + escAttr(lc) + '">\n' +
@@ -546,7 +619,6 @@ async function buildViewerHTML({ inline, hasPDF }) {
 '<title>' + escAttr(title) + '</title>\n' +
 '<meta name="theme-color" content="' + escAttr(accent) + '">\n' +
 '<scr' + 'ipt>(function(){var t=localStorage.getItem("kb-theme");if(t)document.documentElement.setAttribute("data-theme",t);})();</scr' + 'ipt>\n' +
-pdfLibTag +
 headAssets + '\n' +
 '<style>\n' + VIEWER_CSS + '\n</style>\n' +
 '</head>\n' +
@@ -554,19 +626,15 @@ headAssets + '\n' +
 '<div id="app"><p class="kb-loading">Loading…</p></div>\n' +
 '<scr' + 'ipt id="cb-config" type="application/json">' + jsonForScript(cfgObj) + '</scr' + 'ipt>\n' +
 '<scr' + 'ipt id="cb-contacts" type="application/json">' + jsonForScript(contacts) + '</scr' + 'ipt>\n' +
-'<scr' + 'ipt id="cb-meta" type="application/json">' + jsonForScript({ hasPDF: !!hasPDF }) + '</scr' + 'ipt>\n' +
 '<scr' + 'ipt>\n(' + viewerRuntime.toString() + ')();\n</scr' + 'ipt>\n' +
 '</body>\n</html>\n';
 }
 
 async function downloadViewer({ inline }) {
   try {
-    const html = await buildViewerHTML({ inline, hasPDF: !inline });
+    const html = await buildViewerHTML({ inline });
     const name = inline ? 'contactbook-standalone.html' : 'contactbook.html';
-    const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
-    const a = el('a', { href: url, download: name });
-    document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
+    downloadFile(html, name, 'text/html');
   } catch (e) {
     await kbAlert({ title: 'Error', message: String(e && e.message || e) });
   }
@@ -607,11 +675,11 @@ const VIEWER_CSS = [
 
 // ── Viewer runtime (serialised into every generated file via toString()) ─────
 // Self-contained: relies ONLY on app.js globals (present in both variants) and
-// the embedded #cb-config / #cb-contacts / #cb-meta JSON. Does NOT reference
-// any editor-scope variable above.
+// the embedded #cb-config / #cb-contacts JSON. Does NOT reference any
+// editor-scope variable above.
 function viewerRuntime() {
   'use strict';
-  let CFG, CONTACTS = [], HAS_PDF = false, lang = 'en';
+  let CFG, CONTACTS = [], lang = 'en';
   const state = { view: 'list', q: '', cat: '', org: '', id: null };
 
   // Phones: [{type, value}], tolerating the legacy single `phone` string.
@@ -674,36 +742,30 @@ function viewerRuntime() {
     URL.revokeObjectURL(url);
   }
 
-  // PDF (server variant only) — simple list of the current filtered contacts.
-  async function downloadPDF() {
-    const { PDFDocument, StandardFonts } = PDFLib;
-    const safe = s => String(s == null ? '' : s).replace(/[^\x00-\xff]/g, '?');
-    const doc = await PDFDocument.create();
-    const font = await doc.embedFont(StandardFonts.Helvetica);
-    const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-    const W = 595.28, H = 841.89, M = 50;
-    let page = doc.addPage([W, H]); let y = H - M;
-    const line = (text, size, f, gap) => {
-      if (y < M + 40) { page = doc.addPage([W, H]); y = H - M; }
-      page.drawText(safe(text), { x: M, y, size, font: f }); y -= (gap == null ? size + 4 : gap);
-    };
-    line(S('pdf-title'), 16, bold, 26);
+  // CSV of the current filtered contacts — one column per standard phone type
+  // (mirrors the editor's contactsToCSV, kept separate since this scope must
+  // stay self-contained; see the comment above viewerRuntime).
+  const CSV_HEADERS = ['Name', 'Nickname', 'Organisation', 'Role', 'Mobile', 'Office', 'Home', 'Fax', 'Other', 'Email', 'Address', 'Category', 'Notes'];
+  function csvEscape(v) {
+    const s = String(v == null ? '' : v);
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function downloadCSV() {
+    const rows = [CSV_HEADERS];
     filteredContacts().forEach(c => {
-      if (y < M + 70) { page = doc.addPage([W, H]); y = H - M; }
-      line((c.name || '-') + (c.nickname ? '  "' + c.nickname + '"' : ''), 12, bold, 15);
-      const sub = [c.role, c.organisation].filter(Boolean).join('  -  ');
-      if (sub) line(sub, 9, font, 13);
+      const byType = {};
       contactPhones(c).forEach(p => {
-        const t = p.type ? ' (' + S('phone-type-' + p.type) + ')' : '';
-        line(S('f-phone') + t + ': ' + p.value, 9, font, 12);
+        const t = p.type || 'other';
+        byType[t] = byType[t] ? byType[t] + '; ' + p.value : p.value;
       });
-      [['f-email', c.email], ['f-address', c.address], ['f-category', c.category]].forEach(([k, v]) => {
-        if (v) line(S(k) + ': ' + v, 9, font, 12);
-      });
-      y -= 8;
+      rows.push([
+        c.name, c.nickname, c.organisation, c.role,
+        byType.mobile, byType.office, byType.home, byType.fax, byType.other,
+        c.email, c.address, c.category, c.notes,
+      ]);
     });
-    const bytes = await doc.save();
-    download(bytes, 'contact-list.pdf', 'application/pdf');
+    const csv = rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
+    download(csv, 'contacts.csv', 'text/csv');
   }
 
   function render() {
@@ -775,7 +837,7 @@ function viewerRuntime() {
       className: 'kb-btn kb-btn--ghost kb-btn--sm',
       onClick: () => { const list = filteredContacts(); download(list.map(contactToVCard).join('\r\n'), 'contacts.vcf', 'text/vcard'); }
     }, S('dl-vcf-list')));
-    if (HAS_PDF) actions.append(el('button', { className: 'kb-btn kb-btn--ghost kb-btn--sm', onClick: downloadPDF }, S('dl-pdf-list')));
+    actions.append(el('button', { className: 'kb-btn kb-btn--ghost kb-btn--sm', onClick: downloadCSV }, S('dl-csv-list')));
     filterCard.appendChild(actions);
     container.appendChild(filterCard);
 
@@ -878,7 +940,6 @@ function viewerRuntime() {
   try {
     CFG = JSON.parse(document.getElementById('cb-config').textContent);
     CONTACTS = JSON.parse(document.getElementById('cb-contacts').textContent);
-    HAS_PDF = !!JSON.parse(document.getElementById('cb-meta').textContent).hasPDF;
     normaliseConfig();
     applyAccent(CFG);
     initFontScale();
