@@ -14,7 +14,7 @@ There are currently four:
 | `invoice/`        | Freelance/consulting invoices (taxes, FX, payment)        | jsPDF      |
 | `reimburse/`      | Expense reimbursement with attached receipts              | pdf-lib    |
 | `timesheet/`      | Timesheets by employee type, work codes, signatures       | pdf-lib    |
-| `contactmanager/` | Contact directory editor + exported contact-book viewers  | pdf-lib    |
+| `contactmanager/` | Contact directory editor + exported contact-book viewers  | — (CSV/VCF export) |
 
 Each app is **one `index.html`** (all HTML/CSS/JS inline) plus a `config.yml`
 and an `assets/` folder of favicons/PWA icons. There is **no build step and no
