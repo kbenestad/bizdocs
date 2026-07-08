@@ -5,6 +5,18 @@
 # "app-specific" parts. The keys below are the standard bizdocs config header;
 # keep them and add your own (currencies, accounts, products, codes, …).
 
+# ── Dependencies ───────────────────────────────────────────────────────────
+# CDN libraries loaded dynamically after this file parses — swap `url` to
+# point at a local vendored copy instead of the CDN without touching
+# index.html; drop/blank `integrity` when doing so (a local file won't match
+# the CDN's SRI hash). See ../dependencies.md for the current versions/hashes.
+# Note: js-yaml itself stays hardcoded in index.html's <head> — it's needed
+# to fetch and parse this very file, so it can't be config-driven.
+dependencies:
+  pdf-lib:
+    url: "https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"
+    integrity: "sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI"
+
 # Organization
 organization:                # leave blank to show the kBenestad wordmark
 logo: no                     # yes|no — if yes, loads ../assets/logo.png (shared org logo)

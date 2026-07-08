@@ -231,6 +231,29 @@ async function loadYamlConfig(url = 'config.yml', { requireLocalisation = true }
   return cfg;
 }
 
+/** Load a CDN library declared in config.yml's `dependencies:` block (see
+ *  DESIGN.md / dependencies.md) instead of hardcoding its <script> tag in
+ *  index.html. `dep` is `{ url, integrity? }`; omit integrity when pointing
+ *  at a local/vendored copy that won't match a CDN's SRI hash. Caches by
+ *  url so repeated calls for the same dependency reuse one <script> tag.
+ *  js-yaml itself can't go through this path — it's needed to fetch and
+ *  parse config.yml in the first place, so it stays hardcoded per app. */
+const _kbDepPromises = {};
+function loadDependency(dep) {
+  if (!dep || !dep.url) return Promise.reject(new Error('Missing dependency url in config.yml'));
+  if (_kbDepPromises[dep.url]) return _kbDepPromises[dep.url];
+  const p = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = dep.url;
+    if (dep.integrity) { script.integrity = dep.integrity; script.crossOrigin = 'anonymous'; }
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load dependency: ' + dep.url));
+    document.head.appendChild(script);
+  });
+  _kbDepPromises[dep.url] = p;
+  return p;
+}
+
 /** Apply a config's accent-colour to the --accent token (no-op if unset; the
  *  token already has a sensible default in style.css). */
 function applyAccent(cfg) {

@@ -50,17 +50,24 @@ Each app links the shared files in its `<head>`:
 
 1. A tiny inline pre-paint script in `<head>` reads `localStorage['kb-theme']`
    and sets `data-theme` before first paint (avoids a flash).
-2. CDN libraries load from cdnjs: `js-yaml` (all apps), plus `jspdf` (invoice)
-   or `pdf-lib` (the others). Every CDN `<script>` is version-pinned **and
-   carries an `integrity` (SRI) hash + `crossorigin`** — when bumping a library
-   version, recompute the sha384 hash. Each page also ships a
-   Content-Security-Policy `<meta>` allowing scripts only from `'self'` and
-   cdnjs.
+2. `js-yaml` loads from cdnjs — hardcoded in every app's `<head>`, because it's
+   needed to fetch and parse `config.yml` itself, so it can't be config-driven.
+   Its `<script>` is version-pinned **and carries an `integrity` (SRI) hash +
+   `crossorigin`** — when bumping the version, recompute the sha384 hash. Each
+   page also ships a Content-Security-Policy `<meta>` allowing scripts only
+   from `'self'` and cdnjs.
 3. `../assets/app.js` loads and defines the shared globals.
 4. The app's inline `<script>` runs: `loadYamlConfig()` fetches, parses **and
    validates** `config.yml` (see below), an adapter normalises the
    `localisation:` block, and the UI is built from config. State persists to
    `localStorage`.
+5. Any other CDN library the app needs (`jspdf` for invoice, `pdf-lib` for the
+   rest) is declared in that app's `config.yml` under a `dependencies:` block
+   (`{ url, integrity }` per key) and loaded via `loadDependency()` (in
+   `app.js`) right after `config.yml` parses. Bumping a version/hash, or
+   swapping a remote CDN for a local vendored copy, is a `config.yml` edit —
+   `index.html` never needs to change. See [dependencies.md](dependencies.md)
+   for the current versions/hashes and the full rationale.
 
 `loadYamlConfig()` (in `app.js`) validates the parsed config and throws if it
 isn't an object with a `localisation:` block. This catches the common deploy
@@ -140,6 +147,17 @@ the About modal, and a non-English language.
   for interpolation.
 - **The container is ephemeral.** Only committed, pushed work survives. Commit
   and push when a change is complete.
+- **Keep [dependencies.md](dependencies.md) current.** It's the running doc of
+  every third-party library bizdocs loads (name, version, where it's declared,
+  why). Whenever you add, upgrade, remove, or re-point a dependency —
+  including bumping an SRI hash — update `dependencies.md` in the same change.
+- **Declare CDN dependencies in `config.yml`, not `index.html`.** Except for
+  `js-yaml` (hardcoded per app — it's needed to fetch/parse `config.yml`
+  itself), every CDN library an app uses (`jspdf`, `pdf-lib`) is declared
+  under that app's `config.yml` `dependencies:` block and loaded at runtime via
+  `loadDependency()` (app.js). This lets a version/URL/hash change, or a
+  remote→local swap, happen entirely in `config.yml`. See "How an app boots"
+  above and `dependencies.md`.
 
 ## Adding a new app
 

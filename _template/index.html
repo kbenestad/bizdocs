@@ -31,10 +31,10 @@
   (function(){var t=localStorage.getItem('kb-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
 </script>
 
-<!-- CDN libraries: js-yaml (all apps) + pdf-lib (PDF output; new apps use pdf-lib). -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"
-        integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI"
-        crossorigin="anonymous"></script>
+<!-- js-yaml: needed to fetch/parse config.yml, so it must stay hardcoded here.
+     Other CDN libraries (pdf-lib for PDF output) are declared in config.yml's
+     dependencies: block and loaded dynamically via loadDependency() below —
+     see ../dependencies.md for the current versions/hashes. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"
         integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
         crossorigin="anonymous"></script>
@@ -63,6 +63,7 @@
 let CFG;          // parsed config.yml
 let lang = 'en';  // active UI language
 let VERSION_INFO = null; // version.json (written by the release workflow), or null before the first tag
+let pdfLibReady;  // resolves once config.yml's pdf-lib dependency has loaded
 
 // ── i18n ───────────────────────────────────────────────────────────────────
 // One string lookup, delegating to the shared lookupString(). Never hardcode
@@ -212,6 +213,12 @@ function buildFooter() {
 
 // ── PDF output (pdf-lib) — minimal stub; build your real document here. ──────
 async function onDownload() {
+  try {
+    await pdfLibReady;
+  } catch (err) {
+    kbAlert({ title: 'PDF', message: 'PDF library not loaded — check your internet connection.' });
+    return;
+  }
   const { PDFDocument, StandardFonts } = PDFLib;
   const doc = await PDFDocument.create();
   const page = doc.addPage();                 // A4 by default
@@ -229,6 +236,8 @@ try {
   VERSION_INFO = await loadVersionInfo('../version.json');
   normaliseConfig();
   applyAccent(CFG);               // apply config accent-colour to --accent
+  pdfLibReady = loadDependency(CFG.dependencies && CFG.dependencies['pdf-lib']);
+  pdfLibReady.catch(() => {});    // surfaced when onDownload() awaits it instead
   initFontScale();                // restore persisted text size
   lang = localStorage.getItem('template-lang') || CFG['default-code'] || 'en';
   applyLang(lang);

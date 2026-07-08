@@ -2,6 +2,18 @@
 # Invoice App — Configuration
 # =============================================================================
 
+# ── Dependencies ───────────────────────────────────────────────────────────
+# CDN libraries loaded dynamically after this file parses — swap `url` to
+# point at a local vendored copy instead of the CDN without touching
+# index.html; drop/blank `integrity` when doing so (a local file won't match
+# the CDN's SRI hash). See ../dependencies.md for the current versions/hashes.
+# Note: js-yaml itself stays hardcoded in index.html's <head> — it's needed
+# to fetch and parse this very file, so it can't be config-driven.
+dependencies:
+  jspdf:
+    url: "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
+    integrity: "sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk"
+
 # Organization
 organization:                # leave blank to show kBenestad wordmark
 logo: no                     # yes|no — if yes, loads ../assets/logo.png (shared org logo)

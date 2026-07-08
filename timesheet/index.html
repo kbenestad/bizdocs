@@ -17,9 +17,8 @@
 <script>
   (function(){var t=localStorage.getItem('kb-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"
-        integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI"
-        crossorigin="anonymous"></script>
+<!-- js-yaml: needed to fetch/parse config.yml, so it must stay hardcoded here
+     (see config.yml's dependencies: block for the config-driven libraries). -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"
         integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
         crossorigin="anonymous"></script>
@@ -191,6 +190,7 @@ function dateRange(from, to) {
 // ========== CONFIG ==========
 let CFG;
 let VERSION_INFO = null; // version.json (written by the release workflow), or null before the first tag
+let pdfLibReady = null;
 async function loadConfig() {
   CFG = await loadYamlConfig();
   VERSION_INFO = await loadVersionInfo('../version.json');
@@ -198,6 +198,8 @@ async function loadConfig() {
   applyAccent(CFG);
   const marker = buildVersionMarker(VERSION_INFO);
   if (marker) document.querySelector('footer.kb-footer').appendChild(marker);
+  pdfLibReady = loadDependency(CFG.dependencies && CFG.dependencies['pdf-lib']);
+  pdfLibReady.catch(() => {}); // surfaced when generatePDF() awaits it instead
 }
 
 // ── Localisation adapter ───────────────────────────────────────────────────────
@@ -1227,6 +1229,7 @@ async function loadLogo(doc) {
 }
 
 async function generatePDF() {
+  await pdfLibReady;
   const { PDFDocument, StandardFonts, rgb } = PDFLib;
   const doc = await PDFDocument.create();
   const pageW = CFG['page-size'] === 'letter' ? 612 : 595.28;
