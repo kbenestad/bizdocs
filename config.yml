@@ -1,10 +1,16 @@
 # =============================================================================
 # Root config — org-wide settings and navigation
 # =============================================================================
+# organization/logo/logo-maxwidth/tagline/accent-colour also cascade down to
+# every app's own config.yml (invoice, reimburse, timesheet, contactmanager,
+# and any app built from _template) — set them here ONCE and every app picks
+# them up automatically. An app overrides a key only if it sets a non-blank
+# value in its own config.yml.
 
 # Organisation (shown in the page header)
 organization:              # leave blank to show kBenestad wordmark
 logo: no                   # yes|no — place logo.png or logo.jpg in assets/
+logo-maxwidth: 4           # cm — maximum logo width on generated PDFs
 tagline:                   # subtitle shown below org name
 
 # Branding

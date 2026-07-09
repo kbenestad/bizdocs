@@ -269,6 +269,7 @@ async function loadCfg() {
   try {
     cfg = await loadYamlConfig();
     versionInfo = await loadVersionInfo('../version.json');
+    await applySharedBranding(cfg);
     normaliseI18n(cfg);
     lang = cfg["default-code"] || "en";
     jspdfReady = loadDependency(cfg.dependencies && cfg.dependencies.jspdf);

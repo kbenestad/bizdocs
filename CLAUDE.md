@@ -5,9 +5,12 @@ architecture rationale, see [DESIGN.md](DESIGN.md).
 
 ## What this is
 
-**bizdocs** is a collection of small, self-contained web apps that help
-individuals and small organisations produce common business documents as PDFs.
-There are currently four:
+**bizdocs** is a suite of small web apps that help individuals and small
+organisations produce common business documents as PDFs. It's meant to be
+downloaded and deployed together: an office admin sets the organisation's
+name/logo/tagline/accent colour once in the root `config.yml`, and every app
+in the suite picks it up automatically (see "Org-wide branding" below).
+There are currently four apps:
 
 | App               | Purpose                                                   | PDF engine |
 | ----------------- | --------------------------------------------------------- | ---------- |
@@ -32,7 +35,7 @@ invoice/        index.html · config.yml · assets/ (favicons)
 reimburse/      index.html · config.yml · assets/ (favicons)
 timesheet/      index.html · config.yml · assets/ (favicons)
 contactmanager/ index.html · config.yml · assets/ (favicons)
-index.html · config.yml   ← landing page (app navigation; no localisation block)
+index.html · config.yml   ← landing page + org-wide branding (see "Org-wide branding" below; no localisation block)
 docs/           notes & review reports, dependencies.md
 README.md · LICENSE (Apache-2.0)
 ```
@@ -58,9 +61,11 @@ Each app links the shared files in its `<head>`:
    from `'self'` and cdnjs.
 3. `../assets/app.js` loads and defines the shared globals.
 4. The app's inline `<script>` runs: `loadYamlConfig()` fetches, parses **and
-   validates** `config.yml` (see below), an adapter normalises the
-   `localisation:` block, and the UI is built from config. State persists to
-   `localStorage`.
+   validates** `config.yml` (see below); `applySharedBranding(cfg)` then fills
+   in `organization`/`logo`/`logo-maxwidth`/`tagline`/`accent-colour` from the
+   root `config.yml` wherever this app's own config left them blank (see "Org-
+   wide branding" below); an adapter normalises the `localisation:` block; and
+   the UI is built from config. State persists to `localStorage`.
 5. Any other CDN library the app needs (`jspdf` for invoice, `pdf-lib` for the
    rest) is declared in that app's `config.yml` under a `dependencies:` block
    (`{ url, integrity }` per key) and loaded via `loadDependency()` (in
@@ -76,6 +81,29 @@ stale cache) with a 200 for `config.yml`: `jsyaml.load()` would parse that to a
 plain string, and without the guard the app would render its chrome with every
 label as a raw key and an empty language dropdown — and no error. Each app's boot
 already wraps the call in a `try/catch` that renders the thrown message.
+
+## Org-wide branding
+
+The root `config.yml` (next to the landing page's `index.html`) is org-wide
+config, not just landing-page config: `organization`, `logo`, `logo-maxwidth`,
+`tagline` and `accent-colour` set there cascade down to every app via
+`applySharedBranding()` (`app.js`). This is the point — a small business
+deploys the whole suite together and sets its name/logo/colour **once**,
+instead of editing five `config.yml` files.
+
+- An app's own `config.yml` still declares these same keys (blank by default)
+  so it can **override** a shared value for that app alone — e.g. `timesheet`
+  overrides `logo-maxwidth` because its layout has more horizontal room.
+  Leave a key blank to inherit; give it a value to override.
+- `contactmanager` is the one app that currently sets its own real values for
+  all of these — it's branded for a specific deployment (see the note at the
+  top of `contactmanager/config.yml`), not the generic suite.
+- Fetching the root config is tolerant of failure (falls back to `{}`), so an
+  app copied out and deployed standalone, without the rest of the suite,
+  still works — it just falls back to its own (blank → kBenestad default)
+  values instead of inheriting.
+- `_template/config.yml` ships with these keys blank — new apps inherit suite
+  branding automatically unless you give one a value.
 
 ## Running / previewing locally
 
@@ -120,6 +148,11 @@ the About modal, and a non-English language.
   `ui.css` propagates everywhere. App-specific layout (column grids, receipt
   rows, the timesheet grid, the signature pad) stays in that app's inline
   `<style>`.
+- **Don't hardcode org branding in a new app.** `organization`/`logo`/
+  `logo-maxwidth`/`tagline`/`accent-colour` should stay blank in an app's
+  `config.yml` so they inherit from the root `config.yml` — see "Org-wide
+  branding" above. Only set one if that app genuinely needs to differ from
+  the rest of the suite.
 - **Scope gotcha.** `reimburse` and `timesheet` wrap their main script in an
   IIFE (`(async function(){ … })()`), so their top-level functions are *not*
   globals. `invoice`'s main script is a plain classic script, so its top-level

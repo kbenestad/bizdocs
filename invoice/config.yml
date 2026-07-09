@@ -14,11 +14,12 @@ dependencies:
     url: "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
     integrity: "sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk"
 
-# Organization
-organization:                # leave blank to show kBenestad wordmark
-logo: no                     # yes|no — if yes, loads ../assets/logo.png (shared org logo)
-logo-maxwidth: 4             # cm — maximum logo width on PDF
-tagline:                     # subtitle shown below org name
+# Organization — inherited from ../config.yml (root, org-wide settings) when
+# left blank here. Set a value below only to override it for this app alone.
+organization:
+logo:                         # yes|no — if yes, loads ../assets/logo.png (shared org logo)
+logo-maxwidth:                # cm — maximum logo width on PDF
+tagline:
 
 # Page setup
 paper-format: a4             # a4 or letter
@@ -34,8 +35,8 @@ font-heading: Helvetica
 font-monospace: Courier
 font-size: 10                # base font size in pt for PDF
 
-# Branding
-accent-colour: "#2f6fed"
+# Branding — inherited from ../config.yml when blank; override here if needed.
+accent-colour:
 
 # ── Payment info visibility ───────────────────────────────────────────────────
 # Set to true to hide the payment info panel entirely (useful if payment info

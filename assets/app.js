@@ -231,6 +231,34 @@ async function loadYamlConfig(url = 'config.yml', { requireLocalisation = true }
   return cfg;
 }
 
+/** Org-wide branding keys that live in the root config.yml and cascade down
+ *  to every app, so an office admin sets them once instead of in every app's
+ *  config.yml. An app overrides a key by giving it a non-blank value in its
+ *  own config.yml. */
+const KB_SHARED_CONFIG_KEYS = ['organization', 'logo', 'logo-maxwidth', 'tagline', 'accent-colour'];
+
+let _kbSharedConfigPromise = null;
+/** Fetch the root config.yml once and cache it. Tolerant of failure — an app
+ *  deployed standalone (outside the bizdocs suite, with no root config.yml
+ *  reachable at ../config.yml) just falls back to its own config.yml values. */
+function loadSharedConfig() {
+  if (!_kbSharedConfigPromise) {
+    _kbSharedConfigPromise = loadYamlConfig('../config.yml', { requireLocalisation: false }).catch(() => ({}));
+  }
+  return _kbSharedConfigPromise;
+}
+
+/** Fill in KB_SHARED_CONFIG_KEYS on `cfg` from the root config.yml wherever
+ *  the app's own config.yml left them blank. Call after loadYamlConfig() and
+ *  before normalising localisation / applying the accent colour. */
+async function applySharedBranding(cfg) {
+  const shared = await loadSharedConfig();
+  KB_SHARED_CONFIG_KEYS.forEach(key => {
+    if (cfg[key] === undefined || cfg[key] === null || cfg[key] === '') cfg[key] = shared[key];
+  });
+  return cfg;
+}
+
 /** Load a CDN library declared in config.yml's `dependencies:` block (see
  *  DESIGN.md / docs/dependencies.md) instead of hardcoding its <script> tag in
  *  index.html. `dep` is `{ url, integrity? }`; omit integrity when pointing

@@ -194,6 +194,7 @@ let pdfLibReady = null;
 async function loadConfig() {
   CFG = await loadYamlConfig();
   VERSION_INFO = await loadVersionInfo('../version.json');
+  await applySharedBranding(CFG);
   normaliseConfig();
   applyAccent(CFG);
   const marker = buildVersionMarker(VERSION_INFO);

@@ -234,6 +234,7 @@ async function onDownload() {
 try {
   CFG = await loadYamlConfig();   // fetch + parse config.yml (shared helper)
   VERSION_INFO = await loadVersionInfo('../version.json');
+  await applySharedBranding(CFG); // fill in org/logo/tagline/accent from ../config.yml
   normaliseConfig();
   applyAccent(CFG);               // apply config accent-colour to --accent
   pdfLibReady = loadDependency(CFG.dependencies && CFG.dependencies['pdf-lib']);

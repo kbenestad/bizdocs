@@ -4,6 +4,9 @@
 # Copy this folder to start a new app, then rename and replace the marked
 # "app-specific" parts. The keys below are the standard bizdocs config header;
 # keep them and add your own (currencies, accounts, products, codes, …).
+# organization/logo/logo-maxwidth/tagline/accent-colour are blank here on
+# purpose — they inherit from ../config.yml (root, org-wide settings). Give
+# one a value only if this app needs to override it.
 
 # ── Dependencies ───────────────────────────────────────────────────────────
 # CDN libraries loaded dynamically after this file parses — swap `url` to
@@ -17,11 +20,12 @@ dependencies:
     url: "https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"
     integrity: "sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI"
 
-# Organization
-organization:                # leave blank to show the kBenestad wordmark
-logo: no                     # yes|no — if yes, loads ../assets/logo.png (shared org logo)
-logo-maxwidth: 4             # cm — maximum logo width on the PDF
-tagline:                     # subtitle shown below the org name (falls back to ui.subtitle)
+# Organization — inherited from ../config.yml (root, org-wide settings) when
+# left blank here. Set a value below only to override it for this app alone.
+organization:
+logo:                         # yes|no — if yes, loads ../assets/logo.png (shared org logo)
+logo-maxwidth:                # cm — maximum logo width on the PDF
+tagline:                      # (falls back to ui.subtitle if also blank)
 
 # Page setup
 page-size: A4                # A4 or letter
@@ -35,8 +39,8 @@ font-heading: Helvetica
 font-monospace: Courier
 font-size: 10
 
-# Branding — overrides the --accent token for this app
-accent-colour: "#2f6fed"
+# Branding — inherited from ../config.yml when blank; override here if needed.
+accent-colour:
 
 # ── Localisation ──────────────────────────────────────────────────────────────
 # Every user-facing string lives here, under each language's `ui:` block, and is
