@@ -232,7 +232,7 @@ async function loadYamlConfig(url = 'config.yml', { requireLocalisation = true }
 }
 
 /** Load a CDN library declared in config.yml's `dependencies:` block (see
- *  DESIGN.md / dependencies.md) instead of hardcoding its <script> tag in
+ *  DESIGN.md / docs/dependencies.md) instead of hardcoding its <script> tag in
  *  index.html. `dep` is `{ url, integrity? }`; omit integrity when pointing
  *  at a local/vendored copy that won't match a CDN's SRI hash. Caches by
  *  url so repeated calls for the same dependency reuse one <script> tag.

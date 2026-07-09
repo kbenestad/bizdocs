@@ -33,7 +33,7 @@ reimburse/      index.html · config.yml · assets/ (favicons)
 timesheet/      index.html · config.yml · assets/ (favicons)
 contactmanager/ index.html · config.yml · assets/ (favicons)
 index.html · config.yml   ← landing page (app navigation; no localisation block)
-doc/            notes & review reports
+docs/           notes & review reports, dependencies.md
 README.md · LICENSE (Apache-2.0)
 ```
 
@@ -66,7 +66,7 @@ Each app links the shared files in its `<head>`:
    (`{ url, integrity }` per key) and loaded via `loadDependency()` (in
    `app.js`) right after `config.yml` parses. Bumping a version/hash, or
    swapping a remote CDN for a local vendored copy, is a `config.yml` edit —
-   `index.html` never needs to change. See [dependencies.md](dependencies.md)
+   `index.html` never needs to change. See [dependencies.md](docs/dependencies.md)
    for the current versions/hashes and the full rationale.
 
 `loadYamlConfig()` (in `app.js`) validates the parsed config and throws if it
@@ -147,17 +147,18 @@ the About modal, and a non-English language.
   for interpolation.
 - **The container is ephemeral.** Only committed, pushed work survives. Commit
   and push when a change is complete.
-- **Keep [dependencies.md](dependencies.md) current.** It's the running doc of
-  every third-party library bizdocs loads (name, version, where it's declared,
-  why). Whenever you add, upgrade, remove, or re-point a dependency —
-  including bumping an SRI hash — update `dependencies.md` in the same change.
+- **Keep [dependencies.md](docs/dependencies.md) current.** It's the running
+  doc of every third-party library bizdocs loads (name, version, where it's
+  declared, why). Whenever you add, upgrade, remove, or re-point a dependency
+  — including bumping an SRI hash — update `docs/dependencies.md` in the same
+  change.
 - **Declare CDN dependencies in `config.yml`, not `index.html`.** Except for
   `js-yaml` (hardcoded per app — it's needed to fetch/parse `config.yml`
   itself), every CDN library an app uses (`jspdf`, `pdf-lib`) is declared
   under that app's `config.yml` `dependencies:` block and loaded at runtime via
   `loadDependency()` (app.js). This lets a version/URL/hash change, or a
   remote→local swap, happen entirely in `config.yml`. See "How an app boots"
-  above and `dependencies.md`.
+  above and `docs/dependencies.md`.
 
 ## Adding a new app
 

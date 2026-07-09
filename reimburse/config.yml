@@ -6,7 +6,7 @@
 # CDN libraries loaded dynamically after this file parses — swap `url` to
 # point at a local vendored copy instead of the CDN without touching
 # index.html; drop/blank `integrity` when doing so (a local file won't match
-# the CDN's SRI hash). See ../dependencies.md for the current versions/hashes.
+# the CDN's SRI hash). See ../docs/dependencies.md for the current versions/hashes.
 # Note: js-yaml itself stays hardcoded in index.html's <head> — it's needed
 # to fetch and parse this very file, so it can't be config-driven.
 dependencies:
