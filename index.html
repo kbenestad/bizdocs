@@ -122,11 +122,16 @@ function buildFooter() {
     sep(), el('span', null, '© 2026 Kristian Benestad'),
     sep(), el('a', { href: 'https://github.com/kbenestad/bizdocs', target: '_blank', rel: 'noopener' }, 'kbenestad/bizdocs')
   );
+  const marker = buildVersionMarker(VERSION_INFO);
+  if (marker) footer.appendChild(marker);
   return footer;
 }
 
+let VERSION_INFO = null;
+
 try {
   CFG = await loadYamlConfig('config.yml', { requireLocalisation: false });
+  VERSION_INFO = await loadVersionInfo('version.json');
   applyAccent(CFG);
   initFontScale();
   render();

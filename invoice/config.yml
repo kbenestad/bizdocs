@@ -162,7 +162,10 @@ localisation:
         **Source:** [kbenestad/invoice](https://github.com/kbenestad/invoice)
         **Docs:** [docs.benestad.net/invoice](https://docs.benestad.net/invoice)
 
-        &copy; 2026 Kristian Benestad. Licensed under the Apache 2 license.
+        {repo}
+        {version-line}
+
+        Licensed under the Apache 2 licence. Please see LICENSE in root.
     tax-types:
       vat: VAT
       gst: GST
@@ -275,7 +278,10 @@ localisation:
         **Quellcode:** [kbenestad/invoice](https://github.com/kbenestad/invoice)
         **Dokumentation:** [docs.benestad.net/invoice](https://docs.benestad.net/invoice)
 
-        &copy; 2026 Kristian Benestad. Lizenziert unter Apache 2.
+        {repo}
+        {version-line}
+
+        Lizenziert unter der Apache-2-Lizenz. Siehe LICENSE im Root-Verzeichnis.
     tax-types:
       vat: MwSt.
       gst: GST
@@ -388,7 +394,10 @@ localisation:
         **Code source :** [kbenestad/invoice](https://github.com/kbenestad/invoice)
         **Documentation :** [docs.benestad.net/invoice](https://docs.benestad.net/invoice)
 
-        &copy; 2026 Kristian Benestad. Sous licence Apache 2.
+        {repo}
+        {version-line}
+
+        Sous licence Apache 2. Voir LICENSE à la racine du dépôt.
     tax-types:
       vat: TVA
       gst: TPS
@@ -501,7 +510,10 @@ localisation:
         **Código fuente:** [kbenestad/invoice](https://github.com/kbenestad/invoice)
         **Documentación:** [docs.benestad.net/invoice](https://docs.benestad.net/invoice)
 
-        &copy; 2026 Kristian Benestad. Con licencia Apache 2.
+        {repo}
+        {version-line}
+
+        Con licencia Apache 2. Consulte LICENSE en la raíz del repositorio.
     tax-types:
       vat: IVA
       gst: GST

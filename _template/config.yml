@@ -50,6 +50,11 @@ localisation:
         Replace the example card with your own form and PDF output.
 
         **Source:** [kbenestad/bizdocs](https://github.com/kbenestad/bizdocs)
+
+        {repo}
+        {version-line}
+
+        Licensed under the Apache 2 licence. Please see LICENSE in root.
     ui:
       subtitle: "Starter template"
       example-section: "Example section"
@@ -71,6 +76,11 @@ localisation:
         Ersetzen Sie die Beispielkarte durch Ihr eigenes Formular und PDF.
 
         **Quellcode:** [kbenestad/bizdocs](https://github.com/kbenestad/bizdocs)
+
+        {repo}
+        {version-line}
+
+        Lizenziert unter der Apache-2-Lizenz. Siehe LICENSE im Root-Verzeichnis.
     ui:
       subtitle: "Startvorlage"
       example-section: "Beispielabschnitt"

@@ -84,6 +84,11 @@ localisation:
         **Documentation:** [docs.benestad.net](https://docs.benestad.net/invoice)
 
         **Source code:** [kbenestad/reimburse](https://github.com/kbenestad/reimburse)
+
+        {repo}
+        {version-line}
+
+        Licensed under the Apache 2 licence. Please see LICENSE in root.
     currencies:
       USD: United States dollar
       THB: Thai baht
@@ -184,6 +189,11 @@ localisation:
         **Dokumentation:** [docs.benestad.net](https://docs.benestad.net/invoice)
 
         **Quellcode:** [kbenestad/reimburse](https://github.com/kbenestad/reimburse)
+
+        {repo}
+        {version-line}
+
+        Lizenziert unter der Apache-2-Lizenz. Siehe LICENSE im Root-Verzeichnis.
     currencies:
       USD: US-Dollar
       THB: Thailändischer Baht
@@ -283,6 +293,11 @@ localisation:
         **Documentation :** [docs.benestad.net](https://docs.benestad.net/invoice)
 
         **Code source :** [kbenestad/reimburse](https://github.com/kbenestad/reimburse)
+
+        {repo}
+        {version-line}
+
+        Sous licence Apache 2. Voir LICENSE à la racine du dépôt.
     currencies:
       USD: Dollar américain
       THB: Baht thaïlandais
@@ -382,6 +397,11 @@ localisation:
         **Documentación:** [docs.benestad.net](https://docs.benestad.net/invoice)
 
         **Código fuente:** [kbenestad/reimburse](https://github.com/kbenestad/reimburse)
+
+        {repo}
+        {version-line}
+
+        Con licencia Apache 2. Consulte LICENSE en la raíz del repositorio.
     currencies:
       USD: Dólar estadounidense
       THB: Baht tailandés
