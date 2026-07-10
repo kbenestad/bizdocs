@@ -43,6 +43,24 @@
 /* zoom % label next to the text-size buttons */
 .kb-sz-label { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); }
 
+/* ── Nav menu (toolbar's far-left apps/links dropdown) ─────────────────────── */
+.kb-navmenu { position: relative; }
+.kb-navmenu__menu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 50;
+  min-width: 200px; max-width: 300px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow);
+  padding: 6px;
+}
+.kb-navmenu__menu[hidden] { display: none; }
+.kb-navmenu__item {
+  display: block; padding: 8px 10px; border-radius: 4px;
+  font-size: var(--fs-small); font-weight: 600;
+  color: var(--text); text-decoration: none; white-space: nowrap;
+}
+.kb-navmenu__item:hover { background: var(--accent-soft); color: var(--accent); }
+.kb-navmenu__sep { height: 1px; background: var(--border); margin: 6px 4px; }
+
 /* ── Document header (brand + title) ───────────────────────────────────────── */
 .kb-header {
   display: flex; justify-content: space-between; align-items: flex-start;

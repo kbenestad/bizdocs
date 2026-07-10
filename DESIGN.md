@@ -167,11 +167,18 @@ What it already establishes, and you should preserve:
 
 1. The exact `<head>`: pre-paint theme script, CDN libs, then the three shared
    `../assets/` references (`app.js` before the inline script).
-2. The chrome assembly: `kb-toolbar` (language · spacer · `makeSizeControl()` ·
-   `makeThemeButton()` · `makeAboutButton()`), the `kb-header` brand lockup, and
-   the `kb-footer`.
-3. The boot order: `loadYamlConfig → normaliseConfig (buildLangTable) →
-   applyAccent → initFontScale → applyLang → render`.
+2. The chrome assembly: `kb-toolbar` (`makeNavMenu(NAV)` · spacer ·
+   `makeSizeControl()` · `makeThemeButton()` · `makeAboutButton()` ·
+   `makeLangSelect()`), the `kb-header` brand lockup, and the `kb-footer`.
+   `makeNavMenu` sits at the far left and `makeLangSelect` at the far right;
+   the latter returns `null` (append nothing) when the app has 0 or 1
+   languages, so single-language apps don't show an empty selector.
+3. The boot order: `loadYamlConfig → loadNavItems('../config.yml') →
+   normaliseConfig (buildLangTable) → applyAccent → initFontScale →
+   applyLang → render`. `loadNavItems` fetches the root config's `apps:`/
+   `links:` lists (filtering out any with `hide-from-navselector: yes`) for
+   the nav dropdown; it fails soft to `{ apps: [], links: [] }` so a missing
+   root config never blocks the app's own boot.
 4. The `config.yml` header keys: `organization`, `logo`, `logo-maxwidth`,
    `tagline`, `page-size`, `output-language`, `font-*`, `font-size`,
    `accent-colour`, then the `localisation:` block.

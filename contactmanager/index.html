@@ -100,6 +100,7 @@
 
 let CFG;                 // parsed config.yml (editor side)
 let VERSION_INFO = null; // version.json (written by the release workflow), or null before the first tag
+let NAV = { apps: [], links: [] };  // root config's apps/links, for the nav dropdown
 let lang = 'en';         // active editor UI language
 let contacts = [];       // working contact list (persisted as a draft, see saveDraft)
 let statusKey = null;    // one-shot status note key (loaded / empty / imported)
@@ -172,19 +173,14 @@ function render() {
 
 function buildToolbar() {
   const toolbar = el('div', { className: 'kb-toolbar' });
-  const langSel = el('select', { className: 'kb-select', 'aria-label': 'Language' });
-  (CFG.languages || []).forEach(l => {
-    const o = el('option', { value: l.code }, l.name || l.code);
-    if (l.code === lang) o.selected = true;
-    langSel.appendChild(o);
-  });
-  langSel.addEventListener('change', () => {
-    applyLang(langSel.value);
-    localStorage.setItem('contactmanager-lang', langSel.value);
+  const { seg: sizeSeg, label: szLabel } = makeSizeControl();
+  toolbar.append(makeNavMenu(NAV), el('div', { className: 'spacer' }), sizeSeg, szLabel, makeThemeButton(), makeAboutButton(showAboutModal));
+  const langSel = makeLangSelect(CFG.languages, lang, value => {
+    applyLang(value);
+    localStorage.setItem('contactmanager-lang', value);
     render();
   });
-  const { seg: sizeSeg, label: szLabel } = makeSizeControl();
-  toolbar.append(langSel, el('div', { className: 'spacer' }), sizeSeg, szLabel, makeThemeButton(), makeAboutButton(showAboutModal));
+  if (langSel) toolbar.appendChild(langSel);
   return toolbar;
 }
 
@@ -788,15 +784,10 @@ function viewerRuntime() {
   }
   function buildToolbar() {
     const toolbar = el('div', { className: 'kb-toolbar' });
-    const langSel = el('select', { className: 'kb-select', 'aria-label': 'Language' });
-    (CFG.languages || []).forEach(l => {
-      const o = el('option', { value: l.code }, l.name || l.code);
-      if (l.code === lang) o.selected = true;
-      langSel.appendChild(o);
-    });
-    langSel.addEventListener('change', () => { applyLang(langSel.value); render(); });
     const sc = makeSizeControl();
-    toolbar.append(langSel, el('div', { className: 'spacer' }), sc.seg, sc.label, makeThemeButton(), makeAboutButton(showAboutModal));
+    toolbar.append(el('div', { className: 'spacer' }), sc.seg, sc.label, makeThemeButton(), makeAboutButton(showAboutModal));
+    const langSel = makeLangSelect(CFG.languages, lang, value => { applyLang(value); render(); });
+    if (langSel) toolbar.appendChild(langSel);
     return toolbar;
   }
   function buildHeader() {
@@ -979,6 +970,7 @@ try {
     CFG = await loadYamlConfig();
     VERSION_INFO = await loadVersionInfo('../version.json');
     await applySharedBranding(CFG);
+    NAV = await loadNavItems('../config.yml');   // root config's apps/links, for the nav dropdown
     normaliseConfig();
     applyAccent(CFG);
     initFontScale();

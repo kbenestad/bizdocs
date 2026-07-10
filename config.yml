@@ -17,6 +17,9 @@ tagline:                   # subtitle shown below org name
 accent-colour: "#2f6fed"
 
 # Apps — paths relative to this folder
+# Each app/link entry may set `hide-from-navselector: yes` (or `true`) to leave it
+# out of the nav dropdown shown in every app's toolbar, while still listing it here
+# on the landing page. Omitted, `no`, or `false` means it's shown (the default).
 apps:
   - name: Invoice
     href: invoice/

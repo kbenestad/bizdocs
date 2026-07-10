@@ -174,6 +174,15 @@ the About modal, and a non-English language.
 - **Language declarations use `name:`.** `localisation.languages` entries are
   `{ code, name, direction? }` in every app — don't reintroduce per-app
   variants like `display:`.
+- **Toolbar layout.** Every app's `kb-toolbar` is, in order: the nav dropdown
+  (`makeNavMenu(NAV)`, far left) · spacer · text-size control · theme button ·
+  About button · the language select (`makeLangSelect()`, far right).
+  `makeLangSelect()` returns `null` for 0-or-1-language apps — append it
+  conditionally so single-language apps (e.g. `contactmanager`) show no
+  selector at all. `NAV` comes from `loadNavItems('../config.yml')` at boot,
+  which reads the **root** `config.yml`'s `apps:`/`links:` lists; an entry
+  there can set `hide-from-navselector: yes` (or `true`) to stay out of every
+  app's dropdown while still appearing on the landing page.
 - **User-facing strings go through localisation**, never hardcoded literals —
   add a key to every language block in that app's `config.yml` `ui:` section
   and look it up via the app's `t()`/`T()`/`S()`. Use `{placeholder}` tokens

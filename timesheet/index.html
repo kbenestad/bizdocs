@@ -191,6 +191,7 @@ function dateRange(from, to) {
 let CFG;
 let VERSION_INFO = null; // version.json (written by the release workflow), or null before the first tag
 let pdfLibReady = null;
+let NAV = { apps: [], links: [] };  // root config's apps/links, for the nav dropdown
 async function loadConfig() {
   CFG = await loadYamlConfig();
   VERSION_INFO = await loadVersionInfo('../version.json');
@@ -670,18 +671,6 @@ function render() {
   // ── Toolbar
   const toolbar = el('div', {className:'kb-toolbar'});
 
-  const langSeg = el('select', {className:'kb-select', 'aria-label': 'Language'});
-  (CFG.languages || [{code:'en', name:'English'}]).forEach(l => {
-    langSeg.appendChild(el('option', {value: l.code, ...(state.lang === l.code ? {selected:''} : {})}, l.name || l.display || l.code));
-  });
-  langSeg.addEventListener('change', () => {
-    state.lang = langSeg.value;
-    applyLang(state.lang);
-    localStorage.setItem('timesheet-lang', langSeg.value);
-    scheduleAutoSave();
-    render();
-  });
-
   // Font size — A− / A+ control (built by app.js, drives --font-scale)
   const { seg: sizeSeg, label: szLabel } = makeSizeControl();
 
@@ -689,7 +678,18 @@ function render() {
   const themeBtn = makeThemeButton();
   const aboutBtn = makeAboutButton(showAboutModal);
 
-  toolbar.append(langSeg, el('div', {className:'spacer'}), sizeSeg, szLabel, themeBtn, aboutBtn);
+  toolbar.append(makeNavMenu(NAV), el('div', {className:'spacer'}), sizeSeg, szLabel, themeBtn, aboutBtn);
+
+  // Language selector (only when CFG.languages has >1 entry) — goes last, far right
+  const langSeg = makeLangSelect(CFG.languages, state.lang, value => {
+    state.lang = value;
+    applyLang(state.lang);
+    localStorage.setItem('timesheet-lang', value);
+    scheduleAutoSave();
+    render();
+  });
+  if (langSeg) toolbar.appendChild(langSeg);
+
   wrap.appendChild(toolbar);
 
   // ── Document header
@@ -1596,6 +1596,7 @@ async function onGenerate() {
 async function init() {
   try {
     await loadConfig();
+    NAV = await loadNavItems('../config.yml');   // root config's apps/links, for the nav dropdown
     loadSignature();
 
     initFontScale();
