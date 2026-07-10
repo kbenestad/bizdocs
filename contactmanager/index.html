@@ -111,9 +111,12 @@ let statusVars = null;
 // A contact's name is stored as separate `given`/`family` fields, plus its own
 // `nameOrder` ('given-family' | 'family-given', default given-family) — each
 // contact remembers its own swap independently of every other contact. This
-// only controls how the two are composed for DISPLAY within this editor (the
-// contact list, sorting, search, the delete-confirmation); the exported
-// viewer always shows given-family, regardless of any contact's nameOrder.
+// only controls how the two are composed for DISPLAY (the contact list,
+// sorting, search, the delete-confirmation) — never the stored fields
+// themselves. It's exported as part of the contact and the generated viewer
+// (contactbook.html / standalone) honours it too, via its own copy of this
+// logic (see displayName inside viewerRuntime) — the sync button only exists
+// in this editor, but the order it settles on is what staff end up seeing.
 function contactDisplayName(c) {
   const given = (c.given || '').trim();
   const family = (c.family || '').trim();
@@ -768,10 +771,13 @@ function viewerRuntime() {
     return String(c.category || '').split(',').map(s => s.trim()).filter(Boolean);
   }
   function telHref(v) { return 'tel:' + String(v).replace(/[^\d+]/g, ''); }
-  // Given-name-first display; the contact manager's own name-order swap only
-  // affects that editor's list, not the viewer.
+  // Composes given/family in whichever order the editor chose for this
+  // contact (its `nameOrder`, set via the sync button) — the swap is decided
+  // once in contactmanager and carries through to what staff see here.
   function displayName(c) {
-    return [(c.given || '').trim(), (c.family || '').trim()].filter(Boolean).join(' ');
+    const given = (c.given || '').trim();
+    const family = (c.family || '').trim();
+    return (c.nameOrder === 'family-given' ? [family, given] : [given, family]).filter(Boolean).join(' ');
   }
 
   function S(key, vars) { return lookupString(CFG['ui-strings'], key, lang, CFG['default-code'], vars); }
