@@ -71,7 +71,10 @@
 .cm-form .kb-field + .kb-field { margin-top: 0; }
 .cm-nick { font-weight: 400; color: var(--text-muted); }
 
-/* ── Editor: nickname + bigger address + repeatable phones table ───────────── */
+/* ── Editor: given/family name row + nickname + bigger address + phones ─────── */
+.cm-name-row { display: flex; gap: 8px; align-items: flex-end; }
+.cm-name-row .kb-field { flex: 1; min-width: 0; }
+.cm-name-sync { flex: 0 0 auto; }
 .cm-field--address .kb-textarea { min-height: 96px; }
 .cm-phones { display: flex; flex-direction: column; gap: 8px; }
 .cm-phone-row { display: flex; gap: 8px; align-items: center; }
@@ -103,6 +106,38 @@ let lang = 'en';         // active editor UI language
 let contacts = [];       // working contact list (persisted as a draft, see saveDraft)
 let statusKey = null;    // one-shot status note key (loaded / empty / imported)
 let statusVars = null;
+
+// ── Given/family name display order ──────────────────────────────────────────
+// A contact's name is stored as separate `given`/`family` fields. This toggle
+// only controls how they're composed for DISPLAY within this editor (the
+// contact list, sorting, search, the delete-confirmation) — it does not
+// change the stored fields, and the exported viewer always shows given-family.
+const NAME_ORDER_KEY = 'contactmanager-name-order';
+let nameOrder = localStorage.getItem(NAME_ORDER_KEY) === 'family-given' ? 'family-given' : 'given-family';
+function toggleNameOrder() {
+  nameOrder = nameOrder === 'given-family' ? 'family-given' : 'given-family';
+  try { localStorage.setItem(NAME_ORDER_KEY, nameOrder); } catch (e) {}
+}
+function composeFullName(c, order) {
+  const given = (c.given || '').trim();
+  const family = (c.family || '').trim();
+  return (order === 'family-given' ? [family, given] : [given, family]).filter(Boolean).join(' ');
+}
+function contactDisplayName(c) { return composeFullName(c, nameOrder); }
+
+// Legacy contacts (pre given/family split, or older exported viewer files)
+// only have a single `name` string. Split it once on import so every contact
+// in memory uses the current schema; the last word becomes the family name.
+function migrateContact(c) {
+  if (c.given != null || c.family != null) return c;
+  const rest = Object.assign({}, c);
+  delete rest.name;
+  const full = String(c.name || '').trim();
+  if (!full) return Object.assign(rest, { given: '', family: '' });
+  const parts = full.split(/\s+/);
+  const family = parts.length > 1 ? parts.pop() : '';
+  return Object.assign(rest, { given: parts.join(' '), family });
+}
 
 // ── i18n (editor UI) ─────────────────────────────────────────────────────────
 function S(key, vars) {
@@ -140,7 +175,7 @@ function saveDraft() {
 function loadDraft() {
   try {
     const arr = JSON.parse(localStorage.getItem(DRAFT_KEY));
-    return Array.isArray(arr) && arr.length ? arr : null;
+    return Array.isArray(arr) && arr.length ? arr.map(migrateContact) : null;
   } catch (e) { return null; }
 }
 
@@ -214,11 +249,11 @@ function buildContactsCard() {
     card.appendChild(el('div', { className: 'cm-empty' }, S('no-contacts')));
   } else {
     const list = el('div', { className: 'cm-list' });
-    contacts.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '')).forEach(c => {
+    contacts.slice().sort((a, b) => contactDisplayName(a).localeCompare(contactDisplayName(b))).forEach(c => {
       const row = el('div', { className: 'cm-row' });
       const main = el('div', { className: 'cm-row__main' });
       const nameNode = el('div', { className: 'cm-row__name' });
-      nameNode.appendChild(document.createTextNode(c.name || '—'));
+      nameNode.appendChild(document.createTextNode(contactDisplayName(c) || '—'));
       if (c.nickname) nameNode.appendChild(el('span', { className: 'cm-nick' }, ' “' + c.nickname + '”'));
       main.append(
         nameNode,
@@ -305,10 +340,9 @@ function downloadFile(data, filename, mime) {
 }
 
 // ── Add / edit / delete ──────────────────────────────────────────────────────
-// Single-value fields, in form order. Phones sit between role and email and are
-// handled separately (see buildPhonesSection).
+// Single-value fields, in form order. Given/family name are handled separately
+// (see buildNameSection), as are phones (see buildPhonesSection).
 const FIELDS = [
-  ['name', 'field-name', 'input', 'ph-name'],
   ['nickname', 'field-nickname', 'input', 'ph-nickname'],
   ['organisation', 'field-organisation', 'input'],
   ['role', 'field-role', 'input'],
@@ -318,6 +352,38 @@ const FIELDS = [
   ['notes', 'field-notes', 'textarea'],
 ];
 const TEXT_KEYS = FIELDS.map(f => f[0]);
+
+// Given + family name inputs, with a sync icon button that swaps their visual
+// order and persists the preference (see toggleNameOrder). Swapping re-lays
+// out the row in place — the input values stay put, only their position moves
+// — and refreshes the contact list underneath so its display matches.
+function buildNameSection(data) {
+  const wrap = el('div');
+  const givenField = el('div', { className: 'kb-field' });
+  const givenInput = el('input', { className: 'kb-input', placeholder: S('ph-given'), value: data.given || '' });
+  givenField.append(el('span', { className: 'kb-label' }, S('field-given')), givenInput);
+
+  const familyField = el('div', { className: 'kb-field' });
+  const familyInput = el('input', { className: 'kb-input', placeholder: S('ph-family'), value: data.family || '' });
+  familyField.append(el('span', { className: 'kb-label' }, S('field-family')), familyInput);
+
+  const syncBtn = el('button', {
+    type: 'button', className: 'kb-iconbtn cm-name-sync', 'aria-label': S('swap-name-order'), title: S('swap-name-order'),
+    onClick: () => { toggleNameOrder(); layout(); render(); },
+  });
+  syncBtn.innerHTML = KB_ICON.sync;
+
+  const row = el('div', { className: 'cm-name-row' });
+  function layout() {
+    const first = nameOrder === 'family-given' ? familyField : givenField;
+    const second = nameOrder === 'family-given' ? givenField : familyField;
+    row.append(first, syncBtn, second);
+  }
+  layout();
+  wrap.appendChild(row);
+  wrap._collect = () => ({ given: givenInput.value.trim(), family: familyInput.value.trim() });
+  return wrap;
+}
 
 // A repeatable [type · number · remove] table; returns the field with a
 // _collect() that reads back the non-empty rows as [{type, value}].
@@ -362,10 +428,12 @@ async function openContactForm(existing) {
     f.append(el('span', { className: 'kb-label' }, S(labelKey)), input);
     return f;
   };
-  FIELDS.slice(0, 4).forEach(spec => grid.appendChild(makeField(spec)));  // name…role
+  const nameSection = buildNameSection(data);
+  grid.appendChild(nameSection);
+  FIELDS.slice(0, 3).forEach(spec => grid.appendChild(makeField(spec)));  // nickname…role
   const phonesSection = buildPhonesSection(data);
   grid.appendChild(phonesSection);
-  FIELDS.slice(4).forEach(spec => grid.appendChild(makeField(spec)));      // email…notes
+  FIELDS.slice(3).forEach(spec => grid.appendChild(makeField(spec)));      // email…notes
   body.appendChild(grid);
 
   // Organisation is freetext, but suggests organisations already on file (a
@@ -412,8 +480,9 @@ async function openContactForm(existing) {
 
   const next = {};
   TEXT_KEYS.forEach(key => { next[key] = refs[key].value.trim(); });
+  Object.assign(next, nameSection._collect());
   next.phones = phonesSection._collect();
-  if (!next.name) {
+  if (!next.given && !next.family) {
     await kbAlert({ title: S('add-contact'), message: S('name-required'), okLabel: S('cancel') });
     next.id = existing && existing.id;
     return openContactForm(next);   // reopen, preserving what was typed
@@ -435,7 +504,7 @@ async function openContactForm(existing) {
 async function removeContact(c) {
   const ok = await kbConfirm({
     title: S('delete-contact'),
-    message: S('confirm-delete', { name: c.name || '—' }),
+    message: S('confirm-delete', { name: contactDisplayName(c) || '—' }),
     confirmLabel: S('delete-contact'),
     cancelLabel: S('cancel'),
   });
@@ -488,14 +557,14 @@ function extractContacts(htmlText) {
   if (!node) throw new Error('no contact data found');
   const arr = JSON.parse(node.textContent);
   if (!Array.isArray(arr)) throw new Error('contact data is not a list');
-  return arr.map(c => Object.assign({ id: c.id || uid() }, c));
+  return arr.map(c => migrateContact(Object.assign({ id: c.id || uid() }, c)));
 }
 
 // ── CSV import / export ───────────────────────────────────────────────────────
 // One column per standard phone type (rather than a nested structure) so the
 // file opens cleanly in a spreadsheet. Multiple numbers of the same type are
 // joined with "; " on export and split back apart on import.
-const CSV_HEADERS = ['Name', 'Nickname', 'Organisation', 'Role', 'Mobile', 'Office', 'Home', 'Fax', 'Other', 'Email', 'Address', 'Category', 'Notes'];
+const CSV_HEADERS = ['Given name', 'Family name', 'Nickname', 'Organisation', 'Role', 'Mobile', 'Office', 'Home', 'Fax', 'Other', 'Email', 'Address', 'Category', 'Notes'];
 
 function csvEscape(v) {
   const s = String(v == null ? '' : v);
@@ -511,7 +580,7 @@ function contactsToCSV(list) {
       byType[t] = byType[t] ? byType[t] + '; ' + p.value : p.value;
     });
     rows.push([
-      c.name, c.nickname, c.organisation, c.role,
+      c.given, c.family, c.nickname, c.organisation, c.role,
       byType.mobile, byType.office, byType.home, byType.fax, byType.other,
       c.email, c.address, c.category, c.notes,
     ]);
@@ -544,7 +613,11 @@ function csvToContacts(text) {
   if (!rows.length) return [];
   const header = rows[0].map(h => h.trim().toLowerCase());
   const col = name => header.indexOf(name);
-  const iName = col('name'), iNick = col('nickname'), iOrg = col('organisation'), iRole = col('role'),
+  // "Given name"/"Family name" is the current format; a plain "Name" column
+  // (from a file exported before the name split) is still accepted and run
+  // through the same given/family split as legacy in-app data.
+  const iGiven = col('given name'), iFamily = col('family name'), iLegacyName = col('name'),
+    iNick = col('nickname'), iOrg = col('organisation'), iRole = col('role'),
     iMobile = col('mobile'), iOffice = col('office'), iHome = col('home'), iFax = col('fax'), iOther = col('other'),
     iEmail = col('email'), iAddress = col('address'), iCategory = col('category'), iNotes = col('notes');
   const get = (r, i) => (i >= 0 && r[i] != null) ? r[i].trim() : '';
@@ -553,9 +626,14 @@ function csvToContacts(text) {
     [['mobile', iMobile], ['office', iOffice], ['home', iHome], ['fax', iFax], ['other', iOther]].forEach(([type, i]) => {
       get(r, i).split(';').map(s => s.trim()).filter(Boolean).forEach(value => phones.push({ type, value }));
     });
+    let given = get(r, iGiven), family = get(r, iFamily);
+    if (!given && !family && iLegacyName >= 0) {
+      const m = migrateContact({ name: get(r, iLegacyName) });
+      given = m.given; family = m.family;
+    }
     return {
       id: uid(),
-      name: get(r, iName), nickname: get(r, iNick), organisation: get(r, iOrg), role: get(r, iRole),
+      given, family, nickname: get(r, iNick), organisation: get(r, iOrg), role: get(r, iRole),
       phones, email: get(r, iEmail), address: get(r, iAddress), category: get(r, iCategory), notes: get(r, iNotes),
     };
   });
@@ -694,6 +772,11 @@ function viewerRuntime() {
     return String(c.category || '').split(',').map(s => s.trim()).filter(Boolean);
   }
   function telHref(v) { return 'tel:' + String(v).replace(/[^\d+]/g, ''); }
+  // Given-name-first display; the contact manager's own name-order swap only
+  // affects that editor's list, not the viewer.
+  function displayName(c) {
+    return [(c.given || '').trim(), (c.family || '').trim()].filter(Boolean).join(' ');
+  }
 
   function S(key, vars) { return lookupString(CFG['ui-strings'], key, lang, CFG['default-code'], vars); }
   function normaliseConfig() {
@@ -714,15 +797,15 @@ function viewerRuntime() {
     return CONTACTS.filter(c => {
       if (state.cat && !contactCategories(c).includes(state.cat)) return false;
       if (state.org && c.organisation !== state.org) return false;
-      if (q && !((c.name || '') + ' ' + (c.nickname || '') + ' ' + (c.organisation || '') + ' ' + (c.role || '')).toLowerCase().includes(q)) return false;
+      if (q && !((c.given || '') + ' ' + (c.family || '') + ' ' + (c.nickname || '') + ' ' + (c.organisation || '') + ' ' + (c.role || '')).toLowerCase().includes(q)) return false;
       return true;
-    }).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    }).sort((a, b) => displayName(a).localeCompare(displayName(b)));
   }
 
   // vCard (no library)
   function vcfEscape(s) { return String(s).replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n'); }
   function contactToVCard(c) {
-    const lines = ['BEGIN:VCARD', 'VERSION:3.0', 'FN:' + vcfEscape(c.name || ''), 'N:' + vcfEscape(c.name || '') + ';;;;'];
+    const lines = ['BEGIN:VCARD', 'VERSION:3.0', 'FN:' + vcfEscape(displayName(c)), 'N:' + vcfEscape(c.family || '') + ';' + vcfEscape(c.given || '') + ';;;'];
     if (c.nickname) lines.push('NICKNAME:' + vcfEscape(c.nickname));
     if (c.organisation) lines.push('ORG:' + vcfEscape(c.organisation));
     if (c.role) lines.push('TITLE:' + vcfEscape(c.role));
@@ -745,7 +828,7 @@ function viewerRuntime() {
   // CSV of the current filtered contacts — one column per standard phone type
   // (mirrors the editor's contactsToCSV, kept separate since this scope must
   // stay self-contained; see the comment above viewerRuntime).
-  const CSV_HEADERS = ['Name', 'Nickname', 'Organisation', 'Role', 'Mobile', 'Office', 'Home', 'Fax', 'Other', 'Email', 'Address', 'Category', 'Notes'];
+  const CSV_HEADERS = ['Given name', 'Family name', 'Nickname', 'Organisation', 'Role', 'Mobile', 'Office', 'Home', 'Fax', 'Other', 'Email', 'Address', 'Category', 'Notes'];
   function csvEscape(v) {
     const s = String(v == null ? '' : v);
     return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
@@ -759,7 +842,7 @@ function viewerRuntime() {
         byType[t] = byType[t] ? byType[t] + '; ' + p.value : p.value;
       });
       rows.push([
-        c.name, c.nickname, c.organisation, c.role,
+        c.given, c.family, c.nickname, c.organisation, c.role,
         byType.mobile, byType.office, byType.home, byType.fax, byType.other,
         c.email, c.address, c.category, c.notes,
       ]);
@@ -858,7 +941,7 @@ function viewerRuntime() {
       const row = el('button', { type: 'button', className: 'cb-row', onClick: () => { state.view = 'detail'; state.id = c.id; render(); } });
       const main = el('div', { className: 'cb-row__main' });
       const nameNode = el('div', { className: 'cb-row__name' });
-      nameNode.appendChild(document.createTextNode(c.name || '-'));
+      nameNode.appendChild(document.createTextNode(displayName(c) || '-'));
       if (c.nickname) nameNode.appendChild(el('span', { className: 'cb-nick' }, ' “' + c.nickname + '”'));
       main.append(
         nameNode,
@@ -883,7 +966,7 @@ function viewerRuntime() {
     const card = el('div', { className: 'kb-card' });
     if (!c) { card.appendChild(el('div', { className: 'cb-empty' }, S('empty'))); return card; }
     const nameNode = el('div', { className: 'cb-detail__name' });
-    nameNode.appendChild(document.createTextNode(c.name || '-'));
+    nameNode.appendChild(document.createTextNode(displayName(c) || '-'));
     if (c.nickname) nameNode.appendChild(el('span', { className: 'cb-nick' }, ' “' + c.nickname + '”'));
     card.append(
       nameNode,
@@ -920,7 +1003,7 @@ function viewerRuntime() {
     actions.append(
       el('button', { className: 'kb-btn kb-btn--ghost', onClick: () => { state.view = 'list'; render(); } }, S('back')),
       el('div', { className: 'spacer' }),
-      el('button', { className: 'kb-btn kb-btn--primary', onClick: () => download(contactToVCard(c), (c.name || 'contact').replace(/\s+/g, '_') + '.vcf', 'text/vcard') }, S('dl-vcf-contact'))
+      el('button', { className: 'kb-btn kb-btn--primary', onClick: () => download(contactToVCard(c), (displayName(c) || 'contact').replace(/\s+/g, '_') + '.vcf', 'text/vcard') }, S('dl-vcf-contact'))
     );
     card.appendChild(actions);
     return card;
