@@ -12,7 +12,9 @@
  *
  * Provides: DOM helpers ($, $$, el, uid) · markdown() · brand/icon SVGs ·
  * theme (currentTheme/toggleTheme/makeThemeButton) · modals (kbModal/kbConfirm/
- * kbAlert/kbAbout).
+ * kbAlert/kbAbout) · file download/upload (kbDownloadFile/kbReadFileAsText) ·
+ * shared profile & document records (loadSharedProfile/saveSharedProfile/
+ * kbPushRecord).
  * ========================================================================== */
 "use strict";
 
@@ -307,6 +309,77 @@ function kbHexRgb(hex) {
  *  filename: strip anything outside [a-zA-Z0-9_-]. */
 function kbSafeFilename(s) {
   return String(s || '').replace(/[^a-zA-Z0-9_\-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+}
+
+/* ── File download / upload ────────────────────────────────────────────────── */
+/** Trigger a browser download of `data` (a string, or an existing Blob) as
+ *  `filename`. Pure client-side — there is no server to upload to. */
+function kbDownloadFile(data, filename, mime) {
+  const blob = data instanceof Blob ? data : new Blob([data], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = el('a', { href: url, download: filename });
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Open a native file picker restricted to `accept` and resolve with the
+ *  picked file's text content (or null if the user cancels). A `window`
+ *  focus fires when the OS file dialog closes either way, so a cancelled
+ *  pick (no `change` event) is detected shortly after focus returns. */
+function kbReadFileAsText(accept) {
+  return new Promise(resolve => {
+    const input = el('input', { type: 'file', accept, style: { display: 'none' } });
+    let settled = false;
+    const finish = value => { if (settled) return; settled = true; input.remove(); resolve(value); };
+    input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      if (!file) { finish(null); return; }
+      const reader = new FileReader();
+      reader.onload = () => finish(String(reader.result || ''));
+      reader.onerror = () => finish(null);
+      reader.readAsText(file);
+    });
+    window.addEventListener('focus', function onFocus() {
+      window.removeEventListener('focus', onFocus);
+      setTimeout(() => finish(null), 300);
+    }, { once: true });
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
+/* ── Shared profile & per-app document records ─────────────────────────────── */
+/* A user's own identity (name/address/bank details/…) and the documents
+ * they've generated (invoices, expense reports, timesheets) are portable
+ * across browsers/machines via the dashboard app's export/import — see
+ * dashboard/index.html. These two localStorage keys are read/written from
+ * multiple apps, so they live here rather than in any one app. */
+const KB_PROFILE_KEY = 'kb-profile-v1';
+
+/** Read the shared profile, tolerant of it being missing or corrupt
+ *  (returns {} rather than throwing) — an app must never fail to boot
+ *  just because there's no profile saved yet. */
+function loadSharedProfile() {
+  try {
+    const raw = localStorage.getItem(KB_PROFILE_KEY);
+    const p = raw ? JSON.parse(raw) : null;
+    return (p && typeof p === 'object') ? p : {};
+  } catch (e) { return {}; }
+}
+
+function saveSharedProfile(profile) {
+  localStorage.setItem(KB_PROFILE_KEY, JSON.stringify(profile || {}));
+}
+
+/** Append `record` to the JSON array stored at `key` (created fresh if
+ *  missing/corrupt). Used by invoice/reimburse/timesheet to log a summary
+ *  of each document they generate, and read back by the dashboard app. */
+function kbPushRecord(key, record) {
+  let list;
+  try { list = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { list = []; }
+  if (!Array.isArray(list)) list = [];
+  list.push(record);
+  localStorage.setItem(key, JSON.stringify(list));
 }
 
 /* ── Nav menu (apps + links dropdown, shared across every app's toolbar) ─────── */

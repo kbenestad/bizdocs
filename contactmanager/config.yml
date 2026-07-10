@@ -72,6 +72,8 @@ localisation:
       field-address: "Address"
       field-category: "Category"
       field-notes: "Notes"
+      field-private: "Private — keep this contact out of the shared contact book"
+      private-pill: "Private"
       ph-name: "Full name"
       ph-nickname: "What they go by"
       ph-category: "Comma-separated, e.g. Legal, Partner"
