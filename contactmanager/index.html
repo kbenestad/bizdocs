@@ -108,22 +108,17 @@ let statusKey = null;    // one-shot status note key (loaded / empty / imported)
 let statusVars = null;
 
 // ── Given/family name display order ──────────────────────────────────────────
-// A contact's name is stored as separate `given`/`family` fields. This toggle
-// only controls how they're composed for DISPLAY within this editor (the
-// contact list, sorting, search, the delete-confirmation) — it does not
-// change the stored fields, and the exported viewer always shows given-family.
-const NAME_ORDER_KEY = 'contactmanager-name-order';
-let nameOrder = localStorage.getItem(NAME_ORDER_KEY) === 'family-given' ? 'family-given' : 'given-family';
-function toggleNameOrder() {
-  nameOrder = nameOrder === 'given-family' ? 'family-given' : 'given-family';
-  try { localStorage.setItem(NAME_ORDER_KEY, nameOrder); } catch (e) {}
-}
-function composeFullName(c, order) {
+// A contact's name is stored as separate `given`/`family` fields, plus its own
+// `nameOrder` ('given-family' | 'family-given', default given-family) — each
+// contact remembers its own swap independently of every other contact. This
+// only controls how the two are composed for DISPLAY within this editor (the
+// contact list, sorting, search, the delete-confirmation); the exported
+// viewer always shows given-family, regardless of any contact's nameOrder.
+function contactDisplayName(c) {
   const given = (c.given || '').trim();
   const family = (c.family || '').trim();
-  return (order === 'family-given' ? [family, given] : [given, family]).filter(Boolean).join(' ');
+  return (c.nameOrder === 'family-given' ? [family, given] : [given, family]).filter(Boolean).join(' ');
 }
-function contactDisplayName(c) { return composeFullName(c, nameOrder); }
 
 // Legacy contacts (pre given/family split, or older exported viewer files)
 // only have a single `name` string. Split it once on import so every contact
@@ -354,10 +349,11 @@ const FIELDS = [
 const TEXT_KEYS = FIELDS.map(f => f[0]);
 
 // Given + family name inputs, with a sync icon button that swaps their visual
-// order and persists the preference (see toggleNameOrder). Swapping re-lays
-// out the row in place — the input values stay put, only their position moves
-// — and refreshes the contact list underneath so its display matches.
+// order for THIS contact only (stored as its own `nameOrder`, see
+// contactDisplayName) — other contacts are unaffected. Swapping re-lays out
+// the row in place; the input values stay put, only their position moves.
 function buildNameSection(data) {
+  let order = data.nameOrder === 'family-given' ? 'family-given' : 'given-family';
   const wrap = el('div');
   const givenField = el('div', { className: 'kb-field' });
   const givenInput = el('input', { className: 'kb-input', placeholder: S('ph-given'), value: data.given || '' });
@@ -369,19 +365,19 @@ function buildNameSection(data) {
 
   const syncBtn = el('button', {
     type: 'button', className: 'kb-iconbtn cm-name-sync', 'aria-label': S('swap-name-order'), title: S('swap-name-order'),
-    onClick: () => { toggleNameOrder(); layout(); render(); },
+    onClick: () => { order = order === 'given-family' ? 'family-given' : 'given-family'; layout(); },
   });
   syncBtn.innerHTML = KB_ICON.sync;
 
   const row = el('div', { className: 'cm-name-row' });
   function layout() {
-    const first = nameOrder === 'family-given' ? familyField : givenField;
-    const second = nameOrder === 'family-given' ? givenField : familyField;
+    const first = order === 'family-given' ? familyField : givenField;
+    const second = order === 'family-given' ? givenField : familyField;
     row.append(first, syncBtn, second);
   }
   layout();
   wrap.appendChild(row);
-  wrap._collect = () => ({ given: givenInput.value.trim(), family: familyInput.value.trim() });
+  wrap._collect = () => ({ given: givenInput.value.trim(), family: familyInput.value.trim(), nameOrder: order });
   return wrap;
 }
 
