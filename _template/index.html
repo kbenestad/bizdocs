@@ -62,6 +62,7 @@
 
 let CFG;          // parsed config.yml
 let lang = 'en';  // active UI language
+let VERSION_INFO = null; // version.json (written by the release workflow), or null before the first tag
 
 // ── i18n ───────────────────────────────────────────────────────────────────
 // One string lookup, delegating to the shared lookupString(). Never hardcode
@@ -92,7 +93,11 @@ function applyLang(lc) {
 }
 
 function showAboutModal() {
-  return kbAbout({ title: CFG['about-title'], contentMD: CFG['about-content'], closeLabel: CFG['about-button'] });
+  return kbAbout({
+    title: CFG['about-title'],
+    contentMD: applyVersionTokens(CFG['about-content'], VERSION_INFO),
+    closeLabel: CFG['about-button'],
+  });
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────
@@ -200,6 +205,8 @@ function buildFooter() {
     sep(), el('a', { href: 'https://github.com/kbenestad/bizdocs', target: '_blank', rel: 'noopener' }, 'kbenestad/bizdocs'),
     sep(), el('button', { type: 'button', onClick: showAboutModal }, CFG['about-title'] || 'About')
   );
+  const marker = buildVersionMarker(VERSION_INFO);
+  if (marker) footer.appendChild(marker);
   return footer;
 }
 
@@ -219,6 +226,7 @@ async function onDownload() {
 // ── Boot ───────────────────────────────────────────────────────────────────
 try {
   CFG = await loadYamlConfig();   // fetch + parse config.yml (shared helper)
+  VERSION_INFO = await loadVersionInfo('../version.json');
   normaliseConfig();
   applyAccent(CFG);               // apply config accent-colour to --accent
   initFontScale();                // restore persisted text size

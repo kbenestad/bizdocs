@@ -128,6 +128,7 @@
 // ── State ─────────────────────────────────────────────────────────────────────
 let cfg  = null;
 let lang = "en";
+let versionInfo = null; // version.json (written by the release workflow), or null before the first tag
 let lid  = 0;
 const lines  = {};
 let tlid = 0;
@@ -269,6 +270,7 @@ function countryOpts(sel) {
 async function loadCfg() {
   try {
     cfg = await loadYamlConfig();
+    versionInfo = await loadVersionInfo('../version.json');
     normaliseI18n(cfg);
     lang = cfg["default-code"] || "en";
     boot();
@@ -1651,12 +1653,14 @@ function buildFooter() {
     + ` <span class="sep">&#183;</span>`
     + ` <a href="https://github.com/kbenestad/bizdocs" target="_blank" rel="noopener">kbenestad/bizdocs</a>`
     + aboutLink;
+  const marker = buildVersionMarker(versionInfo);
+  if (marker) footer.appendChild(marker);
 }
 
 function openAbout() {
   const ab = aboutData();
   if (!ab) return;
-  kbAbout({ title: ab.title, contentMD: ab.content, closeLabel: ab["btn-close"] });
+  kbAbout({ title: ab.title, contentMD: applyVersionTokens(ab.content, versionInfo), closeLabel: ab["btn-close"] });
 }
 
 // ── Start ─────────────────────────────────────────────────────────────────────

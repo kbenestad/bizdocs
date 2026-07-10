@@ -99,6 +99,7 @@
  * ($, el, kbModal, lookupString, buildLangTable, applyAccent, …) are visible. */
 
 let CFG;                 // parsed config.yml (editor side)
+let VERSION_INFO = null; // version.json (written by the release workflow), or null before the first tag
 let lang = 'en';         // active editor UI language
 let contacts = [];       // working contact list (persisted as a draft, see saveDraft)
 let statusKey = null;    // one-shot status note key (loaded / empty / imported)
@@ -126,7 +127,11 @@ function applyLang(lc) {
 }
 
 function showAboutModal() {
-  return kbAbout({ title: CFG['about-title'], contentMD: CFG['about-content'], closeLabel: CFG['about-button'] });
+  return kbAbout({
+    title: CFG['about-title'],
+    contentMD: applyVersionTokens(CFG['about-content'], VERSION_INFO),
+    closeLabel: CFG['about-button'],
+  });
 }
 
 // ── Draft persistence ────────────────────────────────────────────────────────
@@ -278,6 +283,8 @@ function buildFooter() {
     sep(), el('a', { href: 'https://github.com/kbenestad/bizdocs', target: '_blank', rel: 'noopener' }, 'kbenestad/bizdocs'),
     sep(), el('button', { type: 'button', onClick: showAboutModal }, CFG['about-title'] || 'About')
   );
+  const marker = buildVersionMarker(VERSION_INFO);
+  if (marker) footer.appendChild(marker);
   return footer;
 }
 
@@ -970,6 +977,7 @@ try {
   if (found && !editMode) { location.replace('contactbook.html'); }
   else {
     CFG = await loadYamlConfig();
+    VERSION_INFO = await loadVersionInfo('../version.json');
     normaliseConfig();
     applyAccent(CFG);
     initFontScale();

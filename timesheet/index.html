@@ -190,10 +190,14 @@ function dateRange(from, to) {
 
 // ========== CONFIG ==========
 let CFG;
+let VERSION_INFO = null; // version.json (written by the release workflow), or null before the first tag
 async function loadConfig() {
   CFG = await loadYamlConfig();
+  VERSION_INFO = await loadVersionInfo('../version.json');
   normaliseConfig();
   applyAccent(CFG);
+  const marker = buildVersionMarker(VERSION_INFO);
+  if (marker) document.querySelector('footer.kb-footer').appendChild(marker);
 }
 
 // ── Localisation adapter ───────────────────────────────────────────────────────
@@ -406,7 +410,7 @@ function showConfirmModal(msgHTML) {
 function showAboutModal() {
   return kbAbout({
     title:      CFG['about-title']   || 'About',
-    contentMD:  CFG['about-content'] || '',
+    contentMD:  applyVersionTokens(CFG['about-content'] || '', VERSION_INFO),
     closeLabel: CFG['about-button']  || 'Close',
   });
 }

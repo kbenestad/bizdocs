@@ -1,0 +1,56 @@
+name: Stamp version
+
+# Writes version.json (tag, short commit, human-readable date) to the repo
+# root whenever a new tag is published, so the static apps can show a version
+# marker without a build step. See assets/app.js (loadVersionInfo,
+# buildVersionMarker, applyVersionTokens) and CLAUDE.md.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  stamp-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Compute version info
+        id: info
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          COMMIT=$(git rev-parse --short "$TAG")
+          DATE=$(git log -1 --format=%cd --date=format:'%-d %B %Y' "$TAG")
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
+          echo "date=$DATE" >> "$GITHUB_OUTPUT"
+
+      - name: Write version.json
+        run: |
+          cat > version.json <<EOF
+          {
+            "version": "${{ steps.info.outputs.tag }}",
+            "commit": "${{ steps.info.outputs.commit }}",
+            "date": "${{ steps.info.outputs.date }}"
+          }
+          EOF
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add version.json
+          if git diff --cached --quiet; then
+            echo "version.json unchanged, nothing to commit"
+            exit 0
+          fi
+          git commit -m "chore: stamp version ${{ steps.info.outputs.tag }}"
+          git push origin HEAD:main

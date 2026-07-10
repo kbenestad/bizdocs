@@ -131,6 +131,11 @@ localisation:
         Generate professional PDF timesheets with configurable work codes, employee types, and branding.
 
         Source code and documentation available at [kbenestad/timesheet](https://github.com/kbenestad/timesheet).
+
+        {repo}
+        {version-line}
+
+        Licensed under the Apache 2 licence. Please see LICENSE in root.
     holidays:
       "2025-01-01": "New Year's Day"
       "2025-04-30": "Reunification Day"
@@ -215,6 +220,11 @@ localisation:
         Erstellen Sie professionelle PDF-Stundenzettel mit konfigurierbaren Arbeitscodes, Mitarbeitertypen und Branding.
 
         Quellcode und Dokumentation unter [kbenestad/timesheet](https://github.com/kbenestad/timesheet).
+
+        {repo}
+        {version-line}
+
+        Lizenziert unter der Apache-2-Lizenz. Siehe LICENSE im Root-Verzeichnis.
     holidays:
       "2025-01-01": "Neujahr"
       "2025-04-30": "Wiedervereinigungstag"
@@ -299,6 +309,11 @@ localisation:
         Générez des feuilles de temps PDF professionnelles avec des codes de travail, des types d'employés et une charte graphique configurables.
 
         Code source et documentation disponibles sur [kbenestad/timesheet](https://github.com/kbenestad/timesheet).
+
+        {repo}
+        {version-line}
+
+        Sous licence Apache 2. Voir LICENSE à la racine du dépôt.
     holidays:
       "2025-01-01": "Jour de l'An"
       "2025-04-30": "Jour de la Réunification"
@@ -383,6 +398,11 @@ localisation:
         Genere hojas de horas PDF profesionales con códigos de trabajo, tipos de empleado y branding configurables.
 
         Código fuente y documentación disponibles en [kbenestad/timesheet](https://github.com/kbenestad/timesheet).
+
+        {repo}
+        {version-line}
+
+        Con licencia Apache 2. Consulte LICENSE en la raíz del repositorio.
     holidays:
       "2025-01-01": "Año Nuevo"
       "2025-04-30": "Día de la Reunificación"

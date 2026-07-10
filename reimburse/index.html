@@ -150,17 +150,21 @@ function showWarningModal(msg) {
 function showAboutModal() {
   return kbAbout({
     title:      (CFG && CFG['about-title'])   || 'About',
-    contentMD:  (CFG && CFG['about-content']) || '',
+    contentMD:  applyVersionTokens((CFG && CFG['about-content']) || '', VERSION_INFO),
     closeLabel: (CFG && CFG['about-button'])  || 'Close',
   });
 }
 
 // ========== CONFIG ==========
 let CFG;
+let VERSION_INFO = null; // version.json (written by the release workflow), or null before the first tag
 async function loadConfig() {
   CFG = await loadYamlConfig();
+  VERSION_INFO = await loadVersionInfo('../version.json');
   normaliseConfig();
   applyAccent(CFG);
+  const marker = buildVersionMarker(VERSION_INFO);
+  if (marker) document.querySelector('footer.kb-footer').appendChild(marker);
 }
 
 // ── Localisation adapter ───────────────────────────────────────────────────────

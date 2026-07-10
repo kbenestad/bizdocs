@@ -38,6 +38,11 @@ localisation:
         Internal tool for maintaining CAP's contact directory. Edits made
         here are exported as files — there is no live database, so changes
         only reach staff once an exported file is deployed.
+
+        {repo}
+        {version-line}
+
+        Licensed under the Apache 2 licence. Please see LICENSE in root.
     ui:
       doc-title: "Contact Manager"
       subtitle: "Contact manager"

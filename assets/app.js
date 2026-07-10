@@ -371,6 +371,49 @@ function pdfOutputLang(cfg, uiLang) {
   return cfg['output-language'] === 'user-selected' ? uiLang : (cfg['default-code'] || 'en');
 }
 
+/* ── Version marker ────────────────────────────────────────────────────────── */
+/* version.json is written to the repo root by .github/workflows/version-stamp.yml
+ * on each tag push — it doesn't exist between tags (e.g. on a fresh feature
+ * branch), so every consumer must tolerate a missing/unreadable file. */
+
+/** Fetch version.json ({version, commit, date}). path is relative to the
+ *  calling page (apps pass '../version.json', the root page 'version.json').
+ *  Returns null if the file is missing or malformed. */
+async function loadVersionInfo(path) {
+  try {
+    const res = await fetch(path, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || typeof data.version !== 'string') return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/** Build the right-aligned "vX.Y.Z • abcdef1 / D Month YYYY" footer marker.
+ *  Returns null (nothing to append) when info is null. */
+function buildVersionMarker(info) {
+  if (!info) return null;
+  return el('span', { className: 'kb-footer__version' }, [
+    el('span', { className: 'kb-footer__version-line' }, `${info.version} • ${info.commit}`),
+    el('span', { className: 'kb-footer__version-line' }, info.date),
+  ]);
+}
+
+/** Replace the {repo} / {version-line} tokens in About markdown with the
+ *  release info from version.json (or a neutral placeholder before the
+ *  first tag is ever published). */
+function applyVersionTokens(md, info) {
+  const vars = {
+    repo: 'kbenestad/bizdocs',
+    'version-line': info ? `${info.version} • ${info.commit} • ${info.date}` : 'dev build',
+  };
+  let s = md || '';
+  for (const k in vars) s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), vars[k]);
+  return s;
+}
+
 /* ── Tabs ──────────────────────────────────────────────────────────────── */
 /** Build a tab strip + panels.
  *  items: Array<{ label: string, content: Node }>
