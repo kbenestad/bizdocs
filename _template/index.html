@@ -61,6 +61,7 @@
  * makeSizeControl, kbAbout, lookupString, …) are visible in here. */
 
 let CFG;          // parsed config.yml
+let NAV = { apps: [], links: [] };  // root config's apps/links, for the nav dropdown
 let lang = 'en';  // active UI language
 let VERSION_INFO = null; // version.json (written by the release workflow), or null before the first tag
 let pdfLibReady;  // resolves once config.yml's pdf-lib dependency has loaded
@@ -125,30 +126,26 @@ function render() {
   updateThemeIcon();   // keep theme icons in sync after a (re)render
 }
 
-// Toolbar: language select · spacer · A−/A+ size · theme · about
+// Toolbar: nav menu · spacer · A−/A+ size · theme · about · language select
 function buildToolbar() {
   const toolbar = el('div', { className: 'kb-toolbar' });
 
-  const langSel = el('select', { className: 'kb-select', 'aria-label': 'Language' });
-  (CFG.languages || []).forEach(l => {
-    const o = el('option', { value: l.code }, l.name || l.code);
-    if (l.code === lang) o.selected = true;
-    langSel.appendChild(o);
-  });
-  langSel.addEventListener('change', () => {
-    applyLang(langSel.value);
-    localStorage.setItem('template-lang', langSel.value);   // app-specific key
-    render();
-  });
-
   const { seg: sizeSeg, label: szLabel } = makeSizeControl();
   toolbar.append(
-    langSel,
+    makeNavMenu(NAV),
     el('div', { className: 'spacer' }),
     sizeSeg, szLabel,
     makeThemeButton(),
     makeAboutButton(showAboutModal)
   );
+
+  const langSel = makeLangSelect(CFG.languages, lang, value => {
+    applyLang(value);
+    localStorage.setItem('template-lang', value);   // app-specific key
+    render();
+  });
+  if (langSel) toolbar.appendChild(langSel);
+
   return toolbar;
 }
 
@@ -235,6 +232,7 @@ try {
   CFG = await loadYamlConfig();   // fetch + parse config.yml (shared helper)
   VERSION_INFO = await loadVersionInfo('../version.json');
   await applySharedBranding(CFG); // fill in org/logo/tagline/accent from ../config.yml
+  NAV = await loadNavItems('../config.yml');   // root config's apps/links, for the nav dropdown
   normaliseConfig();
   applyAccent(CFG);               // apply config accent-colour to --accent
   pdfLibReady = loadDependency(CFG.dependencies && CFG.dependencies['pdf-lib']);

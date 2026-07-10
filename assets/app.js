@@ -81,6 +81,7 @@ const KB_ICON = {
   about: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>`,
   warn:  `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/></svg>`,
   info:  `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--info)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>`,
+  menu:  `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>`,
 };
 
 /* ── Theme (light/dark) ────────────────────────────────────────────────────── */
@@ -308,6 +309,86 @@ function kbSafeFilename(s) {
   return String(s || '').replace(/[^a-zA-Z0-9_\-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
 }
 
+/* ── Nav menu (apps + links dropdown, shared across every app's toolbar) ─────── */
+/** Config booleans in this repo are written as yes/no (see `logo: yes|no`) — this
+ *  reads that same convention for `hide-from-navselector`, real booleans included. */
+function kbTruthy(v) {
+  if (v === true) return true;
+  if (typeof v === 'string') return /^(yes|true)$/i.test(v.trim());
+  return false;
+}
+
+/** Filter a root config's `apps:`/`links:` lists down to the entries the nav
+ *  dropdown should show (drops any with `hide-from-navselector: yes|true`). */
+function kbFilterNavItems(cfg) {
+  const visible = list => (Array.isArray(list) ? list : []).filter(item => !kbTruthy(item && item['hide-from-navselector']));
+  return { apps: visible(cfg && cfg.apps), links: visible(cfg && cfg.links) };
+}
+
+/** Fetch the root config (relative to the calling app, e.g. '../config.yml')
+ *  purely for its apps/links nav lists. Fails soft to empty lists — the nav
+ *  menu is optional chrome and must never block an app's own boot. */
+async function loadNavItems(url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return { apps: [], links: [] };
+    const cfg = jsyaml.load(await res.text());
+    if (!cfg || typeof cfg !== 'object') return { apps: [], links: [] };
+    return kbFilterNavItems(cfg);
+  } catch (e) {
+    return { apps: [], links: [] };
+  }
+}
+
+/** Build the toolbar's far-left nav dropdown from { apps, links } (see
+ *  loadNavItems). Hides itself (returns an empty, display:none wrapper) when
+ *  there is nothing to show, so callers can always append it unconditionally. */
+function makeNavMenu(navItems) {
+  const apps  = (navItems && navItems.apps)  || [];
+  const links = (navItems && navItems.links) || [];
+  const wrap = el('div', { className: 'kb-navmenu' });
+  if (!apps.length && !links.length) { wrap.style.display = 'none'; return wrap; }
+
+  const btn = el('button', {
+    type: 'button', className: 'kb-iconbtn kb-navmenu__btn',
+    'aria-haspopup': 'true', 'aria-expanded': 'false', 'aria-label': 'Apps',
+  });
+  btn.innerHTML = KB_ICON.menu;
+
+  const menu = el('div', { className: 'kb-navmenu__menu', role: 'menu' });
+  menu.hidden = true;
+
+  const addItems = (list, external) => {
+    list.forEach(item => {
+      const a = el('a', { className: 'kb-navmenu__item', role: 'menuitem', href: item.href }, item.name || item.href);
+      if (external) { a.target = '_blank'; a.rel = 'noopener'; }
+      menu.appendChild(a);
+    });
+  };
+  addItems(apps, false);
+  if (apps.length && links.length) menu.appendChild(el('div', { className: 'kb-navmenu__sep' }));
+  addItems(links, true);
+
+  function close() {
+    menu.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('click', onDocClick, true);
+    document.removeEventListener('keydown', onKey);
+  }
+  function open() {
+    menu.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+    document.addEventListener('click', onDocClick, true);
+    document.addEventListener('keydown', onKey);
+  }
+  function onDocClick(e) { if (!wrap.contains(e.target)) close(); }
+  function onKey(e) { if (e.key === 'Escape') close(); }
+  btn.addEventListener('click', () => { menu.hidden ? open() : close(); });
+
+  wrap.append(btn, menu);
+  return wrap;
+}
+
 /* ── Numbers & dates ───────────────────────────────────────────────────────── */
 /** Format a number with thousands separators and 2 decimals; returns `fallback`
  *  for non-numeric input. */
@@ -463,6 +544,24 @@ function applyVersionTokens(md, info) {
   let s = md || '';
   for (const k in vars) s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), vars[k]);
   return s;
+}
+
+/** Build the toolbar's far-right language <select>, or null when there's
+ *  nothing to choose (0 or 1 language) — callers should skip appending it
+ *  in that case, so the control disappears for single-language apps. */
+function makeLangSelect(languages, current, onChange) {
+  const langs = Array.isArray(languages) ? languages : [];
+  if (langs.length < 2) return null;
+  const sel = el('select', { className: 'kb-select', 'aria-label': 'Language' });
+  langs.forEach(l => {
+    const code = typeof l === 'object' ? l.code : l;
+    const name = (typeof l === 'object' && l.name) || code;
+    const o = el('option', { value: code }, name);
+    if (code === current) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.addEventListener('change', () => onChange(sel.value));
+  return sel;
 }
 
 /* ── Tabs ──────────────────────────────────────────────────────────────── */

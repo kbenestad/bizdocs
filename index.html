@@ -71,7 +71,7 @@ function render() {
 function buildToolbar() {
   const toolbar = el('div', { className: 'kb-toolbar' });
   const { seg: sizeSeg, label: szLabel } = makeSizeControl();
-  toolbar.append(el('div', { className: 'spacer' }), sizeSeg, szLabel, makeThemeButton());
+  toolbar.append(makeNavMenu(kbFilterNavItems(CFG)), el('div', { className: 'spacer' }), sizeSeg, szLabel, makeThemeButton());
   return toolbar;
 }
 

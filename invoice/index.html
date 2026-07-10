@@ -71,9 +71,7 @@
 
   <!-- Utility toolbar -->
   <div class="kb-toolbar" id="lang-bar">
-    <div id="lang-part" style="display:none">
-      <select id="lang-sel" class="kb-select" style="width:auto;padding:5px 28px 5px 8px;font-size:var(--fs-small)"></select>
-    </div>
+    <div id="nav-menu-slot"></div>
     <div class="spacer"></div>
     <div class="kb-seg" role="group" aria-label="Text size">
       <button id="sz-down" onclick="bumpFontScale(-1)" aria-label="Smaller text">A−</button>
@@ -90,6 +88,9 @@
         <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
       </svg>
     </button>
+    <div id="lang-part" style="display:none">
+      <select id="lang-sel" class="kb-select" aria-label="Language"></select>
+    </div>
   </div>
 
   <!-- Document header (brand + title built by buildHeader() after config loads) -->
@@ -124,6 +125,7 @@
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let cfg  = null;
+let NAV  = { apps: [], links: [] };  // root config's apps/links, for the nav dropdown
 let lang = "en";
 let versionInfo = null; // version.json (written by the release workflow), or null before the first tag
 let lid  = 0;
@@ -270,6 +272,7 @@ async function loadCfg() {
     cfg = await loadYamlConfig();
     versionInfo = await loadVersionInfo('../version.json');
     await applySharedBranding(cfg);
+    NAV = await loadNavItems("../config.yml");   // root config's apps/links, for the nav dropdown
     normaliseI18n(cfg);
     lang = cfg["default-code"] || "en";
     jspdfReady = loadDependency(cfg.dependencies && cfg.dependencies.jspdf);
@@ -285,6 +288,7 @@ async function loadCfg() {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 function boot() {
   applyAccent(cfg);
+  document.getElementById("nav-menu-slot").appendChild(makeNavMenu(NAV));
   buildLangBar();
   buildHeader();
   buildForm();
