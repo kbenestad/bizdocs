@@ -1,0 +1,1678 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.bunny.net; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="format-detection" content="telephone=no">
+  <title>Invoice</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/favicon.ico" sizes="32x32">
+  <link rel="icon" href="assets/favicon-48.png" sizes="48x48" type="image/png">
+  <link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="assets/favicon-16.png" sizes="16x16" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="manifest" href="assets/site.webmanifest">
+  <meta name="theme-color" content="#2f6fed">
+  <script>
+    /* Restore persisted theme before first paint */
+    (function(){var t=localStorage.getItem("kb-theme");if(t)document.documentElement.setAttribute("data-theme",t);})();
+  </script>
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/ui.css">
+  <style>
+/* =============================================================================
+ * Invoice — app-specific styles
+ * Shared colour scheme & components: ../assets/style.css + ../assets/ui.css
+ * ========================================================================== */
+
+/* ── Row grids (line items / tax rows) — rowhead look comes from ui.css ─────── */
+.kb-row { display: grid; align-items: start; gap: 8px; padding: 6px 4px; border-radius: var(--radius-sm); border-left: 3px solid transparent; }
+.kb-row:hover { background: var(--surface-2); }
+.kb-row .r { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; align-self: center; }
+/* Line total sits on the first line of the row (aligned with the qty/price input text),
+   not vertically centred across the two-line description cell. The 9px offset matches the
+   inputs' top border (1px) + top padding (8px). */
+.inv-line .r { align-self: start; padding-top: 9px; line-height: 1.4; }
+.kb-row .kb-circbtn { margin-top: 6px; }
+
+/* Invoice column templates */
+.inv-lines-head { grid-template-columns: 78px 88px 1fr 108px 108px 34px; }
+.inv-line       { grid-template-columns: 78px 88px 1fr 108px 108px 34px; }
+.inv-tax-head   { grid-template-columns: 1fr 100px 34px; }
+.inv-tax        { grid-template-columns: 1fr 100px 34px; }
+
+/* ── FX expansion block ────────────────────────────────────────────────────── */
+.fx-block { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; margin: 4px 0 6px; }
+.fx-note { font-size: var(--fs-small); color: var(--text-muted); margin-top: 8px; }
+.fx-note strong { color: var(--text); font-family: var(--font-mono); }
+
+/* ── Charge-to locked state ────────────────────────────────────────────────── */
+#ct-fields.locked .kb-input,
+#ct-fields.locked .kb-select { background: var(--surface-3) !important; color: var(--text-muted) !important; cursor: not-allowed; pointer-events: none; }
+
+/* ── Payment section ───────────────────────────────────────────────────────── */
+.pay-terms-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.pay-by-row { display: flex; align-items: center; gap: 8px; }
+#paybydisp { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ── Responsive ────────────────────────────────────────────────────────────── */
+@media (max-width: 680px) {
+  .kb-grid.cols-2, .kb-grid.cols-3 { grid-template-columns: 1fr; }
+  .kb-doctitle { text-align: left; }
+  .inv-lines-head { display: none; }
+  .inv-line { grid-template-columns: 1fr 1fr; gap: 6px 8px; }
+  .inv-tax  { grid-template-columns: 1fr 80px 34px; }
+}
+  </style>
+</head>
+<body>
+<div class="kb-wrap">
+
+  <!-- Utility toolbar -->
+  <div class="kb-toolbar" id="lang-bar">
+    <div id="nav-menu-slot"></div>
+    <div class="spacer"></div>
+    <div class="kb-seg" role="group" aria-label="Text size">
+      <button id="sz-down" onclick="bumpFontScale(-1)" aria-label="Smaller text">A−</button>
+      <button id="sz-up"   onclick="bumpFontScale(1)"  aria-label="Larger text">A+</button>
+    </div>
+    <span id="sz-label" class="kb-sz-label">100%</span>
+    <button class="kb-iconbtn kb-theme-btn" id="btn-theme" onclick="toggleTheme()" title="Toggle light/dark" aria-label="Toggle dark mode">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+      </svg>
+    </button>
+    <button class="kb-iconbtn" id="btn-about" onclick="openAbout()" aria-label="About" style="display:none">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
+      </svg>
+    </button>
+    <div id="lang-part" style="display:none">
+      <select id="lang-sel" class="kb-select" aria-label="Language"></select>
+    </div>
+  </div>
+
+  <!-- Document header (brand + title built by buildHeader() after config loads) -->
+  <header class="kb-header">
+    <div id="hdr-brand"></div>
+    <div class="kb-doctitle">
+      <h1 id="inv-title"></h1>
+      <div class="meta" id="inv-meta"></div>
+    </div>
+  </header>
+
+  <!-- Loading / error placeholder -->
+  <div id="loading" class="kb-loading">Loading configuration&#8230;</div>
+
+  <!-- Main form (injected by JS after config loads) -->
+  <div id="form-root"></div>
+
+</div><!-- /.kb-wrap -->
+
+<footer id="app-footer" class="kb-footer"></footer>
+
+<!-- js-yaml: needed to fetch/parse config.yml, so it must stay hardcoded here
+     (see config.yml's dependencies: block for the config-driven libraries). -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"
+        integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
+        crossorigin="anonymous"></script>
+<!-- Shared app runtime (DOM helpers, markdown, theme, modals) -->
+<script src="../assets/app.js"></script>
+
+<script>
+"use strict";
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let cfg  = null;
+let NAV  = { apps: [], links: [] };  // root config's apps/links, for the nav dropdown
+let lang = "en";
+let versionInfo = null; // version.json (written by the release workflow), or null before the first tag
+let lid  = 0;
+const lines  = {};
+let tlid = 0;
+const tLines = {};
+let _loading = false;
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+function t(key) {
+  return lookupString(cfg?.translations, key, lang, cfg?.["default-code"]);
+}
+
+// ── Localisation adapter ───────────────────────────────────────────────────────
+// Maps the unified `localisation:` config block onto the legacy fields the rest of
+// the app reads: default-code/-name, languages, translations[key][lang], the
+// per-language about block, and the localised data maps (products/uom/tax-types).
+function normaliseI18n(c) {
+  const loc = c && c.localisation;
+  if (!loc) return;
+  const { table, languages, codes, defaultCode } = buildLangTable(loc);
+  c["default-code"] = c["default-code"] ?? defaultCode;
+  const defLang = languages.find(l => l.code === defaultCode);
+  c["default-name"] = c["default-name"] ?? (defLang ? defLang.name : defaultCode);
+  c.languages = c.languages ?? languages;
+  c.translations = table;
+
+  const about = c.about ?? {};
+  codes.forEach(lc => { if (loc[lc] && loc[lc].about) about[lc] = loc[lc].about; });
+  if (Object.keys(about).length) c.about = about;
+
+  (c.products || []).forEach(p => {
+    p.description = p.description || {};
+    codes.forEach(lc => { const m = loc[lc] && loc[lc].products; if (m && m[p.code] != null) p.description[lc] = m[p.code]; });
+  });
+  (c.uom || []).forEach(u => {
+    u.labels = u.labels || {};
+    codes.forEach(lc => { const m = loc[lc] && loc[lc].uom; if (m && m[u.code] != null) u.labels[lc] = m[u.code]; });
+  });
+  (c["tax-types"] || []).forEach(tt => {
+    tt.labels = tt.labels || {};
+    codes.forEach(lc => { const m = loc[lc] && loc[lc]["tax-types"]; if (m && m[tt.key] != null) tt.labels[lc] = m[tt.key]; });
+  });
+}
+
+// ── Numbers & dates: formatAmount/parseAmount/formatDate live in app.js ───────
+function fmt(n) { return formatAmount(n); }
+function pn(s)  { return parseAmount(s); }
+function fmtDate(v) { return formatDate(v, cfg?.["date-format"] || "d MMMM YYYY"); }
+
+// ── HTML escape (delegates to the shared kbEsc in app.js) ─────────────────────
+function h(s) { return kbEsc(s); }
+
+// ── Countries ─────────────────────────────────────────────────────────────────
+const COUNTRIES = [
+  ["","— Select country —"],
+  ["AF","Afghanistan"],["AX","Åland Islands"],["AL","Albania"],["DZ","Algeria"],
+  ["AS","American Samoa"],["AD","Andorra"],["AO","Angola"],["AI","Anguilla"],
+  ["AQ","Antarctica"],["AG","Antigua and Barbuda"],["AR","Argentina"],
+  ["AM","Armenia"],["AW","Aruba"],["AU","Australia"],["AT","Austria"],
+  ["AZ","Azerbaijan"],["BS","Bahamas"],["BH","Bahrain"],["BD","Bangladesh"],
+  ["BB","Barbados"],["BY","Belarus"],["BE","Belgium"],["BZ","Belize"],
+  ["BJ","Benin"],["BM","Bermuda"],["BT","Bhutan"],["BO","Bolivia"],
+  ["BQ","Bonaire, Sint Eustatius and Saba"],["BA","Bosnia and Herzegovina"],
+  ["BW","Botswana"],["BV","Bouvet Island"],["BR","Brazil"],
+  ["IO","British Indian Ocean Territory"],["BN","Brunei"],["BG","Bulgaria"],
+  ["BF","Burkina Faso"],["BI","Burundi"],["CV","Cabo Verde"],["KH","Cambodia"],
+  ["CM","Cameroon"],["CA","Canada"],["KY","Cayman Islands"],
+  ["CF","Central African Republic"],["TD","Chad"],["CL","Chile"],["CN","China"],
+  ["CX","Christmas Island"],["CC","Cocos (Keeling) Islands"],["CO","Colombia"],
+  ["KM","Comoros"],["CG","Congo"],["CD","Congo, Democratic Republic"],
+  ["CK","Cook Islands"],["CR","Costa Rica"],["CI","Côte d'Ivoire"],
+  ["HR","Croatia"],["CU","Cuba"],["CW","Curaçao"],["CY","Cyprus"],
+  ["CZ","Czech Republic"],["DK","Denmark"],["DJ","Djibouti"],["DM","Dominica"],
+  ["DO","Dominican Republic"],["EC","Ecuador"],["EG","Egypt"],
+  ["SV","El Salvador"],["GQ","Equatorial Guinea"],["ER","Eritrea"],
+  ["EE","Estonia"],["SZ","Eswatini"],["ET","Ethiopia"],
+  ["FK","Falkland Islands"],["FO","Faroe Islands"],["FJ","Fiji"],
+  ["FI","Finland"],["FR","France"],["GF","French Guiana"],
+  ["PF","French Polynesia"],["TF","French Southern Territories"],["GA","Gabon"],
+  ["GM","Gambia"],["GE","Georgia"],["DE","Germany"],["GH","Ghana"],
+  ["GI","Gibraltar"],["GR","Greece"],["GL","Greenland"],["GD","Grenada"],
+  ["GP","Guadeloupe"],["GU","Guam"],["GT","Guatemala"],["GG","Guernsey"],
+  ["GN","Guinea"],["GW","Guinea-Bissau"],["GY","Guyana"],["HT","Haiti"],
+  ["HM","Heard Island and McDonald Islands"],["VA","Holy See"],["HN","Honduras"],
+  ["HK","Hong Kong"],["HU","Hungary"],["IS","Iceland"],["IN","India"],
+  ["ID","Indonesia"],["IR","Iran"],["IQ","Iraq"],["IE","Ireland"],
+  ["IM","Isle of Man"],["IL","Israel"],["IT","Italy"],["JM","Jamaica"],
+  ["JP","Japan"],["JE","Jersey"],["JO","Jordan"],["KZ","Kazakhstan"],
+  ["KE","Kenya"],["KI","Kiribati"],["KP","Korea, North"],["KR","Korea, South"],
+  ["KW","Kuwait"],["KG","Kyrgyzstan"],["LA","Laos"],["LV","Latvia"],
+  ["LB","Lebanon"],["LS","Lesotho"],["LR","Liberia"],["LY","Libya"],
+  ["LI","Liechtenstein"],["LT","Lithuania"],["LU","Luxembourg"],["MO","Macao"],
+  ["MG","Madagascar"],["MW","Malawi"],["MY","Malaysia"],["MV","Maldives"],
+  ["ML","Mali"],["MT","Malta"],["MH","Marshall Islands"],["MQ","Martinique"],
+  ["MR","Mauritania"],["MU","Mauritius"],["YT","Mayotte"],["MX","Mexico"],
+  ["FM","Micronesia"],["MD","Moldova"],["MC","Monaco"],["MN","Mongolia"],
+  ["ME","Montenegro"],["MS","Montserrat"],["MA","Morocco"],["MZ","Mozambique"],
+  ["MM","Myanmar"],["NA","Namibia"],["NR","Nauru"],["NP","Nepal"],
+  ["NL","Netherlands"],["NC","New Caledonia"],["NZ","New Zealand"],
+  ["NI","Nicaragua"],["NE","Niger"],["NG","Nigeria"],["NU","Niue"],
+  ["NF","Norfolk Island"],["MK","North Macedonia"],
+  ["MP","Northern Mariana Islands"],["NO","Norway"],["OM","Oman"],
+  ["PK","Pakistan"],["PW","Palau"],["PS","Palestine"],["PA","Panama"],
+  ["PG","Papua New Guinea"],["PY","Paraguay"],["PE","Peru"],["PH","Philippines"],
+  ["PN","Pitcairn"],["PL","Poland"],["PT","Portugal"],["PR","Puerto Rico"],
+  ["QA","Qatar"],["RE","Réunion"],["RO","Romania"],["RU","Russia"],
+  ["RW","Rwanda"],["BL","Saint Barthélemy"],["SH","Saint Helena"],
+  ["KN","Saint Kitts and Nevis"],["LC","Saint Lucia"],
+  ["MF","Saint Martin (French)"],["PM","Saint Pierre and Miquelon"],
+  ["VC","Saint Vincent and the Grenadines"],["WS","Samoa"],["SM","San Marino"],
+  ["ST","Sao Tome and Principe"],["SA","Saudi Arabia"],["SN","Senegal"],
+  ["RS","Serbia"],["SC","Seychelles"],["SL","Sierra Leone"],["SG","Singapore"],
+  ["SX","Sint Maarten"],["SK","Slovakia"],["SI","Slovenia"],
+  ["SB","Solomon Islands"],["SO","Somalia"],["ZA","South Africa"],
+  ["GS","South Georgia and South Sandwich Islands"],["SS","South Sudan"],
+  ["ES","Spain"],["LK","Sri Lanka"],["SD","Sudan"],["SR","Suriname"],
+  ["SJ","Svalbard and Jan Mayen"],["SE","Sweden"],["CH","Switzerland"],
+  ["SY","Syria"],["TW","Taiwan"],["TJ","Tajikistan"],["TZ","Tanzania"],
+  ["TH","Thailand"],["TL","Timor-Leste"],["TG","Togo"],["TK","Tokelau"],
+  ["TO","Tonga"],["TT","Trinidad and Tobago"],["TN","Tunisia"],["TR","Turkey"],
+  ["TM","Turkmenistan"],["TC","Turks and Caicos Islands"],["TV","Tuvalu"],
+  ["UG","Uganda"],["UA","Ukraine"],["AE","United Arab Emirates"],
+  ["GB","United Kingdom"],["UM","United States Minor Outlying Islands"],
+  ["US","United States"],["UY","Uruguay"],["UZ","Uzbekistan"],["VU","Vanuatu"],
+  ["VE","Venezuela"],["VN","Vietnam"],["VG","Virgin Islands, British"],
+  ["VI","Virgin Islands, U.S."],["WF","Wallis and Futuna"],
+  ["EH","Western Sahara"],["YE","Yemen"],["ZM","Zambia"],["ZW","Zimbabwe"]
+];
+const COUNTRY_MAP = Object.fromEntries(COUNTRIES.slice(1));
+
+function countryOpts(sel) {
+  return COUNTRIES.map(([c, n]) =>
+    `<option value="${h(c)}" ${c === sel ? "selected" : ""}>${h(n)}</option>`
+  ).join("");
+}
+
+// ── Theme toggle: currentTheme/toggleTheme/updateThemeIcon live in app.js ─────
+
+// ── Load config ───────────────────────────────────────────────────────────────
+let jspdfReady = null;
+async function loadCfg() {
+  try {
+    cfg = await loadYamlConfig();
+    versionInfo = await loadVersionInfo('../version.json');
+    await applySharedBranding(cfg);
+    NAV = await loadNavItems("../config.yml");   // root config's apps/links, for the nav dropdown
+    normaliseI18n(cfg);
+    lang = cfg["default-code"] || "en";
+    jspdfReady = loadDependency(cfg.dependencies && cfg.dependencies.jspdf);
+    jspdfReady.catch(() => {}); // surfaced when buildPDF() awaits it instead
+    boot();
+  } catch (err) {
+    document.getElementById("loading").innerHTML =
+      `<div class="error-box"><strong>Could not load config.yml:</strong> ${h(err.message)}<br>
+       Serve this folder over HTTP (e.g. <code>python3 -m http.server</code> from the repo root).</div>`;
+  }
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+function boot() {
+  applyAccent(cfg);
+  document.getElementById("nav-menu-slot").appendChild(makeNavMenu(NAV));
+  buildLangBar();
+  buildHeader();
+  buildForm();
+  buildFooter();
+  updateThemeIcon();
+  restoreStorage();
+  updateInvMeta();
+  if (!loadLines()) addLine();
+  document.getElementById("loading").style.display = "none";
+}
+
+// ── Document header ───────────────────────────────────────────────────────────
+// KB_BRAND_SVG lives in app.js
+const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" aria-hidden="true">
+  <rect width="48" height="48" rx="12" fill="var(--accent)"/>
+  <path d="M14 9 H29 L34 14 V39 H14 Z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M29 9 V14 H34"             fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M18.5 20 H27"   stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M18.5 25 H29.5" stroke="#fff" stroke-width="2.6" stroke-linecap="round" opacity=".55"/>
+  <path d="M18.5 33 H29.5" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/>
+</svg>`;
+
+function buildHeader() {
+  const org     = cfg.organization || "";
+  const tagline = cfg.tagline || "";
+  const hasLogo = cfg.logo === true || cfg.logo === "yes";
+
+  const hdrEl   = document.querySelector(".kb-header");
+  const brandEl = document.getElementById("hdr-brand");
+  brandEl.className = "kb-brand";
+  brandEl.innerHTML = "";
+
+  if (!org) {
+    brandEl.innerHTML = `<span class="logo">${KB_BRAND_SVG}</span><span class="org">kbenestad/invoice<small>Invoice generator</small></span>`;
+  } else if (hasLogo) {
+    const img = document.createElement("img");
+    img.alt = org; img.src = "../assets/logo.png";
+    img.style.cssText = "max-height:52px;width:auto;display:block;";
+    if (cfg["logo-maxwidth"]) img.style.maxWidth = cfg["logo-maxwidth"] + "cm";
+    img.onerror = function() {
+      this.src = "../assets/logo.jpg";
+      this.onerror = function() { const s = document.createElement("span"); s.className = "logo"; s.innerHTML = KB_BRAND_SVG; this.replaceWith(s); };
+    };
+    brandEl.appendChild(img);
+    if (hdrEl) hdrEl.style.cssText = "background:#ffffff;border:1px solid var(--border);border-radius:8px;padding:16px 20px;";
+  } else {
+    let inner = `<span class="logo">${LOGO_SVG}</span><span class="org">${h(org)}`;
+    if (tagline) inner += `<small>${h(tagline)}</small>`;
+    inner += `</span>`;
+    brandEl.innerHTML = inner;
+  }
+
+  const titleEl = document.getElementById("inv-title");
+  titleEl.innerHTML = LOGO_SVG.replace("<svg ", '<svg width="24" height="24" ') + h(t("doc-title"));
+  updateInvMeta();
+}
+
+function updateInvMeta() {
+  const el  = document.getElementById("inv-meta");
+  const ino = (document.getElementById("ino")?.value || "").trim();
+  if (el) el.textContent = ino || " ";
+}
+
+// ── Font-size accessibility ────────────────────────────────────────────────────
+// Text-size control drives the shared --font-scale token (see app.js).
+
+// ── Language bar ──────────────────────────────────────────────────────────────
+function buildLangBar() {
+  initFontScale();
+  if (cfg.about) {
+    const btn = document.getElementById("btn-about");
+    if (btn) btn.style.display = "";
+  }
+  const langs = cfg.languages || [{ code: cfg["default-code"], name: cfg["default-name"] }];
+  if (langs.length < 2) return;
+  const part = document.getElementById("lang-part");
+  if (part) part.style.display = "";
+  const sel = document.getElementById("lang-sel");
+  sel.innerHTML = langs.map(l =>
+    `<option value="${h(l.code)}" ${l.code === lang ? "selected" : ""}>${h(l.name)}</option>`
+  ).join("");
+  sel.addEventListener("change", e => {
+    lang = e.target.value;
+    const ld = langs.find(l => l.code === lang);
+    document.documentElement.lang = lang;
+    document.documentElement.dir  = ld?.direction || "ltr";
+    relabel();
+  });
+}
+
+// ── Build form ────────────────────────────────────────────────────────────────
+function buildForm() {
+  const today   = new Date();
+  const dateDef = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const curOpts = (cfg.currencies || []).map((c, i) =>
+    `<option value="${h(c)}" ${i === 0 ? "selected" : ""}>${h(c)}</option>`).join("");
+
+  const pcOpts = (cfg["project-codes"] || []).map(pc => `<option value="${h(pc)}">${h(pc)}</option>`).join("");
+  const ctOpts = (cfg["charge-to"] || []).map((ct, i) => `<option value="${i}">${h(ct.display || ct.name)}</option>`).join("");
+
+  document.getElementById("form-root").innerHTML = `
+<form id="the-form" novalidate>
+
+  <!-- Row 1: Sender + Invoice details -->
+  <div class="kb-grid cols-2" style="margin-bottom:14px;align-items:start">
+    <section class="kb-card" style="margin:0">
+      <h2 class="kb-card__title" id="sec-sender">${h(t("sender-section"))}</h2>
+      <div class="kb-grid">
+        <div class="kb-field">
+          <label class="kb-label" id="lbl-sn" for="sn">${h(t("sender-name"))}</label>
+          <input id="sn" type="text" class="kb-input" data-ls="sn" autocomplete="name">
+        </div>
+        <div class="kb-field">
+          <label class="kb-label" id="lbl-sa1" for="sa1">${h(t("sender-address1"))}</label>
+          <input id="sa1" type="text" class="kb-input" data-ls="sa1" autocomplete="address-line1">
+        </div>
+        <div class="kb-field">
+          <label class="kb-label" id="lbl-sa2" for="sa2">${h(t("sender-address2"))}</label>
+          <input id="sa2" type="text" class="kb-input" data-ls="sa2" autocomplete="address-line2">
+        </div>
+        <div class="kb-field">
+          <label class="kb-label" id="lbl-sa3" for="sa3">${h(t("sender-address3"))}</label>
+          <input id="sa3" type="text" class="kb-input" data-ls="sa3">
+        </div>
+        <div class="kb-field">
+          <label class="kb-label" id="lbl-sa4" for="sa4">${h(t("sender-address4"))}</label>
+          <input id="sa4" type="text" class="kb-input" data-ls="sa4">
+        </div>
+        <div class="kb-field">
+          <label class="kb-label" id="lbl-sc" for="sc">${h(t("sender-country"))}</label>
+          <select id="sc" class="kb-select" data-ls="sc">${countryOpts("")}</select>
+        </div>
+        <div class="kb-grid cols-2">
+          <div class="kb-field">
+            <label class="kb-label" id="lbl-sp" for="sp">${h(t("sender-phone"))}</label>
+            <input id="sp" type="tel" class="kb-input" data-ls="sp" autocomplete="tel">
+          </div>
+          <div class="kb-field">
+            <label class="kb-label" id="lbl-se" for="se">${h(t("sender-email"))}</label>
+            <input id="se" type="email" class="kb-input" data-ls="se" autocomplete="email">
+          </div>
+        </div>
+        <div class="kb-field">
+          <label class="kb-label" id="lbl-stax" for="stax">${h(t("vat-id"))}</label>
+          <input id="stax" type="text" class="kb-input" data-ls="stax">
+        </div>
+      </div>
+    </section>
+
+    <div>
+      <section class="kb-card">
+        <h2 class="kb-card__title" id="sec-invdet">${h(t("invoice-details-section"))}</h2>
+        <div class="kb-grid cols-2">
+          <div class="kb-field">
+            <label class="kb-label" id="lbl-idate" for="idate">${h(t("invoice-date"))}</label>
+            <input id="idate" type="date" class="kb-input" value="${dateDef}">
+          </div>
+          <div class="kb-field">
+            <label class="kb-label" id="lbl-ino" for="ino">${h(t("invoice-no"))}</label>
+            <input id="ino" type="text" class="kb-input" data-ls="ino">
+          </div>
+          <div class="kb-field">
+            <label class="kb-label" id="lbl-icur" for="icur">${h(t("invoice-currency"))}</label>
+            <select id="icur" class="kb-select" data-ls="icur">${curOpts}</select>
+          </div>
+          <div class="kb-field">
+            <label class="kb-label" id="lbl-pcode" for="pcode">${h(t("project-code"))}</label>
+            <select id="pcode" class="kb-select" data-ls="pcode">
+              <option value="">${h(t("select"))}</option>
+              ${pcOpts}
+              <option value="__other__">${h(t("other"))}</option>
+            </select>
+          </div>
+        </div>
+        <div class="kb-field" id="pcode-other-wrap" style="display:none;margin-top:12px">
+          <label class="kb-label" id="lbl-pcode-other" for="pcode-other">${h(t("project-code"))} (${h(t("other"))})</label>
+          <input id="pcode-other" type="text" class="kb-input" data-ls="pcode-other">
+        </div>
+      </section>
+
+      <section class="kb-card" style="margin-bottom:0">
+        <h2 class="kb-card__title" id="lbl-pay-sec">${h(t("payment"))}</h2>
+        <div class="pay-terms-row">
+          <label class="kb-label" id="lbl-pterm">${h(t("payment-terms"))}</label>
+          <input id="pterm" type="number" min="0" value="7" class="kb-input" style="width:64px"
+                 oninput="calcPayBy()" data-ls="pterm">
+          <span id="lbl-days" style="font-size:var(--fs-small);color:var(--text-muted)">${h(t("payment-days"))}</span>
+        </div>
+        <div class="pay-by-row">
+          <span style="font-size:var(--fs-small);color:var(--text-muted)" id="lbl-paybyl">${h(t("pay-by"))}:</span>
+          <span id="paybydisp"></span>
+        </div>
+        <div id="bank-section" style="display:none;margin-top:14px">
+          <div class="kb-grid">
+            <div class="kb-field">
+              <label class="kb-label" id="lbl-pacct" for="pacct">${h(t("account-holder"))}</label>
+              <input id="pacct" type="text" class="kb-input" data-ls="pacct">
+            </div>
+            <div class="kb-grid cols-2">
+              <div class="kb-field">
+                <label class="kb-label" id="lbl-piban" for="piban">${h(t("account-no"))}</label>
+                <input id="piban" type="text" class="kb-input kb-mono" data-ls="piban">
+              </div>
+              <div class="kb-field">
+                <label class="kb-label" id="lbl-pbic" for="pbic">${h(t("bank-bic"))}</label>
+                <input id="pbic" type="text" class="kb-input kb-mono" data-ls="pbic">
+              </div>
+            </div>
+            <div class="kb-field">
+              <label class="kb-label" id="lbl-pbadr">${h(t("bank-address"))}</label>
+              <input id="pbadr1" type="text" class="kb-input" data-ls="pbadr1">
+              <input id="pbadr2" type="text" class="kb-input" style="margin-top:6px" data-ls="pbadr2">
+            </div>
+            <div class="kb-field">
+              <label class="kb-label" id="lbl-pref" for="pref">${h(t("payment-ref"))}</label>
+              <input id="pref" type="text" class="kb-input" data-ls="pref">
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Row 2: Bill-to -->
+  <section class="kb-card">
+    <h2 class="kb-card__title">
+      <span id="sec-ct">${h(t("charge-to"))}</span>
+      <select id="ct-pick" class="kb-select" data-ls="ct-pick"
+              style="width:auto;font-size:var(--fs-small);margin-left:8px;padding:4px 28px 4px 8px">
+        <option value="">${h(t("select"))}</option>
+        ${ctOpts}
+        <option value="__other__">${h(t("other"))}</option>
+      </select>
+    </h2>
+    <div id="ct-fields" class="locked">
+      <div class="kb-grid cols-2" style="align-items:start">
+        <!-- Left: address -->
+        <div class="kb-grid">
+          <div class="kb-field">
+            <label class="kb-label" id="lbl-ctn" for="ctn">${h(t("charge-to-name"))}</label>
+            <input id="ctn" type="text" class="kb-input">
+          </div>
+          <div class="kb-field">
+            <label class="kb-label" id="lbl-ca1" for="ca1">${h(t("charge-to-address1"))}</label>
+            <input id="ca1" type="text" class="kb-input">
+          </div>
+          <div class="kb-field">
+            <label class="kb-label" id="lbl-ca2" for="ca2">${h(t("charge-to-address2"))}</label>
+            <input id="ca2" type="text" class="kb-input">
+          </div>
+          <div class="kb-field">
+            <label class="kb-label" id="lbl-ca3" for="ca3">${h(t("charge-to-address3"))}</label>
+            <input id="ca3" type="text" class="kb-input">
+          </div>
+          <div class="kb-grid cols-2" style="gap:10px">
+            <div class="kb-field">
+              <label class="kb-label" id="lbl-ca4" for="ca4">${h(t("charge-to-address4"))}</label>
+              <input id="ca4" type="text" class="kb-input">
+            </div>
+            <div class="kb-field">
+              <label class="kb-label" id="lbl-cc" for="cc">${h(t("charge-to-country"))}</label>
+              <select id="cc" class="kb-select">${countryOpts("")}</select>
+            </div>
+          </div>
+        </div>
+        <!-- Right: contact + IDs -->
+        <div class="kb-grid">
+          <div class="kb-field">
+            <label class="kb-label" id="lbl-cph" for="cph">${h(t("charge-to-phone"))}</label>
+            <input id="cph" type="tel" class="kb-input">
+          </div>
+          <div class="kb-field">
+            <label class="kb-label" id="lbl-cem" for="cem">${h(t("charge-to-email"))}</label>
+            <input id="cem" type="email" class="kb-input">
+          </div>
+          <div class="kb-field">
+            <label class="kb-label" id="lbl-cvat" for="cvat">${h(t("vat-id"))}</label>
+            <input id="cvat" type="text" class="kb-input">
+          </div>
+          <div class="kb-field">
+            <label class="kb-label" id="lbl-creg" for="creg">${h(t("registration-no"))}</label>
+            <input id="creg" type="text" class="kb-input">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Row 3: Line items -->
+  <section class="kb-card">
+    <h2 class="kb-card__title">
+      <span id="sec-lines">${h(t("invoice-lines"))}</span>
+      <button type="button" id="btn-reset-lines" class="kb-btn kb-btn--ghost kb-btn--sm"
+              style="margin-left:auto" onclick="resetLines()">${h(t("reset-lines"))}</button>
+    </h2>
+    <div class="kb-rowhead kb-row inv-lines-head">
+      <span id="th-qty">${h(t("qty"))}</span>
+      <span id="th-uom">${h(t("uom"))}</span>
+      <span id="th-desc">${h(t("description"))}</span>
+      <span class="r" id="th-price">${h(t("price"))}</span>
+      <span class="r" id="th-tot">${h(t("line-total"))}</span>
+      <span></span>
+    </div>
+    <div id="tbody"></div>
+  </section>
+
+  <!-- Row 4: Tax + Summary -->
+  <div class="kb-grid cols-2" style="align-items:start;margin-bottom:14px">
+    <section class="kb-card" style="margin:0">
+      <h2 class="kb-card__title" id="sec-tax">${h(t("tax-section"))}</h2>
+      <div class="kb-rowhead kb-row inv-tax-head">
+        <span id="th-taxrate">${h(t("tax-rate-type"))}</span>
+        <span class="r" id="th-taxamt">${h(t("tax-amount-col"))}</span>
+        <span></span>
+      </div>
+      <div id="tax-tbody"></div>
+      <div style="margin-top:10px">
+        <button type="button" class="kb-btn kb-btn--dashed" id="btn-add-tax"
+                onclick="addTaxLine()">${h(t("add-tax"))}</button>
+      </div>
+    </section>
+
+    <section class="kb-card kb-card--flex" style="margin:0">
+      <h2 class="kb-card__title" id="sec-summary">${h(t("summary-section"))}</h2>
+      <div class="kb-totals">
+        <div id="tot-pre">
+          <div class="row">
+            <span class="lab" id="lbl-sub">${h(t("subtotal"))}</span>
+            <span class="val" id="v-sub">0.00</span>
+          </div>
+        </div>
+        <div id="tot-post">
+          <div class="row">
+            <span class="lab" id="lbl-paid">${h(t("paid"))}</span>
+            <span class="val">
+              <input id="paid-inp" type="number" value="0" min="0" step="0.01"
+                     class="kb-input num" style="width:110px;padding:5px 8px">
+            </span>
+          </div>
+          <div class="grand">
+            <span class="lab" id="lbl-topay">${h(t("to-pay"))}</span>
+            <span class="val" id="v-topay">0.00</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Action row -->
+  <div id="action-row" style="display:flex;gap:10px;margin-top:8px">
+    <button type="button" id="btn-save" class="kb-btn kb-btn--ghost kb-btn--lg" style="flex:2" onclick="saveInvoice()">${h(t("save"))}</button>
+    <button type="button" id="btn-validate" class="kb-btn kb-btn--ghost kb-btn--lg" style="flex:2" onclick="validateInvoice()">${h(t("validate"))}</button>
+    <button type="submit" id="btn-generate" class="kb-btn kb-btn--primary kb-btn--lg" style="flex:6">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+        <path d="M8 2v9m0 0 4-4M8 11 4 7"/><line x1="2" y1="14" x2="14" y2="14"/>
+      </svg>
+      <span id="btn-generate-lbl">${h(t("generate-invoice"))}</span>
+    </button>
+  </div>
+</form>`;
+
+  document.getElementById("pcode").addEventListener("change", function () {
+    document.getElementById("pcode-other-wrap").style.display = this.value === "__other__" ? "block" : "none";
+  });
+  document.getElementById("ino").addEventListener("input", updateInvMeta);
+  document.getElementById("ct-pick").addEventListener("change", e => fillChargeTo(e.target.value));
+  document.getElementById("idate").addEventListener("change", calcPayBy);
+  document.getElementById("paid-inp").addEventListener("input", calcTotals);
+  document.getElementById("the-form").addEventListener("submit", e => { e.preventDefault(); generateInvoice(); });
+  document.querySelectorAll("[data-ls]").forEach(el => el.addEventListener("change", saveStorage));
+  document.getElementById("icur").addEventListener("change", () => {
+    Object.keys(lines).forEach(k => {
+      if (document.getElementById(`frate-lbl-${k}`)) updateFxLabels(+k);
+    });
+  });
+  calcPayBy();
+}
+
+// ── Project-code dropdown ─────────────────────────────────────────────────────
+function updateProjectCodes(codes) {
+  const arr = (codes && codes.length) ? codes : (cfg["project-codes"] || []);
+  const sel = document.getElementById("pcode");
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = `<option value="">${h(t("select"))}</option>`
+    + arr.map(pc => `<option value="${h(pc)}">${h(pc)}</option>`).join("")
+    + `<option value="__other__">${h(t("other"))}</option>`;
+  sel.value = arr.includes(prev) ? prev : "";
+  const wrap = document.getElementById("pcode-other-wrap");
+  if (wrap) wrap.style.display = sel.value === "__other__" ? "block" : "none";
+}
+
+// ── Fill charge-to ────────────────────────────────────────────────────────────
+function fillChargeTo(v) {
+  const f      = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ""; };
+  const fields = document.getElementById("ct-fields");
+
+  const bsec = document.getElementById("bank-section");
+  if (bsec) bsec.style.display = v === "__other__" ? "" : "none";
+
+  if (v === "") {
+    ["ctn","ca1","ca2","ca3","ca4","cc","cph","cem","cvat","creg"].forEach(id => f(id, ""));
+    fields?.classList.add("locked");
+    updateProjectCodes(null);
+    return;
+  }
+  if (v === "__other__") {
+    fields?.classList.remove("locked");
+    updateProjectCodes(null);
+    return;
+  }
+  const ct = (cfg["charge-to"] || [])[+v];
+  if (!ct) return;
+  f("ctn",  ct.name);       f("ca1",  ct.address1);
+  f("ca2",  ct.address2);   f("ca3",  ct.address3);
+  f("ca4",  ct.address4);   f("cc",   ct.country);
+  f("cph",  ct.phone);      f("cem",  ct.email);
+  f("cvat", ct["vat-id"]);  f("creg", ct["reg-no"]);
+  fields?.classList.add("locked");
+  updateProjectCodes(ct["project-codes"] || null);
+  if (ct.currency) {
+    const icurEl = document.getElementById("icur");
+    if (icurEl) { icurEl.value = ct.currency; saveStorage(); }
+  }
+}
+
+// ── Select option helpers ─────────────────────────────────────────────────────
+function uomOpts(sel) {
+  let o = `<option value="">${h(t("select"))}</option>`;
+  (cfg.uom || []).forEach(u => {
+    const lbl = u.labels?.[lang] ?? u.labels?.[cfg["default-code"]] ?? u.code;
+    o += `<option value="${h(u.code)}" ${u.code === sel ? "selected" : ""}>${h(lbl)} (${h(u.code)})</option>`;
+  });
+  return o;
+}
+
+function prodOpts(sel) {
+  let o = `<option value="">${h(t("select"))}</option>`;
+  (cfg.products || []).forEach((p, i) => {
+    const desc = p.description?.[lang] ?? p.description?.[cfg["default-code"]] ?? p.code;
+    o += `<option value="${i}" ${String(i) === String(sel) ? "selected" : ""}>${h(desc)}</option>`;
+  });
+  o += `<option value="__other__" ${"__other__" === sel ? "selected" : ""}>${h(t("other"))}</option>`;
+  return o;
+}
+
+function currOpts(sel) {
+  return (cfg.currencies || ["USD","EUR","GBP"]).map(c =>
+    `<option value="${h(c)}" ${c === sel ? "selected" : ""}>${h(c)}</option>`
+  ).join("");
+}
+
+function getTaxTypeOpts(sel) {
+  return (cfg["tax-types"] || []).map(tt => {
+    const lbl = tt.labels?.[lang] ?? tt.labels?.[cfg["default-code"]] ?? tt.key;
+    return `<option value="${h(tt.key)}" ${tt.key === sel ? "selected" : ""}>${h(lbl)}</option>`;
+  }).join("");
+}
+
+function addTaxLine() {
+  const i = tlid++;
+  tLines[i] = {};
+  const tbody = document.getElementById("tax-tbody");
+  const defaultKey = (cfg["tax-types"]||[])[0]?.key || "";
+
+  const div = document.createElement("div");
+  div.className = "kb-row inv-tax"; div.id = `tlr-${i}`;
+  div.innerHTML = `
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+      <input type="number" id="tv-${i}" class="kb-input num" value="" placeholder="0"
+             min="0" step="any" oninput="calcTotals()" style="width:60px">
+      <select id="tt-${i}" class="kb-select" style="width:auto" onchange="calcTotals()">
+        <option value="pct">${h(t("tax-pct"))}</option>
+        <option value="amt">${h(t("tax-amount"))}</option>
+      </select>
+      <select id="tk-${i}" class="kb-select" style="width:auto" onchange="calcTotals()">
+        ${getTaxTypeOpts(defaultKey)}
+      </select>
+    </div>
+    <span class="r kb-mono" id="ta-${i}">0.00</span>
+    <button type="button" class="kb-circbtn kb-circbtn--rm" onclick="removeTaxLine(${i})"
+            aria-label="Remove">&#x2212;</button>`;
+  tbody.appendChild(div);
+  calcTotals();
+}
+
+function removeTaxLine(i) {
+  document.getElementById(`tlr-${i}`)?.remove();
+  delete tLines[i];
+  calcTotals();
+}
+
+// ── Add / remove line ─────────────────────────────────────────────────────────
+function addLine() {
+  const i = lid++;
+  lines[i] = {};
+  const tbody = document.getElementById("tbody");
+  const alRow = document.getElementById("al-row");
+  if (alRow) alRow.remove();
+
+  const div = document.createElement("div");
+  div.className = "kb-row inv-line"; div.id = `lr-${i}`;
+  div.innerHTML = `
+    <input type="number" id="qty-${i}" class="kb-input num" value="" min="0" step="0.01"
+           placeholder="0.00" oninput="calcLine(${i});saveLines()" disabled>
+    <select id="uom-${i}" class="kb-select" onchange="calcLine(${i});saveLines()" disabled>
+      ${uomOpts("")}
+    </select>
+    <div>
+      <select id="dsel-${i}" class="kb-select" onchange="pickProduct(${i})">
+        ${prodOpts("")}
+      </select>
+      <input type="text" id="dtxt-${i}" class="kb-input" placeholder="${h(t("description"))}"
+             style="margin-top:5px;display:none" oninput="calcLine(${i});saveLines()">
+      <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+        <label style="font-size:var(--fs-label);font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--text-muted);white-space:nowrap"
+               id="lbl-fx-${i}">${h(t("foreign-currency"))}:</label>
+        <select id="fx-${i}" class="kb-select" style="width:auto" onchange="toggleFx(${i})">
+          <option value="no">${h(t("no-option"))}</option>
+          <option value="yes">${h(t("yes"))}</option>
+        </select>
+      </div>
+    </div>
+    <input type="number" id="price-${i}" class="kb-input num" value="" min="0" step="any"
+           oninput="calcLine(${i});saveLines()" disabled>
+    <span class="r kb-mono" id="ltv-${i}"
+          style="font-size:var(--fs-base);font-weight:600">0.00</span>
+    <button type="button" class="kb-circbtn kb-circbtn--rm" onclick="removeLine(${i})"
+            aria-label="Remove">&#x2212;</button>`;
+  tbody.appendChild(div);
+
+  const alNew = document.createElement("div");
+  alNew.id = "al-row";
+  alNew.style.cssText = "padding:10px 4px 4px";
+  alNew.innerHTML = `<button type="button" class="kb-btn kb-btn--dashed" id="btn-al"
+    onclick="addLine()">${h(t("add-line"))}</button>`;
+  tbody.appendChild(alNew);
+  calcTotals();
+  return i;
+}
+
+function removeLine(i) {
+  document.getElementById(`lr-${i}`)?.remove();
+  document.getElementById(`fx-row-${i}`)?.remove();
+  delete lines[i];
+  calcTotals();
+  saveLines();
+}
+
+function pickProduct(i) {
+  const v      = document.getElementById(`dsel-${i}`)?.value;
+  const txt    = document.getElementById(`dtxt-${i}`);
+  const qtyEl  = document.getElementById(`qty-${i}`);
+  const uomEl  = document.getElementById(`uom-${i}`);
+  const priceEl= document.getElementById(`price-${i}`);
+  const fxOn   = document.getElementById(`fx-${i}`)?.value === "yes";
+
+  txt.style.display = v === "__other__" ? "block" : "none";
+
+  if (v === "") {
+    if (qtyEl)   { qtyEl.disabled   = true;  qtyEl.value   = ""; }
+    if (uomEl)   { uomEl.disabled   = true;  uomEl.value   = ""; }
+    if (priceEl) { priceEl.disabled = true;  priceEl.value = ""; }
+  } else if (v === "__other__") {
+    if (qtyEl)   qtyEl.disabled   = false;
+    if (uomEl)   uomEl.disabled   = false;
+    if (!fxOn && priceEl) priceEl.disabled = false;
+  } else {
+    const p = (cfg.products || [])[+v];
+    if (p) {
+      if (uomEl   && p.uom)           uomEl.value   = p.uom;
+      if (priceEl && p.price != null) priceEl.value = p.price;
+      if (qtyEl   && p.qty   != null) qtyEl.value   = p.qty;
+    }
+    if (qtyEl)   qtyEl.disabled   = false;
+    if (uomEl)   uomEl.disabled   = true;
+    if (!fxOn && priceEl) priceEl.disabled = false;
+  }
+  calcLine(i);
+  saveLines();
+}
+
+// ── Foreign currency ──────────────────────────────────────────────────────────
+function toggleFx(i) {
+  const on      = document.getElementById(`fx-${i}`)?.value === "yes";
+  const lr      = document.getElementById(`lr-${i}`);
+  const priceEl = document.getElementById(`price-${i}`);
+  document.getElementById(`fx-row-${i}`)?.remove();
+
+  if (!on) {
+    lr?.classList.remove("open");
+    const dv = document.getElementById(`dsel-${i}`)?.value;
+    if (dv && dv !== "" && priceEl) priceEl.disabled = false;
+    calcTotals();
+    saveLines();
+    return;
+  }
+
+  if (priceEl) { priceEl.disabled = true; priceEl.value = ""; }
+  lr?.classList.add("open");
+
+  const lcy = document.getElementById("icur")?.value || "";
+  const defaultFcy = (cfg.currencies || ["USD"])[0] || "USD";
+
+  const fxDiv = document.createElement("div");
+  fxDiv.className = "fx-block"; fxDiv.id = `fx-row-${i}`;
+  fxDiv.innerHTML = `
+    <div class="kb-grid cols-3">
+      <div class="kb-field">
+        <span class="kb-label" id="fcur-lbl-${i}">${h(t("currency-code"))}</span>
+        <select id="fcur-${i}" class="kb-select"
+                onchange="updateFxLabels(${i});calcLine(${i});saveLines()">
+          ${currOpts(defaultFcy)}
+        </select>
+      </div>
+      <div class="kb-field">
+        <span class="kb-label" id="frate-lbl-${i}">${h(t("exchange-rate"))}</span>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <input type="number" id="frate-${i}" class="kb-input num" value="" min="0" step="any"
+                 style="flex:1;min-width:70px" oninput="calcFxFromPer(${i})">
+          <select id="rcur-${i}" class="kb-select" style="width:auto"
+                  onchange="updateFxLabels(${i});calcFxFromPer(${i});saveLines()">
+            <option value="${h(lcy)}">${h(lcy)}</option>
+            <option value="${h(defaultFcy)}">${h(defaultFcy)}</option>
+          </select>
+          <span class="kb-label" style="margin:0" id="fxper-${i}">${h(t("fx-per"))}</span>
+          <span id="rother-${i}" style="font-size:var(--fs-small);font-weight:600;color:var(--text)">${h(defaultFcy)}</span>
+        </div>
+      </div>
+      <div class="kb-field">
+        <span class="kb-label" id="fper-lbl-${i}">${h(t("per-item"))} ${h(defaultFcy)}</span>
+        <input type="number" id="fper-${i}" class="kb-input num" value="" min="0" step="any"
+               oninput="calcFxFromPer(${i})">
+      </div>
+    </div>
+    <div class="fx-note"><span id="ftot-lbl-${i}">${h(t("total-foreign"))} ${h(defaultFcy)}</span>: <strong id="fltot-${i}">0.00</strong></div>`;
+  lr?.insertAdjacentElement("afterend", fxDiv);
+  calcLine(i);
+  saveLines();
+}
+
+function calcFxFromPer(i) {
+  const per  = pn(document.getElementById(`fper-${i}`)?.value);
+  const rate = pn(document.getElementById(`frate-${i}`)?.value) || 1;
+  const rcur = document.getElementById(`rcur-${i}`)?.value;
+  const lcy  = document.getElementById("icur")?.value || "";
+  const prEl = document.getElementById(`price-${i}`);
+  if (prEl) prEl.value = rcur === lcy
+    ? (per * rate).toFixed(6)
+    : (per / rate).toFixed(6);
+  calcLine(i);
+  saveLines();
+}
+
+// ── Calculations ──────────────────────────────────────────────────────────────
+function calcLine(i) {
+  const qty   = pn(document.getElementById(`qty-${i}`)?.value);
+  const price = pn(document.getElementById(`price-${i}`)?.value);
+  const el    = document.getElementById(`ltv-${i}`);
+  if (el) el.textContent = fmt(qty * price);
+
+  if (document.getElementById(`fx-${i}`)?.value === "yes") {
+    const per  = pn(document.getElementById(`fper-${i}`)?.value);
+    const ltot = document.getElementById(`fltot-${i}`);
+    if (ltot) ltot.textContent = fmt(per * qty);
+  }
+  calcTotals();
+}
+
+function calcPayBy() {
+  const idate = document.getElementById("idate")?.value;
+  const terms = parseInt(document.getElementById("pterm")?.value) || 0;
+  const el = document.getElementById("paybydisp");
+  if (!el) return;
+  if (idate && terms > 0) {
+    const d = new Date(idate + "T00:00:00");
+    d.setDate(d.getDate() + terms);
+    const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    el.textContent = fmtDate(iso);
+  } else {
+    el.textContent = "";
+  }
+}
+
+function calcTotals() {
+  let sub = 0;
+  Object.keys(lines).forEach(i => {
+    sub += pn(document.getElementById(`qty-${i}`)?.value) *
+           pn(document.getElementById(`price-${i}`)?.value);
+  });
+
+  let totalTax = 0;
+  Object.keys(tLines).forEach(i => {
+    const val  = pn(document.getElementById(`tv-${i}`)?.value);
+    const type = document.getElementById(`tt-${i}`)?.value || "pct";
+    const amt  = type === "pct" ? sub * (val / 100) : val;
+    totalTax += amt;
+    const el = document.getElementById(`ta-${i}`);
+    if (el) el.textContent = fmt(amt);
+  });
+
+  const paid  = pn(document.getElementById("paid-inp")?.value);
+  const toPay = sub + totalTax - paid;
+
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = fmt(v); };
+  set("v-sub",   sub);
+  set("v-topay", toPay);
+}
+
+// ── LocalStorage ──────────────────────────────────────────────────────────────
+const LS_DATA = "inv_data_v1";
+const LS_GEN  = "inv_generated_v1";
+
+function saveStorage() {
+  const d = {};
+  document.querySelectorAll("[data-ls]").forEach(el => { d[el.dataset.ls] = el.value; });
+  localStorage.setItem(LS_DATA, JSON.stringify(d));
+}
+
+function restoreStorage() {
+  try {
+    const raw = localStorage.getItem(LS_DATA);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    const wasGen = localStorage.getItem(LS_GEN) === "true";
+
+    Object.entries(d).forEach(([k, v]) => {
+      const el = document.querySelector(`[data-ls="${k}"]`);
+      if (el) el.value = v;
+    });
+
+    // Restore charge-to: rebuild its project code options then re-apply pcode.
+    // fillChargeTo() calls updateProjectCodes() which resets the pcode select,
+    // and may call saveStorage() mid-flow, so we re-apply and re-save after.
+    const ctPickEl = document.getElementById("ct-pick");
+    if (ctPickEl?.value) {
+      fillChargeTo(ctPickEl.value);
+      const pcodeEl = document.getElementById("pcode");
+      if (pcodeEl && d.pcode) pcodeEl.value = d.pcode;
+      saveStorage();
+    }
+
+    if (d.pcode === "__other__") {
+      const w = document.getElementById("pcode-other-wrap");
+      if (w) w.style.display = "block";
+    }
+
+    if (wasGen && d.ino) {
+      const bumped = bumpNum(d.ino);
+      const el = document.getElementById("ino");
+      if (el) el.value = bumped;
+      d.ino = bumped;
+      localStorage.setItem(LS_DATA, JSON.stringify(d));
+      localStorage.setItem(LS_GEN, "false");
+    }
+  } catch (_) {}
+}
+
+function bumpNum(s) {
+  return String(s).replace(/(\d+)$/, m => String(+m + 1).padStart(m.length, "0"));
+}
+
+// ── Relabel on language switch ────────────────────────────────────────────────
+function relabel() {
+  const lm = {
+    "lbl-language":"language",
+    "sec-sender":"sender-section","sec-invdet":"invoice-details-section",
+    "sec-ct":"charge-to","sec-lines":"invoice-lines",
+    "sec-tax":"tax-section","th-taxrate":"tax-rate-type",
+    "th-taxamt":"tax-amount-col","sec-summary":"summary-section",
+    "lbl-sn":"sender-name","lbl-sa1":"sender-address1","lbl-sa2":"sender-address2",
+    "lbl-sa3":"sender-address3","lbl-sa4":"sender-address4","lbl-sc":"sender-country",
+    "lbl-sp":"sender-phone","lbl-se":"sender-email","lbl-stax":"vat-id",
+    "lbl-idate":"invoice-date","lbl-icur":"invoice-currency",
+    "lbl-pcode":"project-code","lbl-ino":"invoice-no",
+    "lbl-ctn":"charge-to-name","lbl-ca1":"charge-to-address1","lbl-ca2":"charge-to-address2",
+    "lbl-ca3":"charge-to-address3","lbl-ca4":"charge-to-address4","lbl-cc":"charge-to-country",
+    "lbl-cph":"charge-to-phone","lbl-cem":"charge-to-email",
+    "lbl-cvat":"vat-id","lbl-creg":"registration-no",
+    "lbl-pay-sec":"payment","lbl-pterm":"payment-terms",
+    "lbl-days":"payment-days","lbl-paybyl":"pay-by",
+    "lbl-pacct":"account-holder","lbl-piban":"account-no","lbl-pbic":"bank-bic",
+    "lbl-pbadr":"bank-address","lbl-pref":"payment-ref",
+    "th-qty":"qty","th-uom":"uom","th-desc":"description",
+    "th-price":"price","th-tot":"line-total",
+    "lbl-sub":"subtotal","lbl-paid":"paid","lbl-topay":"to-pay",
+  };
+  Object.entries(lm).forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = t(key);
+  });
+
+  Object.keys(lines).forEach(i => {
+    const fl = document.getElementById(`lbl-fx-${i}`);
+    if (fl) fl.textContent = t("foreign-currency") + ":";
+    const dt = document.getElementById(`dtxt-${i}`);
+    if (dt) dt.placeholder = t("description");
+    const ue = document.getElementById(`uom-${i}`);
+    if (ue) { const s = ue.value; ue.innerHTML = uomOpts(s); }
+    const de = document.getElementById(`dsel-${i}`);
+    if (de) { const s = de.value; de.innerHTML = prodOpts(s); }
+    const fe = document.getElementById(`fx-${i}`);
+    if (fe) {
+      const s = fe.value;
+      fe.innerHTML = `<option value="no">${h(t("no-option"))}</option><option value="yes">${h(t("yes"))}</option>`;
+      fe.value = s;
+    }
+    if (document.getElementById(`rcur-${i}`)) updateFxLabels(+i);
+  });
+
+  const alBtn = document.getElementById("btn-al");
+  if (alBtn) alBtn.textContent = t("add-line");
+  const saveBtn = document.getElementById("btn-save");
+  if (saveBtn) saveBtn.textContent = t("save");
+  const valBtn = document.getElementById("btn-validate");
+  if (valBtn) valBtn.textContent = t("validate");
+  const genLbl = document.getElementById("btn-generate-lbl");
+  if (genLbl) genLbl.textContent = t("generate-invoice");
+
+  Object.keys(tLines).forEach(i => {
+    const ttEl = document.getElementById(`tt-${i}`);
+    if (ttEl) {
+      const sv = ttEl.value;
+      ttEl.innerHTML = `<option value="pct">${h(t("tax-pct"))}</option><option value="amt">${h(t("tax-amount"))}</option>`;
+      ttEl.value = sv;
+    }
+    const tkEl = document.getElementById(`tk-${i}`);
+    if (tkEl) { const sv = tkEl.value; tkEl.innerHTML = getTaxTypeOpts(sv); }
+  });
+  const atBtn = document.getElementById("btn-add-tax");
+  if (atBtn) atBtn.textContent = t("add-tax");
+
+  const rstBtn = document.getElementById("btn-reset-lines");
+  if (rstBtn) rstBtn.textContent = t("reset-lines");
+
+  const ctPick = document.getElementById("ct-pick");
+  if (ctPick) {
+    const cur = ctPick.value;
+    const ctOpts = (cfg["charge-to"] || []).map((ct, i) =>
+      `<option value="${i}">${h(ct.display || ct.name)}</option>`).join("");
+    ctPick.innerHTML = `<option value="">${h(t("select"))}</option>${ctOpts}<option value="__other__">${h(t("other"))}</option>`;
+    ctPick.value = cur;
+  }
+
+  buildHeader();   // localised doc-title (h1)
+}
+
+// ── Generate invoice ──────────────────────────────────────────────────────────
+function saveInvoice() {
+  saveStorage();
+  const btn = document.getElementById("btn-save");
+  if (!btn) return;
+  const orig = btn.textContent;
+  btn.textContent = "✓ " + orig;
+  btn.disabled = true;
+  setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1500);
+}
+
+function validateInvoice() {
+  const errors = [];
+  const ino = (document.getElementById("ino")?.value || "").trim();
+  if (!ino) errors.push(t("val-invoice-no") || "Invoice number is required");
+  const fromName = (document.getElementById("sn")?.value || "").trim();
+  if (!fromName) errors.push(t("val-from-name") || "Sender name is required");
+  const ctPick = document.getElementById("ct-pick");
+  if (!ctPick || !ctPick.value) errors.push(t("val-charge-to") || "Charge-to is required");
+  if (Object.keys(lines).length === 0) errors.push(t("val-lines") || "At least one line item is required");
+
+  const existing = document.getElementById("validate-msg");
+  if (existing) existing.remove();
+  const msg = document.createElement("div");
+  msg.id = "validate-msg";
+  const row = document.getElementById("action-row");
+  if (errors.length === 0) {
+    msg.className = "kb-note kb-note--success";
+    msg.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor" width="17" height="17" style="flex-shrink:0;margin-top:1px"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.061L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/></svg><div><b>${h(t("val-ok-head") || "All good.")}</b> ${h(t("val-ok") || "The form is ready to download.")}</div>`;
+  } else {
+    msg.className = "kb-note kb-note--error";
+    const icon = `<svg viewBox="0 0 16 16" fill="currentColor" width="17" height="17" style="flex-shrink:0;margin-top:1px"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>`;
+    const body = document.createElement("div");
+    body.innerHTML = `<b>${h(t("val-errors-head") || "Please fix the following:")}</b><ul>` + errors.map(e => `<li>${h(e)}</li>`).join("") + "</ul>";
+    msg.innerHTML = icon;
+    msg.appendChild(body);
+  }
+  if (row) row.after(msg);
+}
+
+function generateInvoice() {
+  saveStorage();
+  localStorage.setItem(LS_GEN, "true");
+  buildPDF();
+}
+
+// ── Shared: gather invoice data ───────────────────────────────────────────────
+// PDF/output language: follows the UI when output-language is "user-selected",
+// otherwise the default (first defined) language.
+function outputLang() {
+  return pdfOutputLang(cfg, lang);
+}
+
+function gatherData(renderLang) {
+  const dl = renderLang || cfg["default-code"] || "en";
+  const td = key => { const e = cfg?.translations?.[key]; return e?.[dl] ?? e?.["en"] ?? key; };
+  const g  = id => (document.getElementById(id)?.value ?? "").trim();
+
+  const sName  = g("sn");
+  const sAddr  = [g("sa1"),g("sa2"),g("sa3"),g("sa4")].filter(Boolean);
+  const sCntry = COUNTRY_MAP[g("sc")] || "";
+  const sPh    = g("sp"), sEm = g("se"), sTax = g("stax");
+
+  const iDate  = g("idate");
+  const pCode  = g("pcode") === "__other__" ? g("pcode-other") : g("pcode");
+  const iNo    = g("ino");
+  const iCur   = g("icur");
+
+  const ctName = g("ctn");
+  const ctAddr = [g("ca1"),g("ca2"),g("ca3"),g("ca4")].filter(Boolean);
+  const ctCntry= COUNTRY_MAP[g("cc")] || "";
+  const ctPh   = g("cph"), ctEm = g("cem"), ctVat = g("cvat"), ctReg = g("creg");
+
+  const pTerm  = parseInt(document.getElementById("pterm")?.value) || 0;
+  const pPayBy = document.getElementById("paybydisp")?.textContent || "";
+  const bsecEl = document.getElementById("bank-section");
+  const bankVis = bsecEl && bsecEl.style.display !== "none";
+  const pAcct  = bankVis ? g("pacct") : "";
+  const pIban  = bankVis ? g("piban") : "";
+  const pBic   = bankVis ? g("pbic")  : "";
+  const pBadr1 = bankVis ? g("pbadr1"): "";
+  const pBadr2 = bankVis ? g("pbadr2"): "";
+  const pRef   = bankVis ? g("pref")  : "";
+  const hasBank = !!(pAcct || pIban || pBic || pBadr1 || pRef);
+  const hidePaymentOut = cfg["hide-payment-info"] === true || cfg["hide-payment-info"] === "yes";
+
+  let sub = 0;
+  const rows = [];
+  Object.keys(lines).sort((a,b)=>+a-+b).forEach(i => {
+    const qty   = pn(document.getElementById(`qty-${i}`)?.value);
+    const price = pn(document.getElementById(`price-${i}`)?.value);
+    const tot   = qty * price;
+    if (qty === 0 && price === 0) return;
+    sub += tot;
+
+    const uomCode = document.getElementById(`uom-${i}`)?.value || "";
+    const uomObj  = (cfg.uom||[]).find(u=>u.code===uomCode);
+    const uomLbl  = uomObj?.labels?.[dl] ?? uomObj?.labels?.[cfg["default-code"]] ?? uomCode;
+
+    const dv = document.getElementById(`dsel-${i}`)?.value;
+    let desc = "";
+    if (dv === "__other__") {
+      desc = (document.getElementById(`dtxt-${i}`)?.value || "").trim();
+    } else if (dv !== "" && dv != null) {
+      const p = (cfg.products||[])[+dv];
+      desc = p?.description?.[dl] ?? p?.description?.[cfg["default-code"]] ?? "";
+    }
+
+    const isFx = document.getElementById(`fx-${i}`)?.value === "yes";
+    let fxNote = null;
+    if (isFx) {
+      const cur        = document.getElementById(`fcur-${i}`)?.value || "";
+      const rcur       = document.getElementById(`rcur-${i}`)?.value || "";
+      const rate       = pn(document.getElementById(`frate-${i}`)?.value) || 1;
+      const per        = pn(document.getElementById(`fper-${i}`)?.value);
+      const foreignTot = per * qty;
+      fxNote = { cur, rcur, rate, per, foreignTot, td };
+    }
+    rows.push({ qty, uomLbl, desc, price, tot, fxNote });
+  });
+
+  let totalTax = 0;
+  const taxes = [];
+  Object.keys(tLines).sort((a,b)=>+a-+b).forEach(i => {
+    const val  = pn(document.getElementById(`tv-${i}`)?.value);
+    const type = document.getElementById(`tt-${i}`)?.value || "pct";
+    const key  = document.getElementById(`tk-${i}`)?.value || "";
+    const ttObj = (cfg["tax-types"]||[]).find(x => x.key === key);
+    const label = ttObj?.labels?.[dl] ?? ttObj?.labels?.[cfg["default-code"]] ?? key;
+    const amt   = type === "pct" ? sub * (val / 100) : val;
+    totalTax += amt;
+    const lineLabel = type === "pct" ? `${label} ${val}%` : `${label} (${fmt(val)})`;
+    taxes.push({ val, type, key, label, lineLabel, amt });
+  });
+
+  const paid  = pn(document.getElementById("paid-inp")?.value);
+  const toPay = sub + totalTax - paid;
+
+  return { dl, td, sName, sAddr, sCntry, sPh, sEm, sTax, iDate, pCode, iNo, iCur,
+           ctName, ctAddr, ctCntry, ctPh, ctEm, ctVat, ctReg,
+           pTerm, pPayBy, pAcct, pIban, pBic, pBadr1, pBadr2, pRef, hasBank, hidePaymentOut,
+           rows, sub, taxes, totalTax, paid, toPay };
+}
+
+// ── Build PDF with jsPDF + Helvetica ─────────────────────────────────────────
+async function buildPDF() {
+  try {
+    await jspdfReady;
+  } catch (err) { /* fall through to the window.jspdf check below */ }
+  if (!window.jspdf) { kbAlert({ title: "PDF", message: "PDF library not loaded — check your internet connection." }); return; }
+
+  const { jsPDF } = window.jspdf;
+  const paperFmt = (cfg["paper-format"] || "a4").toLowerCase();
+  const doc = new jsPDF({ unit: "mm", format: paperFmt });
+
+  const PW = paperFmt === "letter" ? 215.9 : 210;
+  const PH = paperFmt === "letter" ? 279.4 : 297;
+  const ML = 15, MR = 15, MT = 15;
+  const CW = PW - ML - MR;
+  const XR = PW - MR;
+
+  const fc = (r,g,b) => doc.setFillColor(r,g,b);
+  const dc = (r,g,b) => doc.setDrawColor(r,g,b);
+  const tc = (r,g,b) => doc.setTextColor(r,g,b);
+  const _stdFonts = ["helvetica","times","courier"];
+  const _pFont = (f => _stdFonts.includes(f) ? f : "helvetica")((cfg["font-body"] || cfg["font-heading"] || "helvetica").toLowerCase().split(/[\s,]/)[0]);
+  const _mFont = (f => _stdFonts.includes(f) ? f : "courier")((cfg["font-monospace"] || "courier").toLowerCase().split(/[\s,]/)[0]);
+  const _fsc   = (cfg["font-size"] || 10) / 10;
+  const fb = sz => { doc.setFont(_pFont,"bold");   doc.setFontSize(sz * _fsc); };
+  const fn = sz => { doc.setFont(_pFont,"normal"); doc.setFontSize(sz * _fsc); };
+  const fm = sz => { doc.setFont(_mFont,"normal"); doc.setFontSize(sz * _fsc); };
+  const tL = (s,x,y)        => doc.text(String(s??""),  x, y);
+  const tR = (s,x,y)        => doc.text(String(s??""),  x, y, {align:"right"});
+  const sp = (s,w)          => doc.splitTextToSize(String(s??""), w);
+
+  const { dl, td, sName, sAddr, sCntry, sPh, sEm, sTax, iDate, pCode, iNo, iCur,
+          ctName, ctAddr, ctCntry, ctPh, ctEm, ctVat, ctReg,
+          pTerm, pPayBy, pAcct, pIban, pBic, pBadr1, pBadr2, pRef, hasBank, hidePaymentOut,
+          rows, sub, taxes, paid, toPay } = gatherData(outputLang());
+
+  const showBank = hasBank && !hidePaymentOut;
+
+  // ── 2×2 HEADER ───────────────────────────────────────────────────────────
+  const GAP  = 8;
+  const LW   = (CW - GAP) / 2;
+  const XM_L = ML + LW + GAP;
+
+  let y = MT;
+  let ly = y, ry = y;
+
+  const ACCENT  = kbHexRgb(cfg['accent-colour']) || kbHexRgb('#2F6FED');
+  const BODY    = [17,24,39];
+  const MUTED   = [107,114,128];
+  const BORDER  = [209,213,219];
+  const WHITE   = [255,255,255];
+  const STRIPE  = [249,250,251];
+
+  if (sName) { fb(13); tc(...ACCENT); tL(sName, ML, ly); ly += 6; }
+  fn(8.5); tc(...MUTED);
+  [...sAddr, sCntry].filter(Boolean).forEach(l => { tL(l, ML, ly); ly += 4.5; });
+  if (sPh || sEm || sTax) {
+    const parts = [];
+    if (sPh)  parts.push(`${td("sender-phone")}: ${sPh}`);
+    if (sEm)  parts.push(`${td("sender-email")}: ${sEm}`);
+    if (sTax) parts.push(`${td("vat-id")}: ${sTax}`);
+    fn(8); tc(...MUTED);
+    sp(parts.join("   "), LW).forEach(l => { tL(l, ML, ly); ly += 4; }); ly += 1;
+  }
+
+  fb(24); tc(...ACCENT); tR(td("invoice"), XR, ry); ry += 10;
+  const metaRows = [
+    iNo   ? [td("invoice-no"),       iNo]            : null,
+    iDate ? [td("invoice-date"),     fmtDate(iDate)] : null,
+    pCode ? [td("project-code"),     pCode]          : null,
+    iCur  ? [td("invoice-currency"), iCur]           : null,
+  ].filter(Boolean);
+  metaRows.forEach(([lbl, val]) => {
+    fn(8.5); tc(...MUTED); tR(lbl + ":", XR - 42, ry);
+    fb(8.5); tc(...BODY);  tR(val, XR, ry);
+    ry += 5;
+  });
+
+  const row1Y = Math.max(ly, ry) + 4;
+  dc(...BORDER); doc.setLineWidth(0.3);
+  doc.line(ML, row1Y, XR, row1Y);
+
+  let ly2 = row1Y + 5, ry2 = row1Y + 5;
+  fb(7); tc(...MUTED); tL(td("charge-to").toUpperCase(), ML, ly2); ly2 += 5;
+  if (ctName) {
+    fb(10); tc(...ACCENT); tL(ctName, ML, ly2); ly2 += 5.5;
+    fn(8.5); tc(...BODY);
+    [...ctAddr, ctCntry].filter(Boolean).forEach(l => { tL(l, ML, ly2); ly2 += 4.5; });
+    const ctParts = [];
+    if (ctPh)  ctParts.push(`${td("charge-to-phone")}: ${ctPh}`);
+    if (ctEm)  ctParts.push(`${td("charge-to-email")}: ${ctEm}`);
+    if (ctVat) ctParts.push(`${td("vat-id")}: ${ctVat}`);
+    if (ctReg) ctParts.push(`${td("registration-no")}: ${ctReg}`);
+    if (ctParts.length) {
+      fn(8); tc(...MUTED);
+      sp(ctParts.join("   "), LW).forEach(l => { tL(l, ML, ly2); ly2 += 4; }); ly2 += 1;
+    }
+  }
+
+  if (pTerm > 0 || showBank) {
+    fb(7); tc(...MUTED); tL(td("payment").toUpperCase(), XM_L, ry2); ry2 += 5;
+    if (pTerm > 0) {
+      const ts = `${td("payment-terms")}: ${pTerm} ${td("payment-days")}${pPayBy ? `   ${td("pay-by")}: ${pPayBy}` : ""}`;
+      fn(8.5); tc(...BODY); tL(ts, XM_L, ry2); ry2 += 5;
+    }
+    if (showBank) {
+      const LLBL = 46;
+      const payRows = [
+        pAcct            ? [td("account-holder"), pAcct]  : null,
+        pIban            ? [td("account-no"),     pIban]  : null,
+        pBic             ? [td("bank-bic"),        pBic]  : null,
+        (pBadr1||pBadr2) ? [td("bank-address"),   [pBadr1,pBadr2].filter(Boolean).join(", ")] : null,
+      ].filter(Boolean);
+      payRows.forEach(([lbl, val]) => {
+        fn(8); tc(...MUTED); tL(lbl + ":", XM_L, ry2);
+        fn(8.5); tc(...BODY);
+        const wrapped = sp(val, LW - LLBL - 2);
+        wrapped.forEach((line, i) => tL(line, XM_L + LLBL, ry2 + i * 4));
+        ry2 += Math.max(4.5, wrapped.length * 4);
+      });
+      if (pRef) {
+        fn(8); tc(...MUTED); tL(td("payment-ref") + ":", XM_L, ry2);
+        fb(8.5); tc(...BODY); tL(pRef, XM_L + LLBL, ry2); ry2 += 5;
+      }
+    }
+  }
+
+  y = Math.max(ly2, ry2) + 5;
+
+  dc(...ACCENT); doc.setLineWidth(0.6);
+  doc.line(ML, y, XR, y); y += 6;
+
+  // ── LINE ITEMS TABLE ──────────────────────────────────────────────────────
+  const CQ=18, CU=18, CP=28, CT=34;
+  const CD = CW - CQ - CU - CP - CT;
+  const xQ=ML, xU=xQ+CQ, xD=xU+CU, xP=xD+CD, xT=xP+CP;
+  const TH = 7;
+
+  if (y + TH > PH - 40) { doc.addPage(); y = MT; }
+
+  fc(...ACCENT); dc(...WHITE); doc.setLineWidth(0);
+  doc.rect(ML, y, CW, TH, "F");
+  fb(8); tc(...WHITE);
+  tL(td("qty"),         xQ+2,     y+4.8);
+  tL(td("uom"),         xU+2,     y+4.8);
+  tL(td("description"), xD+2,     y+4.8);
+  tR(td("price"),       xP+CP-2,  y+4.8);
+  tR(td("line-total"),  XR-2,     y+4.8);
+  y += TH;
+
+  const ROW_H = 7.5;
+
+  rows.forEach((row, idx) => {
+    const dLines  = sp(row.desc, CD - 4);
+    const descH   = Math.max(0, (dLines.length - 1) * 3.8);
+    let   fxH     = 0;
+    if (row.fxNote) {
+      const fxStr = `${td("per-item")}: ${row.fxNote.cur} ${fmt(row.fxNote.per)} `
+                  + `(${(+row.fxNote.rate).toFixed(5)} ${row.fxNote.cur} = 1 ${iCur})`;
+      const fxLines = sp(fxStr, CD + CP - 4);
+      fxH = fxLines.length * 3.5 + 1;
+    }
+    const rh = ROW_H + descH + fxH;
+
+    if (y + rh > PH - 30) { doc.addPage(); y = MT; }
+
+    if (idx % 2 === 1) {
+      fc(...STRIPE); dc(...WHITE); doc.setLineWidth(0);
+      doc.rect(ML, y, CW, rh, "F");
+    }
+
+    dc(...BORDER); doc.setLineWidth(0.1);
+    doc.line(ML, y+rh, XR, y+rh);
+
+    const yt = y + 5;
+    const qStr = row.qty % 1 === 0 ? String(row.qty) : fmt(row.qty);
+
+    fn(8.5); tc(...BODY);
+    tL(qStr,       xQ+2, yt);
+    tL(row.uomLbl, xU+2, yt);
+    dLines.forEach((dline, li) => tL(dline, xD+2, yt + li*3.8));
+    fn(8.5); tc(...BODY);   tR(fmt(row.price), xP+CP-2, yt);
+    fb(8.5); tc(...BODY);   tR(fmt(row.tot),   XR-2,    yt);
+
+    if (row.fxNote) {
+      const fxStr = `${td("per-item")}: ${row.fxNote.cur} ${fmt(row.fxNote.per)} `
+                  + `(${(+row.fxNote.rate).toFixed(5)} ${row.fxNote.cur} = 1 ${iCur})`;
+      fn(7); tc(...MUTED);
+      const fxLines = sp(fxStr, CD + CP - 4);
+      fxLines.forEach((fl, fi) => tL(fl, xD+2, y + ROW_H + descH + 3.2 + fi * 3.5));
+    }
+
+    y += rh;
+  });
+
+  y += 4;
+
+  // ── TOTALS ────────────────────────────────────────────────────────────────
+  const TW   = 78;
+  const TX   = XR - TW;
+  const TRH  = 6.5;
+  const TLBX = XR - 40;
+
+  const totRows = [
+    [td("subtotal"), fmt(sub)],
+    ...taxes.map(tx => [tx.lineLabel, fmt(tx.amt)]),
+    ...(paid > 0 ? [[td("paid"), "−" + fmt(paid)]] : []),
+  ];
+
+  totRows.forEach(([lbl, val]) => {
+    if (y + TRH > PH - 20) { doc.addPage(); y = MT; }
+    fn(8.5); tc(...MUTED); tR(lbl,  TLBX,  y+4.5);
+    fn(8.5); tc(...BODY);  tR(val,  XR-2,  y+4.5);
+    dc(...BORDER); doc.setLineWidth(0.1);
+    doc.line(TX, y+TRH, XR, y+TRH);
+    y += TRH;
+  });
+
+  if (y + 9 > PH - 10) { doc.addPage(); y = MT; }
+  fc(...ACCENT); dc(...WHITE); doc.setLineWidth(0);
+  doc.rect(TX, y, TW, 9, "F");
+  fn(9);  tc(180,210,255); tR(td("to-pay"), TLBX, y+5.8);
+  fb(11); tc(...WHITE);    tR(fmt(toPay),   XR-2, y+5.8);
+  y += 9;
+
+  const fnIssuer = kbSafeFilename(sName);
+  const fnDate   = iDate || "";
+  const filename = fnIssuer && fnDate
+    ? `${fnIssuer}_${fnDate}_Invoice ${iNo || ""}.pdf`.replace(/\s+/g, " ").trimEnd()
+    : `Invoice ${iNo || "001"}.pdf`;
+  doc.save(filename);
+}
+
+// ── Update FX labels when currency or invoice currency changes ────────────────
+function updateFxLabels(i) {
+  const fcy      = document.getElementById(`fcur-${i}`)?.value || "FCY";
+  const lcy      = document.getElementById("icur")?.value || "";
+  const rcurEl   = document.getElementById(`rcur-${i}`);
+  const rotherEl = document.getElementById(`rother-${i}`);
+  if (rcurEl) {
+    const prev = rcurEl.value;
+    rcurEl.innerHTML = `<option value="${h(lcy)}">${h(lcy)}</option><option value="${h(fcy)}">${h(fcy)}</option>`;
+    rcurEl.value = (prev === lcy || prev === fcy) ? prev : lcy;
+  }
+  if (rotherEl) rotherEl.textContent = rcurEl?.value === lcy ? fcy : lcy;
+  const cl = document.getElementById(`fcur-lbl-${i}`);
+  if (cl) cl.textContent = t("currency-code");
+  const rl = document.getElementById(`frate-lbl-${i}`);
+  if (rl) rl.textContent = t("exchange-rate");
+  const pp = document.getElementById(`fxper-${i}`);
+  if (pp) pp.textContent = t("fx-per");
+  const pl = document.getElementById(`fper-lbl-${i}`);
+  if (pl) pl.textContent = t("per-item") + " " + fcy;
+  const tl = document.getElementById(`ftot-lbl-${i}`);
+  if (tl) tl.textContent = t("total-foreign") + " " + fcy;
+}
+
+// ── Save / load invoice lines ──────────────────────────────────────────────────
+const LS_LINES = "inv_lines_v1";
+
+function saveLines() {
+  if (_loading) return;
+  const data = [];
+  Object.keys(lines).sort((a, b) => +a - +b).forEach(k => {
+    const i = +k;
+    data.push({
+      dsel:  document.getElementById(`dsel-${i}`)?.value  || "",
+      dtxt:  document.getElementById(`dtxt-${i}`)?.value  || "",
+      qty:   document.getElementById(`qty-${i}`)?.value   || "",
+      uom:   document.getElementById(`uom-${i}`)?.value   || "",
+      price: document.getElementById(`price-${i}`)?.value || "",
+      fx:    document.getElementById(`fx-${i}`)?.value    || "no",
+      fcur:  document.getElementById(`fcur-${i}`)?.value  || "",
+      rcur:  document.getElementById(`rcur-${i}`)?.value  || "",
+      frate: document.getElementById(`frate-${i}`)?.value || "",
+      fper:  document.getElementById(`fper-${i}`)?.value  || "",
+    });
+  });
+  localStorage.setItem(LS_LINES, JSON.stringify(data));
+}
+
+function loadLines() {
+  try {
+    const raw = localStorage.getItem(LS_LINES);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data) || data.length === 0) return false;
+
+    const firstKey = Object.keys(lines)[0];
+    if (firstKey !== undefined) {
+      document.getElementById(`lr-${firstKey}`)?.remove();
+      document.getElementById(`fx-row-${firstKey}`)?.remove();
+      delete lines[+firstKey];
+    }
+
+    _loading = true;
+    data.forEach(ld => {
+      const i = addLine();
+
+      if (ld.dsel) {
+        const dsel = document.getElementById(`dsel-${i}`);
+        if (dsel) {
+          dsel.value = ld.dsel;
+          pickProduct(i);
+          if (ld.dsel === "__other__" && ld.dtxt) {
+            const dtxt = document.getElementById(`dtxt-${i}`);
+            if (dtxt) dtxt.value = ld.dtxt;
+          }
+        }
+      }
+
+      if (ld.uom) { const el = document.getElementById(`uom-${i}`); if (el) el.value = ld.uom; }
+      if (ld.qty) { const el = document.getElementById(`qty-${i}`); if (el) el.value = ld.qty; }
+
+      if (ld.fx === "yes") {
+        const fxEl = document.getElementById(`fx-${i}`);
+        if (fxEl) {
+          fxEl.value = "yes";
+          toggleFx(i);
+          if (ld.fcur) {
+            const el = document.getElementById(`fcur-${i}`);
+            if (el) { el.value = ld.fcur; updateFxLabels(i); }
+          }
+          if (ld.rcur) {
+            const el = document.getElementById(`rcur-${i}`);
+            if (el) { el.value = ld.rcur; updateFxLabels(i); }
+          }
+          if (ld.frate) { const el = document.getElementById(`frate-${i}`); if (el) el.value = ld.frate; }
+          if (ld.fper)  { const el = document.getElementById(`fper-${i}`);  if (el) el.value = ld.fper; }
+          calcFxFromPer(i);
+        }
+      } else {
+        if (ld.price) { const el = document.getElementById(`price-${i}`); if (el) el.value = ld.price; }
+        calcLine(i);
+      }
+    });
+
+    _loading = false;
+    saveLines();
+    calcTotals();
+    return true;
+  } catch (e) {
+    _loading = false;
+    return false;
+  }
+}
+
+async function resetLines() {
+  if (!await kbConfirm({ title: t("reset-lines"), message: t("reset-lines") + "?" })) return;
+  Object.keys(lines).forEach(k => {
+    document.getElementById(`lr-${+k}`)?.remove();
+    document.getElementById(`fx-row-${+k}`)?.remove();
+    delete lines[+k];
+  });
+  localStorage.removeItem(LS_LINES);
+  addLine();
+  calcTotals();
+}
+
+// ── Footer & About modal ──────────────────────────────────────────────────────
+function aboutData() {
+  const ab = cfg?.about;
+  if (!ab) return null;
+  return ab[lang] ?? ab[cfg["default-code"]] ?? Object.values(ab)[0] ?? null;
+}
+
+function buildFooter() {
+  const footer = document.getElementById("app-footer");
+  if (!footer) return;
+  const ab = aboutData();
+  const aboutLink = ab
+    ? ` <span class="sep">&#183;</span> <a href="#" onclick="openAbout();return false">${h(ab.title ?? "About")}</a>`
+    : "";
+  footer.innerHTML =
+    `<span class="kb-mark">${KB_FOOTER_MARK_SVG}kBenestad</span>`
+    + ` <span class="sep">&#183;</span>`
+    + ` <span>&#169; 2026 Kristian Benestad</span>`
+    + ` <span class="sep">&#183;</span>`
+    + ` <a href="https://github.com/kbenestad/bizdocs" target="_blank" rel="noopener">kbenestad/bizdocs</a>`
+    + aboutLink;
+  const marker = buildVersionMarker(versionInfo);
+  if (marker) footer.appendChild(marker);
+}
+
+function openAbout() {
+  const ab = aboutData();
+  if (!ab) return;
+  kbAbout({ title: ab.title, contentMD: applyVersionTokens(ab.content, versionInfo), closeLabel: ab["btn-close"] });
+}
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+loadCfg();
+</script>
+</body>
+</html>

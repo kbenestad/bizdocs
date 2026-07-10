@@ -1,0 +1,1638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.bunny.net; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Timesheet</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="assets/site.webmanifest">
+<meta name="theme-color" content="#2f6fed">
+<!-- Restore persisted theme BEFORE first paint (and before any blocking
+     network fetch) to avoid a light-mode flash. Keep this first. -->
+<script>
+  (function(){var t=localStorage.getItem('kb-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
+</script>
+<!-- js-yaml: needed to fetch/parse config.yml, so it must stay hardcoded here
+     (see config.yml's dependencies: block for the config-driven libraries). -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"
+        integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
+        crossorigin="anonymous"></script>
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/ui.css">
+<script src="../assets/app.js"></script>
+<style>
+/* =============================================================================
+ * Timesheet — app-specific styles
+ * Shared colour scheme & components: ../assets/style.css + ../assets/ui.css
+ * ========================================================================== */
+
+/* ── Row grid (timesheet entries) — rowhead look comes from ui.css ─────────── */
+.kb-rowhead, .ts-row2 {
+  display: grid; align-items: center; gap: 6px;
+  grid-template-columns: 108px 112px 112px 108px 1fr 64px 52px;
+}
+.kb-rowhead { align-items: end; padding: 0 10px 8px; }
+.ts-row2 { padding: 6px 10px; border-radius: var(--radius-sm); border-left: 3px solid transparent; position: relative; }
+.ts-row2:hover { background: var(--surface-2); }
+.ts-row2.continuation .ts-date { visibility: hidden; }
+.ts-row2 input[type="time"] { font-family: var(--font-mono); padding-right: 4px; }
+.ts-date { font-weight: 600; font-size: var(--fs-small); color: var(--text); white-space: nowrap; }
+.ts-date .dow { display: block; font-weight: 500; font-size: 11px; color: var(--text-muted); }
+.ts-hours { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--fs-small); font-weight: 600; color: var(--text); white-space: nowrap; }
+.ts-actions { display: flex; align-items: center; justify-content: flex-end; gap: 3px; opacity: 0; transition: opacity .15s; }
+.ts-row2:hover .ts-actions { opacity: 1; }
+.ts-unlock { display: none; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); cursor: pointer; white-space: nowrap; position: absolute; right: 0; top: 0; bottom: 0; padding: 0 8px; background: inherit; border-radius: var(--radius-sm); }
+.ts-row2:hover .ts-unlock { display: flex; }
+.ts-unlock input[type="checkbox"] { width: 13px; height: 13px; margin: 0; cursor: pointer; }
+
+/* Inline day validation */
+.ts-day-val { font-size: 11px; padding: 4px 10px 4px 13px; line-height: 1.6; color: var(--danger); }
+.ts-day-val .warn { color: var(--warning); }
+
+/* Code chip legend (chips themselves: see ui.css .kb-chip) */
+.ts-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+
+/* ── Totals (right-aligned narrow variant of ui.css .kb-totals) ────────────── */
+.kb-totals { margin-left: auto; width: min(420px, 100%); }
+.kb-totals--fill { margin-left: 0; width: 100%; }
+
+/* ── Signature pad ─────────────────────────────────────────────────────────── */
+.kb-sig { border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); height: 100px; display: block; max-width: 100%; touch-action: none; cursor: crosshair; }
+.sig-controls { display: flex; gap: 8px; margin-top: 8px; }
+
+/* ── Responsive ────────────────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .kb-grid.cols-3, .kb-grid.cols-5 { grid-template-columns: 1fr 1fr; }
+  .kb-grid.cols-2 { grid-template-columns: 1fr; }
+  .kb-header { flex-direction: column; gap: 14px; }
+  .kb-doctitle { text-align: left; }
+  .kb-rowhead { display: none; }
+  .ts-row2 {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px; padding: 12px;
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    border-left-width: 4px;
+    margin-bottom: 8px;
+  }
+  .ts-row2.continuation .ts-date { display: none; }
+}
+@media print {
+  .kb-toolbar, .kb-actions, .sig-controls, .kb-footer { display: none !important; }
+}
+</style>
+</head>
+<body>
+<div id="app"><p class="kb-loading">Loading configuration…</p></div>
+
+<footer class="kb-footer">
+  <span class="kb-mark">
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <rect x="1" y="5" width="11" height="11" rx="3" fill="var(--accent)"/>
+      <rect x="6" y="1" width="11" height="11" rx="3" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+    </svg>
+    kBenestad
+  </span>
+  <span class="sep">·</span>
+  <span>© 2026 Kristian Benestad</span>
+  <span class="sep">·</span>
+  <a href="https://github.com/kbenestad/bizdocs" target="_blank" rel="noopener">kbenestad/bizdocs</a>
+  <span class="sep">·</span>
+  <button id="footer-about-btn" style="background:none;border:none;padding:0;font:inherit;font-size:var(--fs-small);color:var(--text-muted);cursor:pointer;">About</button>
+</footer>
+
+<script>
+(async function() {
+'use strict';
+
+// ── Brand assets ──────────────────────────────────────────────────────────────
+// KB_BRAND_SVG lives in app.js
+const TS_APP_ICON  = `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true" style="width:100%;height:100%;display:block"><rect width="48" height="48" rx="12" fill="var(--accent)"/><circle cx="24" cy="24" r="13" fill="none" stroke="#fff" stroke-width="3.2"/><path d="M24 16 V24 L30 27.5" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+// ========== UTILITIES ==========
+// $, $$, el live in app.js
+
+function defaultPeriod() {
+  const d = new Date();
+  const isLastDay = d.getDate() === new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  const y = isLastDay ? d.getFullYear() : (d.getMonth() === 0 ? d.getFullYear() - 1 : d.getFullYear());
+  const m = isLastDay ? d.getMonth() : (d.getMonth() === 0 ? 11 : d.getMonth() - 1);
+  const fmt = dt => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+  return { from: fmt(new Date(y, m, 1)), to: fmt(new Date(y, m + 1, 0)) };
+}
+
+function fmtHM(totalMins) {
+  if (totalMins == null || isNaN(totalMins) || totalMins < 0) return '';
+  const h = Math.floor(totalMins / 60);
+  const m = Math.abs(totalMins % 60);
+  return `${h}:${String(m).padStart(2,'0')}`;
+}
+
+function parseHM(str) {
+  if (!str) return null;
+  const [h, m] = str.split(':').map(Number);
+  if (isNaN(h) || isNaN(m)) return null;
+  return h * 60 + m;
+}
+
+function calcRowMins(row) {
+  const inM = parseHM(row.timeIn);
+  const outM = parseHM(row.timeOut);
+  if (inM == null || outM == null || outM <= inM) return null;
+  return outM - inM;
+}
+
+// English day codes — used as identifiers (config `workdays:` list), not copy.
+const DOW_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function parseDateStr(s) {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function dateStrDow(s) {
+  return parseDateStr(s).getDay();
+}
+
+// Localised month/weekday abbreviations via Intl — works for any configured
+// language, with an English fallback for unknown codes.
+function localePart(d, lang, opts) {
+  try { return d.toLocaleString(lang, opts); }
+  catch (e) { return d.toLocaleString('en', opts); }
+}
+
+function fmtDate(s, lang) {
+  const d = parseDateStr(s);
+  return `${d.getDate()} ${localePart(d, lang, { month: 'short' })}`;
+}
+
+function fmtDow(s, lang) {
+  return localePart(parseDateStr(s), lang, { weekday: 'short' });
+}
+
+function dateRange(from, to) {
+  const dates = [];
+  const d = parseDateStr(from);
+  const end = parseDateStr(to);
+  while (d <= end) {
+    const s = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    dates.push(s);
+    d.setDate(d.getDate() + 1);
+  }
+  return dates;
+}
+
+// ========== CONFIG ==========
+let CFG;
+let VERSION_INFO = null; // version.json (written by the release workflow), or null before the first tag
+let pdfLibReady = null;
+let NAV = { apps: [], links: [] };  // root config's apps/links, for the nav dropdown
+async function loadConfig() {
+  CFG = await loadYamlConfig();
+  VERSION_INFO = await loadVersionInfo('../version.json');
+  await applySharedBranding(CFG);
+  normaliseConfig();
+  applyAccent(CFG);
+  const marker = buildVersionMarker(VERSION_INFO);
+  if (marker) document.querySelector('footer.kb-footer').appendChild(marker);
+  pdfLibReady = loadDependency(CFG.dependencies && CFG.dependencies['pdf-lib']);
+  pdfLibReady.catch(() => {}); // surfaced when generatePDF() awaits it instead
+}
+
+// ── Localisation adapter ───────────────────────────────────────────────────────
+// Maps the unified `localisation:` config block onto the legacy fields the app
+// reads: default-code, languages, ui-strings[key][lang], and per-row display-<lang>
+// / hint-<lang> on holidays and codes. about/* are language-dependent and set by
+// applyLang() (called at boot and on language change).
+function normaliseConfig() {
+  const loc = CFG && CFG.localisation;
+  if (!loc) return;
+  const { table, languages, codes, defaultCode } = buildLangTable(loc);
+  CFG['default-code'] = defaultCode;
+  CFG.languages = CFG.languages || languages;
+  CFG['ui-strings'] = table;
+
+  (CFG.holidays || []).forEach(hol => {
+    codes.forEach(lc => { const m = loc[lc] && loc[lc].holidays; if (m && m[hol.date] != null) hol['display-' + lc] = m[hol.date]; });
+  });
+
+  (CFG.codes || []).forEach(co => {
+    codes.forEach(lc => {
+      const m = loc[lc] && loc[lc].codes; if (!m) return;
+      const v = m[co.code]; if (v == null) return;
+      if (typeof v === 'object') {
+        if (v.display != null) co['display-' + lc] = v.display;
+        if (v.hint != null)    co['hint-' + lc]    = v.hint;
+      } else {
+        co['display-' + lc] = v;
+      }
+    });
+  });
+}
+
+// Copy the active language's about block onto the flat fields the modal reads.
+function applyLang(lc) {
+  const loc = CFG && CFG.localisation;
+  if (!loc) return;
+  const a = (loc[lc] && loc[lc].about) || (loc[CFG['default-code']] && loc[CFG['default-code']].about) || {};
+  CFG['about-title']   = a.title  || 'About';
+  CFG['about-content'] = a.content || '';
+  CFG['about-button']  = a.button || 'Close';
+  // The footer About button lives in static HTML outside render() — keep it
+  // in step with the active language.
+  const fab = document.getElementById('footer-about-btn');
+  if (fab) fab.textContent = CFG['about-title'];
+}
+
+// Active language for string lookups. During PDF generation this is overridden
+// to the output language (see outputLang / generatePDF); otherwise it is the UI language.
+let renderLang = null;
+function curLang() { return renderLang || state.lang; }
+
+// PDF/output language: follows the UI when output-language is "user-selected",
+// otherwise the default (first defined) language.
+function outputLang() {
+  return pdfOutputLang(CFG, state.lang);
+}
+
+function S(key, vars) {
+  return lookupString(CFG['ui-strings'], key, curLang(), CFG['default-code'], vars);
+}
+
+function codeObj(code) {
+  return (CFG.codes || []).find(c => c.code === code);
+}
+
+function codesForType(empType) {
+  return (CFG.codes || []).filter(c => (c['employee-types'] || []).includes(empType));
+}
+
+function isHoliday(dateStr) {
+  return (CFG.holidays || []).some(h => h.date === dateStr);
+}
+
+function holidayObj(dateStr) {
+  return (CFG.holidays || []).find(h => h.date === dateStr);
+}
+
+function isWorkday(dateStr) {
+  const dow = DOW_NAMES[dateStrDow(dateStr)];
+  return (CFG['workdays'] || ['Mon','Tue','Wed','Thu','Fri']).includes(dow);
+}
+
+// ========== STATE ==========
+const state = {
+  employee: '',
+  empType: '',
+  lang: 'en',
+  periodFrom: '',
+  periodTo: '',
+  days: {},
+  unlocks: {},
+};
+
+function rowKey(dateStr, idx) { return `${dateStr}-${idx}`; }
+
+// ========== ROW DEFAULTS ==========
+function empTypeObj(code) {
+  return (CFG['employee-types'] || []).find(t => t.code === code) || null;
+}
+
+function workStart() { return CFG['workhours-from'] || '09:00'; }
+function workEnd()   { return CFG['workhours-to']   || '17:00'; }
+
+function defaultRowsForDay(dateStr, empType) {
+  const wstart = workStart();
+  const wend   = workEnd();
+  const weekend = !isWorkday(dateStr);
+  const holiday = isHoliday(dateStr);
+  const defCode = CFG['default-work-code'] || 'REG';
+
+  const tObj = empTypeObj(empType);
+  const prefilled = tObj ? tObj.prefilled : 'working';
+
+  if (weekend) {
+    return [{ code: 'WEEKEND', timeIn: '', timeOut: '', desc: '', _locked: true }];
+  }
+  if (holiday) {
+    const hObj = holidayObj(dateStr);
+    const hName = hObj ? (hObj[`display-${state.lang}`] || hObj['display-en'] || '') : '';
+    if (prefilled === 'non-working') {
+      return [{ code: 'NON', timeIn: '', timeOut: '', desc: hName, _locked: true }];
+    }
+    return [{ code: 'HOL', timeIn: wstart, timeOut: wend, desc: hName, _locked: true }];
+  }
+  if (prefilled === 'non-working') {
+    return [{ code: 'NON', timeIn: '', timeOut: '', desc: '', _locked: true }];
+  }
+  return [{ code: defCode, timeIn: wstart, timeOut: wend, desc: '', _locked: false }];
+}
+
+function buildDefaultDays(from, to, empType) {
+  const days = {};
+  for (const ds of dateRange(from, to)) {
+    days[ds] = defaultRowsForDay(ds, empType);
+  }
+  return days;
+}
+
+function isRowLocked(dateStr, idx, row) {
+  if (state.unlocks[rowKey(dateStr, idx)]) return false;
+  return row._locked === true;
+}
+
+// ========== PERSISTENCE ==========
+let autoSaveTimer = null;
+
+function saveState() {
+  const serial = {
+    employee: state.employee, empType: state.empType, lang: state.lang,
+    periodFrom: state.periodFrom, periodTo: state.periodTo,
+    days: state.days, unlocks: state.unlocks,
+  };
+  try { localStorage.setItem('ts-state', JSON.stringify(serial)); } catch(e) {}
+}
+
+function loadSavedState() {
+  const raw = localStorage.getItem('ts-state');
+  if (!raw) return false;
+  try {
+    const d = JSON.parse(raw);
+    if (d.employee != null) state.employee = d.employee;
+    if (d.empType)   state.empType = d.empType;
+    if (d.lang)      state.lang    = d.lang;
+    if (d.periodFrom) state.periodFrom = d.periodFrom;
+    if (d.periodTo)   state.periodTo   = d.periodTo;
+    if (d.days)   state.days    = d.days;
+    if (d.unlocks) state.unlocks = d.unlocks;
+    return true;
+  } catch(e) { return false; }
+}
+
+function scheduleAutoSave() {
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(saveState, 1000);
+}
+
+// ========== TOTALS ==========
+function computeTotals() {
+  const empType = state.empType;
+  const codeTotals = {};
+  let grandMins = 0;
+
+  for (const [ds, rows] of Object.entries(state.days)) {
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const code = row.code;
+      if (!code || code === 'WEEKEND') continue;
+      const cObj = codeObj(code);
+      if (!cObj || !cObj.counthours) continue;
+      if (code === 'HOL' && !codesForType(empType).find(c => c.code === 'HOL')) continue;
+      const mins = calcRowMins(row);
+      if (mins == null || mins <= 0) continue;
+      codeTotals[code] = (codeTotals[code] || 0) + mins;
+      grandMins += mins;
+    }
+  }
+  return { codeTotals, grandMins };
+}
+
+// ========== MODALS ==========
+// Generic kbModal / kbConfirm / kbAbout live in app.js.
+function showConfirmModal(msgHTML) {
+  return kbConfirm({
+    title: S('confirm-title'), message: msgHTML,
+    confirmLabel: S('btn-new'), cancelLabel: S('btn-cancel'),
+  });
+}
+
+function showAboutModal() {
+  return kbAbout({
+    title:      CFG['about-title']   || 'About',
+    contentMD:  applyVersionTokens(CFG['about-content'] || '', VERSION_INFO),
+    closeLabel: CFG['about-button']  || 'Close',
+  });
+}
+
+// ========== VALIDATION ==========
+function runValidation() {
+  const errors = [];
+  const warnings = [];
+
+  if (!state.employee || !state.employee.trim()) {
+    errors.push(S('val-employee-required') || 'Employee name is required');
+  }
+
+  const wstartM = parseHM(workStart());
+  const wendM   = parseHM(workEnd());
+  const stdMins = (wendM != null && wstartM != null) ? (wendM - wstartM) : null;
+
+  const sortedDates = Object.keys(state.days).sort();
+
+  for (const ds of sortedDates) {
+    const rows = state.days[ds];
+    const displayDate = fmtDate(ds, state.lang);
+    let dayTotalMins = 0;
+    const intervals = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const locked = isRowLocked(ds, i, row);
+      if (!row.code || row.code === 'WEEKEND') continue;
+
+      const inM  = parseHM(row.timeIn);
+      const outM = parseHM(row.timeOut);
+      if (inM != null && outM != null && outM <= inM) {
+        if (!locked) errors.push(`${displayDate}: ${S('val-time-order')}`);
+      } else if (inM != null && outM != null && outM > inM) {
+        intervals.push([inM, outM]);
+        dayTotalMins += (outM - inM);
+      }
+
+      if (!locked && (row.code === 'REG' || row.code === 'OTH') && !row.desc.trim()) {
+        errors.push(`${displayDate}: ${S('val-desc-required')} (${row.code})`);
+      }
+    }
+
+    const sorted = [...intervals].sort((a,b) => a[0]-b[0]);
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i][0] < sorted[i-1][1]) {
+        errors.push(`${displayDate}: ${S('val-time-overlap')}`);
+        break;
+      }
+    }
+
+    if (stdMins != null && dayTotalMins > stdMins) {
+      warnings.push(`${displayDate}: ${S('val-hours-exceed')} (${fmtHM(dayTotalMins)} > ${fmtHM(stdMins)})`);
+    }
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const locked = isRowLocked(ds, i, row);
+      if (locked) continue;
+      if (!row.code) {
+        warnings.push(`${displayDate}: ${S('val-code-empty')}`);
+        break;
+      }
+    }
+  }
+
+  const byDate = {};
+  [...errors, ...warnings].forEach(msg => {
+    for (const ds of sortedDates) {
+      if (msg.startsWith(fmtDate(ds, state.lang) + ':')) {
+        if (!byDate[ds]) byDate[ds] = { errors: [], warnings: [] };
+        if (errors.includes(msg)) byDate[ds].errors.push(msg.slice(fmtDate(ds, state.lang).length + 1).trim());
+        else byDate[ds].warnings.push(msg.slice(fmtDate(ds, state.lang).length + 1).trim());
+        break;
+      }
+    }
+  });
+  return { errors, warnings, byDate };
+}
+
+// ========== ROW COLOUR ==========
+function applyRowColour(rowEl, dateStr, row, rowIndex, totalRowsForDay) {
+  const code = row.code;
+  const mutedbg = CFG['muted-background'] === true || CFG['muted-background'] === 'yes';
+
+  rowEl.style.borderLeftColor = '';
+  rowEl.style.background = '';
+
+  if (!code || code === 'WEEKEND') {
+    rowEl.style.borderLeftColor = 'var(--border-strong)';
+    if (mutedbg) rowEl.style.background = 'var(--surface-3)';
+    return;
+  }
+
+  const cObj = codeObj(code);
+  if (!cObj) return;
+
+  let borderCol, bgCol;
+
+  if (code === 'PPT') {
+    const isFullDay = totalRowsForDay === 1;
+    borderCol = isFullDay ? cObj['colour-border-fullday'] : cObj['colour-border-partialday'];
+    bgCol     = isFullDay ? cObj['colour-bg-fullday']     : cObj['colour-bg-partialday'];
+  } else {
+    borderCol = cObj['colour-border'];
+    bgCol     = cObj['colour-bg'];
+  }
+
+  if (borderCol) rowEl.style.borderLeftColor = borderCol;
+  if (bgCol && mutedbg) rowEl.style.background = bgCol;
+}
+
+// ========== SIGNATURE ==========
+let signatureDataUrl = null;
+
+function loadSignature() {
+  signatureDataUrl = localStorage.getItem('ts-signature') || null;
+}
+
+function saveSignature(dataUrl) {
+  signatureDataUrl = dataUrl || null;
+  if (dataUrl) localStorage.setItem('ts-signature', dataUrl);
+  else localStorage.removeItem('ts-signature');
+}
+
+function needsSignature() {
+  return CFG.needssignature === true || CFG.needssignature === 'yes';
+}
+
+function renderSignatureArea(wrap) {
+  if (!needsSignature()) return;
+
+  const card = el('div', {className: 'kb-card'});
+  const title = el('h2', {className: 'kb-card__title'}, S('signature-employee'));
+  card.appendChild(title);
+
+  const grid = el('div', {className: 'kb-grid cols-1', style: {gap: '18px', maxWidth: '50%'}});
+
+  function makeSigField(labelKey) {
+    const field = el('div', {className: 'kb-field'});
+    field.appendChild(el('span', {className: 'kb-label'}, S(labelKey)));
+
+    const canvas = el('canvas', {width: 500, height: 100, className: 'kb-sig'});
+    const ctx = canvas.getContext('2d');
+
+    if (labelKey === 'signature-employee' && signatureDataUrl) {
+      const img = new Image();
+      img.onload = () => ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      img.src = signatureDataUrl;
+    }
+
+    if (labelKey === 'signature-employee') {
+      function getPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const sx = canvas.width / rect.width, sy = canvas.height / rect.height;
+        const src = e.touches ? e.touches[0] : e;
+        return [(src.clientX - rect.left) * sx, (src.clientY - rect.top) * sy];
+      }
+
+      let drawing = false, lx = 0, ly = 0;
+
+      function startDraw(e) { drawing = true; [lx, ly] = getPos(e); }
+      function moveDraw(e) {
+        if (!drawing) return;
+        const [x, y] = getPos(e);
+        ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(x, y);
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#14181e';
+        ctx.lineWidth = 1.8; ctx.lineCap = 'round'; ctx.stroke();
+        [lx, ly] = [x, y];
+        saveSignature(canvas.toDataURL('image/png'));
+      }
+      function stopDraw() { drawing = false; }
+
+      canvas.addEventListener('mousedown', startDraw);
+      canvas.addEventListener('mousemove', moveDraw);
+      canvas.addEventListener('mouseup', stopDraw);
+      canvas.addEventListener('mouseleave', stopDraw);
+      canvas.addEventListener('touchstart', e => { e.preventDefault(); startDraw(e); }, {passive:false});
+      canvas.addEventListener('touchmove',  e => { e.preventDefault(); moveDraw(e);  }, {passive:false});
+      canvas.addEventListener('touchend', stopDraw);
+
+      const controls = el('div', {className: 'sig-controls'});
+      const clearBtn = el('button', {type:'button', className:'kb-btn kb-btn--ghost'}, S('sig-clear'));
+      clearBtn.style.cssText = 'font-size:12px;padding:4px 12px';
+      clearBtn.addEventListener('click', () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        saveSignature(null);
+      });
+
+      const fileInput = el('input', {type:'file', accept:'image/*', style:{display:'none'}});
+      const uploadBtn = el('button', {type:'button', className:'kb-btn kb-btn--ghost'}, S('sig-upload'));
+      uploadBtn.style.cssText = 'font-size:12px;padding:4px 12px';
+      uploadBtn.addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+          const img = new Image();
+          img.onload = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const scale = Math.min(canvas.width / img.width, canvas.height / img.height, 1);
+            const dw = img.width * scale, dh = img.height * scale;
+            ctx.drawImage(img, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
+            saveSignature(canvas.toDataURL('image/png'));
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+
+      controls.append(clearBtn, uploadBtn, fileInput);
+      field.append(canvas, controls);
+    } else {
+      canvas.style.cursor = 'default';
+      field.appendChild(canvas);
+    }
+
+    return field;
+  }
+
+  grid.append(makeSigField('signature-employee'));
+  card.appendChild(grid);
+  wrap.appendChild(card);
+}
+
+// ========== RENDER ==========
+let validationResult = null;
+
+function buildChipStyle(tag, attrs, cObj, code, totalRowsForDay) {
+  let border, bg, text;
+  if (code === 'PPT' && cObj) {
+    const full = totalRowsForDay === 1;
+    border = full ? cObj['colour-border-fullday'] : cObj['colour-border-partialday'];
+    bg     = full ? cObj['colour-bg-fullday']     : cObj['colour-bg-partialday'];
+  } else if (cObj) {
+    border = cObj['colour-border'];
+    bg     = cObj['colour-bg'];
+  }
+  const chipEl = el(tag, attrs);
+  if (border) chipEl.style.setProperty('--chip-border', border);
+  if (bg)     chipEl.style.setProperty('--chip-bg', bg);
+  // derive text as the border colour (darkened is fine; bg is pale)
+  if (border) chipEl.style.setProperty('--chip-text', border);
+  return chipEl;
+}
+
+function render() {
+  const app = $('#app');
+  app.innerHTML = '';
+  const wrap = el('div', {className:'kb-wrap'});
+
+  // ── Toolbar
+  const toolbar = el('div', {className:'kb-toolbar'});
+
+  // Font size — A− / A+ control (built by app.js, drives --font-scale)
+  const { seg: sizeSeg, label: szLabel } = makeSizeControl();
+
+  // Theme + About icon buttons (built by app.js)
+  const themeBtn = makeThemeButton();
+  const aboutBtn = makeAboutButton(showAboutModal);
+
+  toolbar.append(makeNavMenu(NAV), el('div', {className:'spacer'}), sizeSeg, szLabel, themeBtn, aboutBtn);
+
+  // Language selector (only when CFG.languages has >1 entry) — goes last, far right
+  const langSeg = makeLangSelect(CFG.languages, state.lang, value => {
+    state.lang = value;
+    applyLang(state.lang);
+    localStorage.setItem('timesheet-lang', value);
+    scheduleAutoSave();
+    render();
+  });
+  if (langSeg) toolbar.appendChild(langSeg);
+
+  wrap.appendChild(toolbar);
+
+  // ── Document header
+  const hdr = el('div', {className:'kb-header'});
+  const brand = el('div', {className:'kb-brand'});
+  const tsOrg     = CFG.organization || '';
+  const tsTagline = CFG.tagline != null ? CFG.tagline : '';
+  const tsHasLogo = CFG.logo === true || CFG.logo === 'yes';
+
+  if (!tsOrg) {
+    const tile = el('span', {className:'logo'}); tile.innerHTML = KB_BRAND_SVG;
+    const orgEl = el('span', {className:'org'});
+    orgEl.appendChild(document.createTextNode('kbenestad/timesheet'));
+    const sm = el('small'); sm.textContent = 'Timesheet generator'; orgEl.appendChild(sm);
+    brand.append(tile, orgEl);
+  } else if (tsHasLogo) {
+    const img = el('img', {alt: tsOrg});
+    img.src = '../assets/logo.png';
+    img.style.cssText = 'max-height:52px;width:auto;display:block;';
+    if (CFG['logo-maxwidth']) img.style.maxWidth = CFG['logo-maxwidth'] + 'cm';
+    img.onerror = function() { this.src = '../assets/logo.jpg'; this.onerror = function() { const s = el('span', {className:'logo'}); s.innerHTML = KB_BRAND_SVG; this.replaceWith(s); }; };
+    brand.appendChild(img);
+    hdr.style.cssText = 'background:#ffffff;border:1px solid var(--border);border-radius:8px;padding:16px 20px;';
+  } else {
+    const tile = el('span', {className:'logo'}); tile.innerHTML = TS_APP_ICON;
+    const orgEl = el('span', {className:'org'});
+    orgEl.appendChild(document.createTextNode(tsOrg));
+    if (tsTagline) { const sm = el('small'); sm.textContent = tsTagline; orgEl.appendChild(sm); }
+    brand.append(tile, orgEl);
+  }
+
+  const docTitle = el('div', {className:'kb-doctitle'});
+  const h1 = el('h1');
+  h1.innerHTML = `<svg width="24" height="24" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="48" height="48" rx="12" fill="var(--accent)"/><circle cx="24" cy="24" r="13" fill="none" stroke="#fff" stroke-width="3.2"/><path d="M24 16 V24 L30 27.5" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>timesheet`;
+  const metaDiv = el('div', {className:'meta'});
+  metaDiv.textContent = (state.periodFrom && state.periodTo)
+    ? `${fmtDate(state.periodFrom, state.lang)} – ${fmtDate(state.periodTo, state.lang)}`
+    : '—';
+  docTitle.append(h1, metaDiv);
+  hdr.append(brand, docTitle);
+  wrap.appendChild(hdr);
+
+  // ── Employee / period card
+  const empCard = el('div', {className:'kb-card'});
+  const empGrid = el('div', {className:'kb-grid cols-5'});
+
+  const employeeInput = el('input', {type:'text', className:'kb-input', value: state.employee, placeholder: S('employee-label')});
+  employeeInput.addEventListener('input', () => {
+    state.employee = employeeInput.value;
+    localStorage.setItem('timesheet-employee', employeeInput.value);
+    scheduleAutoSave();
+  });
+
+  const empTypeSelect = el('select', {className:'kb-select'});
+  const empTypes = CFG['employee-types'] || [{code:'salaried', display:'Salaried'}, {code:'hourly', display:'Hourly'}];
+  empTypes.forEach(t => {
+    const disp = (typeof t.display === 'object') ? (t.display[state.lang] || t.display['en'] || t.code) : (t.display || t.code);
+    empTypeSelect.appendChild(el('option', {value: t.code, ...(state.empType === t.code ? {selected:''} : {})}, disp));
+  });
+  empTypeSelect.addEventListener('change', () => {
+    state.empType = empTypeSelect.value;
+    localStorage.setItem('timesheet-type', empTypeSelect.value);
+    regenerateDays();
+    scheduleAutoSave();
+  });
+
+  const fromInput = el('input', {type:'date', className:'kb-input'});
+  fromInput.value = state.periodFrom;
+  const toInput = el('input', {type:'date', className:'kb-input'});
+  toInput.value = state.periodTo;
+
+  function onPeriodChange() {
+    const nf = fromInput.value, nt = toInput.value;
+    if (nf && nt && nf <= nt) {
+      state.periodFrom = nf;
+      state.periodTo = nt;
+      // Update header meta
+      const metaEl = document.querySelector('.kb-doctitle .meta');
+      if (metaEl) metaEl.textContent = `${fmtDate(nf, state.lang)} – ${fmtDate(nt, state.lang)}`;
+      regenerateDays();
+      scheduleAutoSave();
+    }
+  }
+  fromInput.addEventListener('change', onPeriodChange);
+  toInput.addEventListener('change', onPeriodChange);
+
+  function mkField(label, inputEl) {
+    const f = el('div', {className:'kb-field'});
+    f.append(el('span', {className:'kb-label'}, label), inputEl);
+    return f;
+  }
+
+  empGrid.append(
+    mkField(S('employee-label'), employeeInput),
+    mkField(S('employee-type-label'), empTypeSelect),
+    mkField(S('period-label'), fromInput),
+    mkField(S('period-to'), toInput),
+  );
+  empCard.appendChild(empGrid);
+
+  const newBtnRow = el('div', {style:{marginTop:'10px'}});
+  const newBtnEl = el('button', {type:'button', className:'kb-btn kb-btn--soft', onClick: onNewTimesheet}, S('btn-new'));
+  newBtnRow.appendChild(newBtnEl);
+  empCard.appendChild(newBtnRow);
+
+  wrap.appendChild(empCard);
+
+  // ── Daily entries card
+  const entriesCard = el('div', {className:'kb-card'});
+  entriesCard.appendChild(el('h2', {className:'kb-card__title'}, S('daily-entries')));
+
+  // Legend chips — from config codes
+  const legend = el('div', {className:'ts-legend'});
+  codesForType(state.empType).forEach(c => {
+    const dispKey = `display-${state.lang}`;
+    const label = c[dispKey] || c['display-en'] || c.code;
+    const chip = buildChipStyle('span', {className:'kb-chip'}, c, c.code, 1);
+    const dot = el('span', {className:'dot'});
+    if (c['colour-border']) dot.style.background = c['colour-border'];
+    chip.append(dot, document.createTextNode(`${c.code} · ${label}`));
+    legend.appendChild(chip);
+  });
+  entriesCard.appendChild(legend);
+
+  // Grid header
+  const gridWrap = el('div', {id:'grid-wrap'});
+  const ghdr = el('div', {className:'kb-rowhead'});
+  ghdr.append(
+    el('span', null, S('col-date')),
+    el('span', null, S('col-time-in')),
+    el('span', null, S('col-time-out')),
+    el('span', null, S('col-code')),
+    el('span', null, S('col-description')),
+    el('span', {className:'r'}, S('col-hours')),
+    el('span', null, '')
+  );
+  gridWrap.appendChild(ghdr);
+
+  const datesInPeriod = dateRange(state.periodFrom, state.periodTo);
+  datesInPeriod.forEach((ds) => gridWrap.appendChild(renderDayBlock(ds)));
+  entriesCard.appendChild(gridWrap);
+  wrap.appendChild(entriesCard);
+
+  // ── Summary card
+  wrap.appendChild(renderSummary());
+
+  // ── Signature card
+  renderSignatureArea(wrap);
+
+  // ── Action row
+  const genBtn = el('button', {id:'gen-btn', type:'button', className:'kb-btn kb-btn--primary kb-btn--lg', style:{flex:'6'}, onClick: onGenerate});
+  genBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M8 2v9m0 0 4-4M8 11 4 7"/><line x1="2" y1="14" x2="14" y2="14"/></svg>${kbEsc(S('btn-generate'))}`;
+
+  const valBtn = el('button', {type:'button', className:'kb-btn kb-btn--ghost kb-btn--lg', style:{flex:'2'}, onClick: () => {
+    validationResult = runValidation();
+    renderValBox(valBox);
+    updateGenBtn(genBtn);
+    $$('.day-block').forEach(block => {
+      const ds = block.id.replace('day-', '');
+      renderDayValMessages(block, ds);
+    });
+  }}, S('btn-validate'));
+
+  const saveBtn = el('button', {type:'button', className:'kb-btn kb-btn--ghost kb-btn--lg', style:{flex:'2'}, onClick: () => {
+    saveState();
+    saveBtn.textContent = S('btn-saved');
+    setTimeout(() => { saveBtn.textContent = S('btn-save'); }, 1500);
+  }}, S('btn-save'));
+
+  updateGenBtn(genBtn);
+  const actRow = el('div', {className:'kb-actbar'});
+  actRow.append(saveBtn, valBtn, genBtn);
+  wrap.appendChild(actRow);
+
+  const valBox = el('div', {id:'val-box', style:{marginTop:'8px'}});
+  wrap.appendChild(valBox);
+
+  app.appendChild(wrap);
+}
+
+function updateGenBtn(btn) {
+  btn.disabled = !!(validationResult && validationResult.errors.length > 0);
+}
+
+function renderValBox(box) {
+  box.innerHTML = '';
+  if (!validationResult) return;
+  const {errors, warnings} = validationResult;
+
+  if (!errors.length && !warnings.length) {
+    const note = el('div', {className:'kb-note kb-note--success'});
+    const icon = `<svg viewBox="0 0 16 16" fill="currentColor" width="17" height="17"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.061L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/></svg>`;
+    const inner = el('div');
+    inner.innerHTML = `<b>${kbEsc(S('val-ok-title'))}</b> ${kbEsc(S('val-ok-body'))}`;
+    note.innerHTML = icon;
+    note.appendChild(inner);
+    box.appendChild(note);
+    return;
+  }
+  if (errors.length) {
+    const note = el('div', {className:'kb-note kb-note--error'});
+    const icon = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>`;
+    const inner = el('div');
+    inner.innerHTML = `<b>${kbEsc(S('val-errors-title'))}</b><ul>${errors.map(e=>`<li>${kbEsc(e)}</li>`).join('')}</ul>`;
+    note.innerHTML = icon;
+    note.appendChild(inner);
+    box.appendChild(note);
+  }
+  if (warnings.length) {
+    const note = el('div', {className:'kb-note kb-note--warning'});
+    const icon = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/></svg>`;
+    const inner = el('div');
+    inner.innerHTML = `<b>${kbEsc(S('val-warnings-title'))}</b><ul>${warnings.map(w=>`<li>${kbEsc(w)}</li>`).join('')}</ul>`;
+    note.innerHTML = icon;
+    note.appendChild(inner);
+    box.appendChild(note);
+  }
+}
+
+function renderDayBlock(dateStr) {
+  const block = el('div', {className:'day-block', id:`day-${dateStr}`});
+  redrawDayBlock(block, dateStr);
+  return block;
+}
+
+function redrawDayBlock(block, dateStr) {
+  block.innerHTML = '';
+  const rows = state.days[dateStr] || [];
+  const totalRows = rows.length;
+  rows.forEach((row, i) => {
+    block.appendChild(renderRow(dateStr, i, row, i === 0, i === totalRows - 1, totalRows));
+  });
+  renderDayValMessages(block, dateStr);
+}
+
+function renderDayValMessages(block, dateStr) {
+  const old = block.querySelector('.ts-day-val');
+  if (old) old.remove();
+  if (!validationResult || !validationResult.byDate[dateStr]) return;
+  const { errors, warnings } = validationResult.byDate[dateStr];
+  if (!errors.length && !warnings.length) return;
+  const div = el('div', {className:'ts-day-val'});
+  errors.forEach(msg => { const d = el('div'); d.textContent = '⚠ ' + msg; div.appendChild(d); });
+  warnings.forEach(msg => { const d = el('div', {className:'warn'}); d.textContent = '⚠ ' + msg; div.appendChild(d); });
+  block.appendChild(div);
+}
+
+function renderRow(dateStr, rowIndex, row, isFirst, isLast, totalRows) {
+  const locked = isRowLocked(dateStr, rowIndex, row);
+  const timeLocked = locked && totalRows === 1;
+  const rowEl = el('div', {className: 'ts-row2' + (isFirst ? '' : ' continuation')});
+
+  // Date cell
+  const dateCellEl = el('div', {className:'ts-date'});
+  if (isFirst) {
+    dateCellEl.appendChild(document.createTextNode(fmtDate(dateStr, state.lang)));
+    const dowSpan = el('span', {className:'dow'}, fmtDow(dateStr, state.lang));
+    dateCellEl.appendChild(dowSpan);
+  }
+  rowEl.appendChild(dateCellEl);
+
+  // Time In
+  const timeInEl = el('input', {type:'time', className:'kb-input', value: row.timeIn || '', ...(timeLocked ? {disabled:''} : {})});
+  timeInEl.addEventListener('change', () => {
+    row.timeIn = timeInEl.value;
+    updateHoursCell(rowEl, row);
+    refreshSummary();
+    scheduleAutoSave();
+  });
+  rowEl.appendChild(timeInEl);
+
+  // Time Out
+  const timeOutEl = el('input', {type:'time', className:'kb-input', value: row.timeOut || '', ...(timeLocked ? {disabled:''} : {})});
+  timeOutEl.addEventListener('change', () => {
+    row.timeOut = timeOutEl.value;
+    updateHoursCell(rowEl, row);
+    refreshSummary();
+    scheduleAutoSave();
+  });
+  rowEl.appendChild(timeOutEl);
+
+  // Code dropdown
+  const codeEl = el('select', {className:'kb-select', ...(locked ? {disabled:''} : {})});
+  if (!locked) {
+    const available = codesForType(state.empType);
+    if (!row.code) codeEl.appendChild(el('option', {value:''}, ''));
+    if (row._locked && !isWorkday(dateStr)) {
+      codeEl.appendChild(el('option', {value:'__WEEKEND__'}, S('weekend')));
+    }
+    available.forEach(c => {
+      const dispKey = `display-${state.lang}`;
+      const disp = c[dispKey] || c['display-en'] || c.code;
+      codeEl.appendChild(el('option', {value: c.code, ...(row.code === c.code ? {selected:''} : {})}, disp));
+    });
+    codeEl.addEventListener('change', () => {
+      const newCode = codeEl.value;
+      const revert = newCode === '__WEEKEND__';
+      const newCObj = codeObj(newCode);
+      const becomesLocked = revert || (newCObj && newCObj.lockstate === 'locked');
+      row.code = revert ? 'WEEKEND' : newCode;
+      if (becomesLocked) {
+        if (revert || !newCObj || !newCObj.counthours) { row.timeIn = ''; row.timeOut = ''; }
+        else { row.timeIn = workStart(); row.timeOut = workEnd(); }
+        row.desc = '';
+        row._locked = true;
+        delete state.unlocks[rowKey(dateStr, rowIndex)];
+        const block = $(`#day-${dateStr}`);
+        if (block) redrawDayBlock(block, dateStr);
+      } else {
+        if (newCObj && newCObj.counthours) {
+          if (!row.timeIn)  { row.timeIn  = workStart(); timeInEl.value  = row.timeIn; }
+          if (!row.timeOut) { row.timeOut = workEnd();   timeOutEl.value = row.timeOut; }
+          updateHoursCell(rowEl, row);
+        }
+        applyRowColour(rowEl, dateStr, row, rowIndex, totalRows);
+        updateDescHint(descEl, row);
+      }
+      scheduleAutoSave();
+      refreshSummary();
+    });
+  } else {
+    const cObj = codeObj(row.code);
+    if (row.code === 'WEEKEND') {
+      codeEl.appendChild(el('option', {value:'WEEKEND'}, S('weekend')));
+    } else if (cObj) {
+      const dispKey = `display-${state.lang}`;
+      codeEl.appendChild(el('option', {value: row.code}, cObj[dispKey] || cObj['display-en'] || row.code));
+    } else {
+      codeEl.appendChild(el('option', {value: row.code || ''}, row.code || ''));
+    }
+  }
+  rowEl.appendChild(codeEl);
+
+  // Description
+  const descEl = el('input', {type:'text', className:'kb-input', value: row.desc || '', ...(locked ? {disabled:''} : {})});
+  updateDescHint(descEl, row);
+  descEl.addEventListener('input', () => { row.desc = descEl.value; scheduleAutoSave(); });
+  rowEl.appendChild(descEl);
+
+  // Hours
+  const hoursEl = el('div', {className:'ts-hours kb-mono', id:`hrs-${dateStr}-${rowIndex}`});
+  const mins = calcRowMins(row);
+  hoursEl.textContent = (mins != null && mins > 0) ? fmtHM(mins) : '';
+  rowEl.appendChild(hoursEl);
+
+  // Action buttons
+  const actionEl = el('div', {className:'ts-actions'});
+  if (isLast && !isFirst) {
+    const rmBtn = el('button', {type:'button', className:'kb-circbtn kb-circbtn--rm', title:S('row-remove')}, '−');
+    rmBtn.addEventListener('click', () => {
+      state.days[dateStr].splice(rowIndex, 1);
+      const block = $(`#day-${dateStr}`);
+      if (block) redrawDayBlock(block, dateStr);
+      refreshSummary(); scheduleAutoSave();
+    });
+    actionEl.appendChild(rmBtn);
+  }
+  if (isLast) {
+    const addBtn = el('button', {type:'button', className:'kb-circbtn', title:S('row-add')}, '+');
+    addBtn.addEventListener('click', () => {
+      state.days[dateStr].push({ code: '', timeIn: '', timeOut: '', desc: '', _locked: false });
+      const block = $(`#day-${dateStr}`);
+      if (block) redrawDayBlock(block, dateStr);
+      refreshSummary(); scheduleAutoSave();
+    });
+    actionEl.appendChild(addBtn);
+  } else if (!isFirst) {
+    const rmBtn = el('button', {type:'button', className:'kb-circbtn kb-circbtn--rm', title:S('row-remove')}, '−');
+    rmBtn.addEventListener('click', () => {
+      state.days[dateStr].splice(rowIndex, 1);
+      const block = $(`#day-${dateStr}`);
+      if (block) redrawDayBlock(block, dateStr);
+      refreshSummary(); scheduleAutoSave();
+    });
+    actionEl.appendChild(rmBtn);
+  }
+  rowEl.appendChild(actionEl);
+
+  // Unlock checkbox
+  if (row._locked && !state.unlocks[rowKey(dateStr, rowIndex)]) {
+    const unlockWrap = el('label', {className:'ts-unlock', title: S('unlock-label')});
+    const chk = el('input', {type:'checkbox'});
+    chk.addEventListener('change', () => {
+      if (chk.checked) {
+        state.unlocks[rowKey(dateStr, rowIndex)] = true;
+        row.code   = CFG['default-work-code'] || 'REG';
+        row.timeIn  = workStart();
+        row.timeOut = workEnd();
+      } else {
+        delete state.unlocks[rowKey(dateStr, rowIndex)];
+      }
+      const block = $(`#day-${dateStr}`);
+      if (block) redrawDayBlock(block, dateStr);
+      scheduleAutoSave();
+    });
+    unlockWrap.append(chk, S('unlock-label'));
+    rowEl.appendChild(unlockWrap);
+  }
+
+  applyRowColour(rowEl, dateStr, row, rowIndex, totalRows);
+  return rowEl;
+}
+
+function updateDescHint(descEl, row) {
+  const cObj = codeObj(row.code);
+  descEl.placeholder = cObj ? (cObj[`hint-${state.lang}`] || cObj['hint-en'] || '') : '';
+}
+
+function updateHoursCell(rowEl, row) {
+  const mins = calcRowMins(row);
+  const hEl = rowEl.querySelector('.ts-hours');
+  if (hEl) hEl.textContent = (mins != null && mins > 0) ? fmtHM(mins) : '';
+}
+
+function refreshSummary() {
+  const existing = $('#summary-card');
+  if (existing) existing.replaceWith(renderSummary());
+}
+
+function renderSummary() {
+  const {codeTotals, grandMins} = computeTotals();
+  const card = el('div', {className:'kb-card', id:'summary-card'});
+  card.appendChild(el('h2', {className:'kb-card__title'}, S('summary')));
+
+  const totals = el('div', {className:'kb-totals kb-totals--fill'});
+
+  const decimalHours = (grandMins / 60).toFixed(2);
+
+  const shownCodes = (CFG.codes || []).filter(c => c.counthours && codeTotals[c.code] > 0);
+  shownCodes.forEach(c => {
+    const dispKey = `display-${state.lang}`;
+    const disp = c[dispKey] || c['display-en'] || c.code;
+    const row = el('div', {className:'row'});
+    row.append(el('span', {className:'lab'}, `${S('of-which')} ${disp}`), el('span', {className:'val'}, fmtHM(codeTotals[c.code] || 0)));
+    totals.appendChild(row);
+  });
+
+  const grandRow = el('div', {className:'grand'});
+  grandRow.append(el('span', {className:'lab'}, S('total-hours')), el('span', {className:'val'}, fmtHM(grandMins)));
+  totals.appendChild(grandRow);
+
+  const decRow = el('div', {className:'row'});
+  decRow.append(el('span', {className:'lab'}, S('total-hours-decimal')), el('span', {className:'val'}, decimalHours));
+  totals.appendChild(decRow);
+
+  const unpMins = codeTotals['UNP'] || 0;
+  if (unpMins > 0 && grandMins > 0) {
+    const qty = (1 - unpMins / grandMins).toFixed(6);
+    const noteTemplate = S('note-unpaid');
+    const noteText = noteTemplate
+      .replace('{x}', fmtHM(unpMins))
+      .replace('{y}', fmtHM(grandMins))
+      .replace('{q}', qty);
+    const noteDiv = el('div', {className:'note'});
+    noteText.split('\n').forEach((line, i) => {
+      if (i > 0) noteDiv.appendChild(el('br'));
+      noteDiv.appendChild(document.createTextNode(line));
+    });
+    totals.appendChild(noteDiv);
+  }
+
+  card.appendChild(totals);
+  return card;
+}
+
+// ========== PERIOD / DAY REGENERATION ==========
+function regenerateDays() {
+  if (!state.periodFrom || !state.periodTo) return;
+  const newDays = buildDefaultDays(state.periodFrom, state.periodTo, state.empType);
+  for (const ds of Object.keys(newDays)) {
+    if (state.days[ds]) newDays[ds] = state.days[ds];
+  }
+  state.days = newDays;
+
+  const gridWrap = $('#grid-wrap');
+  if (!gridWrap) { render(); return; }
+
+  const header = gridWrap.querySelector('.kb-rowhead');
+  gridWrap.innerHTML = '';
+  if (header) gridWrap.appendChild(header);
+
+  const dates = dateRange(state.periodFrom, state.periodTo);
+  dates.forEach(ds => gridWrap.appendChild(renderDayBlock(ds)));
+  refreshSummary();
+}
+
+// ========== NEW TIMESHEET ==========
+async function onNewTimesheet() {
+  const confirmed = await showConfirmModal(S('new-confirm'));
+  if (!confirmed) return;
+  const p = defaultPeriod();
+  state.periodFrom = p.from;
+  state.periodTo   = p.to;
+  state.days    = buildDefaultDays(p.from, p.to, state.empType);
+  state.unlocks = {};
+  validationResult = null;
+  try { localStorage.removeItem('ts-state'); } catch(e) {}
+  render();
+}
+
+// ========== PDF ENGINE ==========
+function parseHexColor(hex) {
+  const c = kbHexRgb(hex) || kbHexRgb('#2f6fed');
+  return PDFLib.rgb(c[0]/255, c[1]/255, c[2]/255);
+}
+
+function wrapText(text, font, size, maxW) {
+  const words = (text || '').split(/\s+/);
+  const lines = [];
+  let cur = '';
+  words.forEach(w => {
+    const test = cur ? cur + ' ' + w : w;
+    if (font.widthOfTextAtSize(test, size) > maxW) { if (cur) lines.push(cur); cur = w; }
+    else cur = test;
+  });
+  if (cur) lines.push(cur);
+  return lines.length ? lines : [''];
+}
+
+function truncate(text, font, size, maxW) {
+  if (!text) return '';
+  if (font.widthOfTextAtSize(text, size) <= maxW) return text;
+  let t = text;
+  while (t.length > 1 && font.widthOfTextAtSize(t + '…', size) > maxW) t = t.slice(0, -1);
+  return t + '…';
+}
+
+async function loadLogo(doc) {
+  for (const ext of ['png','jpg']) {
+    try {
+      const res = await fetch(`../assets/logo.${ext}`);
+      if (!res.ok) continue;
+      const buf = await res.arrayBuffer();
+      return ext === 'png' ? await doc.embedPng(buf) : await doc.embedJpg(buf);
+    } catch(e) { continue; }
+  }
+  return null;
+}
+
+async function generatePDF() {
+  await pdfLibReady;
+  const { PDFDocument, StandardFonts, rgb } = PDFLib;
+  const doc = await PDFDocument.create();
+  const pageW = CFG['page-size'] === 'letter' ? 612 : 595.28;
+  const pageH = CFG['page-size'] === 'letter' ? 792 : 841.89;
+  const M = { top: 26, bottom: 28, left: 32, right: 32 };
+  const W = pageW - M.left - M.right;
+
+  const fontBody   = await doc.embedFont(StandardFonts.Helvetica);
+  const fontBold   = await doc.embedFont(StandardFonts.HelveticaBold);
+  const fontItalic = await doc.embedFont(StandardFonts.HelveticaOblique);
+
+  const szBody  = 9;
+  const szSm    = 8;
+  const szEye   = 7;
+  const szOrg   = 13;
+  const szTitle = 18;
+  const szGrand = 14;
+  const lh      = 17;
+  const ROW_GAP = 2;
+
+  const accent   = parseHexColor(CFG['accent-colour'] || '#2f6fed');
+  const ink      = rgb(0.078, 0.094, 0.118);
+  const inkSoft  = rgb(0.227, 0.263, 0.310);
+  const muted    = rgb(0.373, 0.412, 0.459);
+  const subtle   = rgb(0.604, 0.639, 0.686);
+  const hairline = rgb(0.890, 0.906, 0.933);
+  const divider  = rgb(0.827, 0.851, 0.886);
+  const white    = rgb(1, 1, 1);
+
+  const now = new Date();
+  const printed = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+  let logoImage = null;
+  if (CFG.logo === true || CFG.logo === 'yes') logoImage = await loadLogo(doc);
+
+  const pages = [];
+  let pg, y;
+
+  function hline(yy, thickness = 0.5, color = hairline) {
+    pg.drawLine({start:{x:M.left, y:yy}, end:{x:M.left+W, y:yy}, thickness, color});
+  }
+
+  function eyebrow(txt, x, yy) {
+    pg.drawText(txt.toUpperCase(), {x, y: yy, size: szEye, font: fontBold, color: muted, characterSpacing: 0.4});
+  }
+
+  function hexToRgb(hex) {
+    const c = kbHexRgb(hex);
+    return c ? rgb(c[0]/255, c[1]/255, c[2]/255) : null;
+  }
+
+  const BORDER_W = 3;
+  const RPAD_HRS = 4;
+  function drawRowBackground(rowY, bgHex, borderHex) {
+    const rectBot = rowY - lh + ROW_GAP;
+    const rectH   = lh - ROW_GAP * 2;
+    const bg  = bgHex     ? hexToRgb(bgHex)     : null;
+    const bdr = borderHex ? hexToRgb(borderHex) : null;
+    if (bg)  pg.drawRectangle({x: M.left + BORDER_W, y: rectBot, width: W - BORDER_W, height: rectH, color: bg,  borderWidth: 0});
+    if (bdr) pg.drawRectangle({x: M.left,             y: rectBot, width: BORDER_W,     height: rectH, color: bdr, borderWidth: 0});
+  }
+
+  // Columns: Date(12%) | TimeIn(9%) | TimeOut(9%) | Code(13%) | Desc(fill) | Hours(right)
+  const TX = M.left + BORDER_W + 4;
+  const COL = [0, W*0.12, W*0.21, W*0.30, W*0.43, W*0.88];
+
+  function drawContHeader() {
+    pg.drawText(CFG.organization || 'kbenestad.timesheet', {x: M.left, y, size: szBody, font: fontBold, color: ink});
+    const rTxt = `${state.periodFrom} – ${state.periodTo}  ·  ${state.employee || ''}`;
+    const rw = fontBody.widthOfTextAtSize(rTxt, szSm);
+    pg.drawText(rTxt, {x: M.left + W - rw, y, size: szSm, font: fontBody, color: muted});
+    y -= szBody + 5;
+    hline(y, 1.5, accent);
+    y -= 10;
+  }
+
+  function addPage(cont) {
+    pg = doc.addPage([pageW, pageH]);
+    pages.push(pg);
+    y = pageH - M.top;
+    if (cont) drawContHeader();
+  }
+
+  function needSpace(h) { if (y - h < M.bottom) addPage(true); }
+
+  // ── Page 1 header ────────────────────────────────────────────────────────
+  addPage(false);
+  const hdrTopY = y;
+
+  if (logoImage) {
+    const maxW = (CFG['logo-maxwidth'] || 4) * 28.3465;
+    const logoH = 36;
+    const scale = Math.min(maxW / logoImage.width, logoH / logoImage.height, 1);
+    const lw = logoImage.width * scale, lhh = logoImage.height * scale;
+    pg.drawImage(logoImage, {x: M.left, y: hdrTopY - lhh + szBody, width: lw, height: lhh});
+  } else {
+    pg.drawText(CFG.organization || 'kbenestad.timesheet', {x: M.left, y: hdrTopY, size: szOrg, font: fontBold, color: ink});
+  }
+
+  const titleStr = S('pdf-title');
+  const tw = fontBold.widthOfTextAtSize(titleStr, szTitle);
+  pg.drawText(titleStr, {x: M.left + W - tw, y: hdrTopY, size: szTitle, font: fontBold, color: accent});
+  const periodStr = `${fmtDate(state.periodFrom, curLang())} – ${fmtDate(state.periodTo, curLang())}`;
+  const prw = fontBody.widthOfTextAtSize(periodStr, szSm);
+  pg.drawText(periodStr, {x: M.left + W - prw, y: hdrTopY - szTitle - 4, size: szSm, font: fontBody, color: muted});
+
+  y = hdrTopY - 38;
+  hline(y, 1.5, accent);
+  y -= 13;
+
+  const c1 = 0, c2 = W * 0.35, c3 = W * 0.65;
+  eyebrow(S('pdf-employee'), M.left + c1, y);
+  eyebrow(S('pdf-period'),   M.left + c2, y);
+  eyebrow(S('pdf-type'),     M.left + c3, y);
+  y -= szEye + 5;
+  pg.drawText(state.employee || '—', {x: M.left + c1, y, size: szBody, font: fontBold, color: ink});
+  pg.drawText(`${state.periodFrom}  –  ${state.periodTo}`, {x: M.left + c2, y, size: szBody, font: fontBody, color: inkSoft});
+  const tObj = empTypeObj(state.empType);
+  const typeDisp2 = tObj ? ((typeof tObj.display === 'object') ? (tObj.display[curLang()] || tObj.display['en'] || state.empType) : (tObj.display || state.empType)) : state.empType;
+  pg.drawText(typeDisp2, {x: M.left + c3, y, size: szBody, font: fontBody, color: inkSoft});
+  y -= szBody + 8;
+  hline(y, 1.5, divider);
+  y -= Math.round(szEye * 0.72) + 4;  // cap-height + 4pt visual gap above cap
+
+  const colHeaders = [S('col-date'), S('col-time-in'), S('col-time-out'), S('col-code'), S('col-description'), S('col-hours')];
+  colHeaders.forEach((h, i) => {
+    if (i === 5) {
+      const hw = fontBold.widthOfTextAtSize(h.toUpperCase(), szEye);
+      eyebrow(h, M.left + W - hw - RPAD_HRS, y);
+    } else {
+      eyebrow(h, TX + COL[i], y);
+    }
+  });
+  y -= 4;  // 4pt visual gap below baseline (uppercase — no descenders)
+  hline(y, 0.5, hairline);
+  y -= 4;
+
+  // ── Data rows ─────────────────────────────────────────────────────────────
+  const sortedDates = Object.keys(state.days).sort();
+
+  for (let di = 0; di < sortedDates.length; di++) {
+    const ds = sortedDates[di];
+    const rows = state.days[ds];
+    const totalRowsDay = rows.length;
+
+    for (let ri = 0; ri < rows.length; ri++) {
+      const row = rows[ri];
+      const isFirst = ri === 0;
+      const isLocked = isRowLocked(ds, ri, row);
+      needSpace(lh);
+
+      const rowY = y;
+      const textColor = isLocked ? subtle : inkSoft;
+
+      const cObjRow = row.code && row.code !== 'WEEKEND' ? codeObj(row.code) : null;
+      let bgHex = null, borderHex = null;
+      if (row.code === 'WEEKEND' || !row.code) {
+        bgHex = '#ebebeb'; borderHex = '#c8c8c8';
+      } else if (cObjRow) {
+        if (row.code === 'PPT') {
+          const isFullDay = totalRowsDay === 1;
+          bgHex     = isFullDay ? cObjRow['colour-bg-fullday']     : cObjRow['colour-bg-partialday'];
+          borderHex = isFullDay ? cObjRow['colour-border-fullday'] : cObjRow['colour-border-partialday'];
+        } else {
+          bgHex = cObjRow['colour-bg']; borderHex = cObjRow['colour-border'];
+        }
+      }
+      drawRowBackground(rowY, bgHex, borderHex);
+      const textY = rowY - lh / 2 - szBody * 0.35;
+
+      if (isFirst) {
+        const dateTxt = fmtDate(ds, curLang());
+        const dowTxt  = fmtDow(ds, curLang());
+        const dateFont = isLocked ? fontBody : fontBold;
+        pg.drawText(dateTxt, {x: TX + COL[0], y: textY, size: szBody, font: dateFont, color: isLocked ? subtle : ink});
+        const dw = dateFont.widthOfTextAtSize(dateTxt, szBody);
+        pg.drawText(' ' + dowTxt, {x: TX + COL[0] + dw, y: textY, size: szSm, font: fontBody, color: subtle});
+      }
+
+      if (row.timeIn)  pg.drawText(row.timeIn,  {x: TX + COL[1], y: textY, size: szBody, font: fontBody, color: textColor});
+      if (row.timeOut) pg.drawText(row.timeOut, {x: TX + COL[2], y: textY, size: szBody, font: fontBody, color: textColor});
+
+      if (row.code === 'WEEKEND') {
+        pg.drawText(S('weekend'), {x: TX + COL[3], y: textY, size: szSm, font: fontBody, color: subtle});
+      } else if (row.code) {
+        const dispKey = `display-${curLang()}`;
+        const codeTxt = cObjRow ? (cObjRow[dispKey] || cObjRow['display-en'] || row.code) : row.code;
+        pg.drawText(codeTxt, {x: TX + COL[3], y: textY, size: szBody, font: fontBody, color: textColor});
+      }
+
+      const descMaxW = COL[5] - COL[4] - 6;
+      if (row.desc) {
+        pg.drawText(truncate(row.desc, fontBody, szSm, descMaxW), {x: TX + COL[4], y: textY, size: szSm, font: fontBody, color: isLocked ? subtle : muted});
+      }
+
+      const mins = calcRowMins(row);
+      if (mins != null && mins > 0) {
+        const hStr = fmtHM(mins);
+        const hw = fontBold.widthOfTextAtSize(hStr, szBody);
+        pg.drawText(hStr, {x: M.left + W - hw - RPAD_HRS, y: textY, size: szBody, font: fontBold, color: isLocked ? subtle : ink});
+      }
+
+      y -= lh;
+    }
+  }
+
+  // ── Summary + signatures ──────────────────────────────────────────────────
+  const {codeTotals, grandMins} = computeTotals();
+  const decHours = (grandMins / 60).toFixed(2);
+  const shownCodes = (CFG.codes || []).filter(c => c.counthours && codeTotals[c.code] > 0);
+
+  const sigBoxH = 44;
+  const hasSig = needsSignature();
+  // When sig required: employee box left + authorised box right, each half-width
+  const sigBlockH = hasSig ? szEye + 5 + sigBoxH + szSm + 14 : 0;
+  const sumBlockH = shownCodes.length * lh + 7 + szGrand + 6 + lh;
+  needSpace(22 + Math.max(sigBlockH, sumBlockH) + 10);
+
+  y -= 10;
+  hline(y, 1.5, accent);
+  y -= 12;
+
+  const blockTopY = y;
+
+  // ── RIGHT: totals ──────────────────────────────────────────────────────────
+  const sumColX  = M.left + W * 0.56;
+  const sumRight = M.left + W;
+  let sy = blockTopY;
+
+  shownCodes.forEach(c => {
+    const dispKey = `display-${curLang()}`;
+    const disp = c[dispKey] || c['display-en'] || c.code;
+    const valTxt = fmtHM(codeTotals[c.code] || 0);
+    const vw = fontBody.widthOfTextAtSize(valTxt, szSm);
+    pg.drawText(`${S('of-which')}  ${disp}`, {x: sumColX, y: sy, size: szSm, font: fontBody, color: muted});
+    pg.drawText(valTxt, {x: sumRight - vw, y: sy, size: szSm, font: fontBody, color: inkSoft});
+    sy -= lh;
+  });
+
+  // Divider + TOTAL HOURS grand figure
+  pg.drawLine({start:{x: sumColX, y: sy}, end:{x: sumRight, y: sy}, thickness: 0.75, color: divider});
+  sy -= 7;
+
+  eyebrow(S('total-hours'), sumColX, sy);
+  const grandTxt = fmtHM(grandMins);
+  const gw = fontBold.widthOfTextAtSize(grandTxt, szGrand);
+  pg.drawText(grandTxt, {x: sumRight - gw, y: sy - (szGrand - szEye), size: szGrand, font: fontBold, color: accent});
+  sy -= szGrand + 6;
+
+  // Decimal hours — italic, muted, below grand total
+  const decValW = fontItalic.widthOfTextAtSize(decHours, szSm);
+  pg.drawText(S('total-hours-decimal'), {x: sumColX, y: sy, size: szSm, font: fontItalic, color: subtle});
+  pg.drawText(decHours, {x: sumRight - decValW, y: sy, size: szSm, font: fontItalic, color: subtle});
+  sy -= lh;
+
+  const summaryBottomY = sy;
+
+  // ── LEFT: signatures (employee + authorised, side by side) ────────────────
+  if (hasSig) {
+    const sigColW = W * 0.50;
+    const sigBoxW = (sigColW - 10) / 2;
+    let sigY = blockTopY;
+
+    // Employee signature
+    eyebrow(S('signature-employee'), M.left, sigY);
+    sigY -= szEye + 5;
+    pg.drawRectangle({x: M.left, y: sigY - sigBoxH, width: sigBoxW, height: sigBoxH, borderWidth: 0.75, borderColor: divider, color: white});
+    if (signatureDataUrl) {
+      const b64 = signatureDataUrl.split(',')[1];
+      const sigBytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      const sigImg = await doc.embedPng(sigBytes);
+      const scale = Math.min((sigBoxW - 8) / sigImg.width, (sigBoxH - 8) / sigImg.height, 1);
+      const sw = sigImg.width * scale, sh = sigImg.height * scale;
+      pg.drawImage(sigImg, {x: M.left + (sigBoxW - sw) / 2, y: sigY - sigBoxH + (sigBoxH - sh) / 2, width: sw, height: sh});
+    }
+    const empSigBottomY = sigY - sigBoxH - 10;
+    pg.drawText(`${S('signature-date')}: ${printed}`, {x: M.left, y: empSigBottomY, size: szSm, font: fontBody, color: muted});
+
+    // Authorised signature
+    const authX = M.left + sigBoxW + 10;
+    let authY = blockTopY;
+    eyebrow(S('signature-authorised'), authX, authY);
+    authY -= szEye + 5;
+    pg.drawRectangle({x: authX, y: authY - sigBoxH, width: sigBoxW, height: sigBoxH, borderWidth: 0.75, borderColor: divider, color: white});
+    authY -= sigBoxH + 10;
+    const dateLabel = `${S('signature-date')}:`;
+    const dlw = fontBody.widthOfTextAtSize(dateLabel + ' ', szSm);
+    pg.drawText(dateLabel, {x: authX, y: authY, size: szSm, font: fontBody, color: muted});
+    pg.drawLine({start:{x: authX + dlw, y: authY - 1}, end:{x: authX + sigBoxW, y: authY - 1}, thickness: 0.5, color: divider});
+
+    y = Math.min(summaryBottomY, authY - 12);
+  } else {
+    y = summaryBottomY - 6;
+  }
+
+  // ── Unpaid leave note ─────────────────────────────────────────────────────
+  const unpMins = codeTotals['UNP'] || 0;
+  if (unpMins > 0 && grandMins > 0) {
+    y -= 6;
+    hline(y, 0.5, hairline);
+    y -= 10;
+    const qty = (1 - unpMins / grandMins).toFixed(6);
+    const noteText = S('note-unpaid').replace('{x}', fmtHM(unpMins)).replace('{y}', fmtHM(grandMins)).replace('{q}', qty);
+    noteText.split('\n').forEach(line => {
+      wrapText(line, fontBody, szSm, W).forEach(wl => {
+        pg.drawText(wl, {x: M.left, y, size: szSm, font: fontBody, color: muted});
+        y -= lh;
+      });
+    });
+  }
+
+  // ── Footer (every page) ───────────────────────────────────────────────────
+  const totalPages = pages.length;
+  pages.forEach((p, i) => {
+    const fy = M.bottom - 10;
+    p.drawLine({start:{x:M.left, y:fy+10}, end:{x:M.left+W, y:fy+10}, thickness: 0.5, color: hairline});
+    const leftStr = [CFG.footer, state.employee].filter(Boolean).join('  ·  ');
+    if (leftStr) p.drawText(leftStr, {x: M.left, y: fy, size: szEye, font: fontBody, color: subtle, characterSpacing: 0.2});
+    const rightStr = `${i+1} / ${totalPages}  ·  ${printed}`;
+    const rw = fontBody.widthOfTextAtSize(rightStr, szEye);
+    p.drawText(rightStr, {x: M.left + W - rw, y: fy, size: szEye, font: fontBody, color: subtle, characterSpacing: 0.2});
+  });
+
+  const pdfBytes = await doc.save();
+  const blob = new Blob([pdfBytes], {type:'application/pdf'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const emp = kbSafeFilename(state.employee) || 'employee';
+  a.download = `${emp}_${state.periodFrom}_Timesheet.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ========== GENERATE HANDLER ==========
+async function onGenerate() {
+  validationResult = runValidation();
+  const valBox = $('#val-box');
+  renderValBox(valBox);
+  const genBtn = $('#gen-btn');
+  if (validationResult.errors.length) {
+    updateGenBtn(genBtn);
+    valBox.scrollIntoView({behavior:'smooth'});
+    return;
+  }
+  genBtn.disabled = true;
+  const origHTML = genBtn.innerHTML;
+  genBtn.textContent = S('generating');
+  try {
+    renderLang = outputLang();
+    await generatePDF();
+  } catch(e) {
+    kbAlert({ title: 'PDF', message: 'Error generating PDF: ' + e.message });
+    console.error(e);
+  } finally {
+    renderLang = null;
+  }
+  genBtn.disabled = false;
+  genBtn.innerHTML = origHTML;
+}
+
+// ========== INIT ==========
+async function init() {
+  try {
+    await loadConfig();
+    NAV = await loadNavItems('../config.yml');   // root config's apps/links, for the nav dropdown
+    loadSignature();
+
+    initFontScale();
+
+    const savedLang = localStorage.getItem('timesheet-lang');
+    const savedEmp  = localStorage.getItem('timesheet-employee');
+    const savedType = localStorage.getItem('timesheet-type');
+    state.lang = savedLang || CFG['default-code'] || 'en';
+    applyLang(state.lang);
+    if (savedEmp)  state.employee = savedEmp;
+    const validTypes = (CFG['employee-types'] || []).map(t => t.code);
+    if (savedType && validTypes.includes(savedType)) state.empType = savedType;
+    else if (validTypes.length) state.empType = validTypes[0];
+
+    const p = defaultPeriod();
+    state.periodFrom = p.from;
+    state.periodTo   = p.to;
+
+    const restored = loadSavedState();
+    if (!restored || !state.periodFrom || Object.keys(state.days).length === 0) {
+      state.days = buildDefaultDays(state.periodFrom, state.periodTo, state.empType);
+    }
+
+    render();
+
+    document.addEventListener('input', scheduleAutoSave);
+    document.addEventListener('change', scheduleAutoSave);
+    document.getElementById('footer-about-btn').addEventListener('click', showAboutModal);
+  } catch(e) {
+    $('#app').innerHTML = `<div class="kb-wrap"><div class="kb-note kb-note--error"><span>⚠</span><div><b>Failed to load</b><br>${kbEsc(e.message)}</div></div></div>`;
+    console.error(e);
+  }
+}
+
+init();
+})();
+</script>
+</body>
+</html>

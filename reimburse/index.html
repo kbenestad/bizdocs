@@ -1,0 +1,1495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.bunny.net; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="format-detection" content="telephone=no">
+<title>Reimbursement</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon-32x32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="assets/favicon-16x16.png" sizes="16x16" type="image/png">
+<link rel="shortcut icon" href="assets/favicon.ico">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="assets/site.webmanifest">
+<meta name="theme-color" content="#2f6fed">
+<!-- Restore persisted theme BEFORE first paint (and before any blocking
+     network fetch) to avoid a light-mode flash. Keep this first. -->
+<script>
+  (function(){var t=localStorage.getItem('kb-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
+</script>
+<!-- js-yaml: needed to fetch/parse config.yml, so it must stay hardcoded here
+     (see config.yml's dependencies: block for the config-driven libraries). -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"
+        integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
+        crossorigin="anonymous"></script>
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/ui.css">
+<script src="../assets/app.js"></script>
+<style>
+/* =============================================================================
+ * Reimbursement — app-specific styles
+ * Shared colour scheme & components: ../assets/style.css + ../assets/ui.css
+ * ========================================================================== */
+
+/* ── Item blocks ───────────────────────────────────────────────────────────── */
+.kb-block { border:1px solid var(--border); border-radius:var(--radius); background:var(--surface-2); padding:16px 18px; margin-bottom:14px; }
+.kb-block__head { display:flex; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+.kb-block__tag { font-size:var(--fs-label); font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--accent); }
+.kb-block__name { flex:1; }
+.kb-subtotal { font-family:var(--font-mono); font-weight:600; color:var(--text); font-variant-numeric:tabular-nums; white-space:nowrap; }
+
+/* ── Expense line ──────────────────────────────────────────────────────────── */
+.kb-line { padding:14px 0; }
+.kb-line+.kb-line { border-top:1px solid var(--border); }
+.kb-line-section { display:grid; gap:12px 14px; margin-bottom:12px; }
+.kb-line-section.row1 { grid-template-columns:140px 1fr auto auto; }
+.kb-line-section.row2 { grid-template-columns:1fr auto auto; }
+.kb-line-section.row3 { grid-template-columns:1fr 1fr; }
+
+/* ── Receipts ──────────────────────────────────────────────────────────────── */
+.rb-receipt-area { margin-top:10px; }
+.rb-receipt { display:flex; align-items:center; gap:9px; padding:8px 12px; margin-bottom:6px; background:var(--accent-soft); border:1px solid var(--accent-border); border-radius:var(--radius-sm); font-size:var(--fs-small); color:var(--text-soft); }
+.rb-receipt svg { width:15px; height:15px; color:var(--accent); flex:0 0 15px; }
+.rb-receipt .name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.rb-receipt .rm { background:none; border:none; cursor:pointer; color:var(--text-muted); padding:0 2px; font-size:14px; line-height:1; }
+.rb-receipt .rm:hover { color:var(--danger); }
+.rb-no-receipt { margin-top:8px; }
+
+/* ── Custom currency dropdown ──────────────────────────────────────────────── */
+.cdd { position:relative; display:inline-block; }
+.cdd-trigger { padding:9px 32px 9px 11px; border:1px solid var(--border-strong); border-radius:var(--radius-sm); background:var(--surface) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%235F6975' stroke-width='1.6'><path d='M4 6l4 4 4-4'/></svg>") no-repeat right 10px center; cursor:pointer; font:400 var(--fs-input)/1.4 var(--font-sans); color:var(--text); text-align:left; width:100%; outline:none; transition:border-color .14s,box-shadow .14s; }
+.cdd-trigger:focus { border-color:var(--accent); box-shadow:var(--ring); }
+.cdd-panel { display:none; position:absolute; top:calc(100% + 2px); left:0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); z-index:100; min-width:200px; max-height:260px; overflow-y:auto; }
+.cdd-panel.open { display:block; }
+.cdd-opt { padding:8px 12px; cursor:pointer; }
+.cdd-opt:hover { background:var(--surface-2); }
+.cdd-opt .code { font-weight:600; font-size:var(--fs-input); color:var(--text); }
+.cdd-opt .name { font-size:var(--fs-small); color:var(--text-muted); }
+.cdd-opt+.cdd-opt { border-top:1px solid var(--border); }
+
+/* ── Responsive ────────────────────────────────────────────────────────────── */
+@media (max-width:680px){
+  .kb-grid.cols-2, .kb-grid.cols-3, .kb-grid.cols-4, .kb-grid.claim-grid { grid-template-columns:1fr; }
+  .kb-grid.claim-grid .kb-field { justify-content:flex-end; }
+  .kb-header { flex-direction:column; gap:14px; }
+  .kb-doctitle { text-align:left; }
+  .kb-line-section.row1, .kb-line-section.row2, .kb-line-section.row3 { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+
+<div id="app"><p class="kb-loading">Loading configuration…</p></div>
+<footer class="kb-footer">
+  <span class="kb-mark">
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <rect x="1" y="5" width="11" height="11" rx="3" fill="var(--accent)"/>
+      <rect x="6" y="1" width="11" height="11" rx="3" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+    </svg>
+    kBenestad
+  </span>
+  <span class="sep">·</span>
+  <span>© 2026 Kristian Benestad</span>
+  <span class="sep">·</span>
+  <a href="https://github.com/kbenestad/bizdocs" target="_blank" rel="noopener">kbenestad/bizdocs</a>
+  <span class="sep">·</span>
+  <a href="#" id="about-link">About</a>
+</footer>
+
+<script>
+(async function() {
+'use strict';
+
+// ── Brand assets ──────────────────────────────────────────────────────────────
+// KB_BRAND_SVG lives in app.js
+
+// ========== UTILITIES ==========
+// $, $$, el, uid live in app.js
+// Same grouping/locale as the other apps (formatAmount defaults to en-US).
+function fmtAmt(n) { return formatAmount(n, { fallback: '–' }); }
+function defaultPeriod() {
+  const d = new Date();
+  const isLastDay = d.getDate() === new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  const y = isLastDay ? d.getFullYear() : (d.getMonth() === 0 ? d.getFullYear() - 1 : d.getFullYear());
+  const m = isLastDay ? d.getMonth() : (d.getMonth() === 0 ? 11 : d.getMonth() - 1);
+  const fmt = dt => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+  return { from: fmt(new Date(y, m, 1)), to: fmt(new Date(y, m + 1, 0)) };
+}
+
+// ── Field helper ──────────────────────────────────────────────────────────
+function kbField(label, input, opts) {
+  const cls = 'kb-field' + (opts && opts.grow ? ' grow' : '') + (opts && opts.cls ? ' ' + opts.cls : '');
+  const f = el('div', {className: cls});
+  f.appendChild(el('span', {className:'kb-label'}, label));
+  f.appendChild(input);
+  if (opts && opts.hint) {
+    const h = el('div', {style:{fontSize:'var(--fs-small)',color:'var(--text-muted)',marginTop:'3px'}}, opts.hint);
+    f.appendChild(h);
+  }
+  return f;
+}
+
+// ========== DATE HELPERS ==========
+function isDateInPeriod(date) {
+  if (!date || !state.periodFrom || !state.periodTo) return true;
+  return date >= state.periodFrom && date <= state.periodTo;
+}
+
+// ========== MODALS ==========
+// Generic kbModal / kbConfirm / kbAlert / kbAbout live in app.js.
+function showConfirmModal(msg) {
+  return kbConfirm({ message: msg, confirmLabel: T('confirm-new-form'), cancelLabel: T('cancel') });
+}
+
+function showWarningModal(msg) {
+  return kbAlert({ message: msg, okLabel: T('ok') });
+}
+
+function showAboutModal() {
+  return kbAbout({
+    title:      (CFG && CFG['about-title'])   || 'About',
+    contentMD:  applyVersionTokens((CFG && CFG['about-content']) || '', VERSION_INFO),
+    closeLabel: (CFG && CFG['about-button'])  || 'Close',
+  });
+}
+
+// ========== CONFIG ==========
+let CFG;
+let VERSION_INFO = null; // version.json (written by the release workflow), or null before the first tag
+let pdfLibReady = null;
+let NAV = { apps: [], links: [] };  // root config's apps/links, for the nav dropdown
+async function loadConfig() {
+  CFG = await loadYamlConfig();
+  VERSION_INFO = await loadVersionInfo('../version.json');
+  await applySharedBranding(CFG);
+  normaliseConfig();
+  applyAccent(CFG);
+  const marker = buildVersionMarker(VERSION_INFO);
+  if (marker) document.querySelector('footer.kb-footer').appendChild(marker);
+  pdfLibReady = loadDependency(CFG.dependencies && CFG.dependencies['pdf-lib']);
+  pdfLibReady.catch(() => {}); // surfaced when generatePDF() awaits it instead
+}
+
+// ── Localisation adapter ───────────────────────────────────────────────────────
+// Maps the unified `localisation:` config block onto the legacy fields the app
+// reads. languages/default-code are language-independent; the about block, the
+// fx-rate messages, and the per-currency names are language-dependent and applied
+// by applyLang() (called at boot and on language change).
+function normaliseConfig() {
+  const loc = CFG && CFG.localisation;
+  if (!loc) return;
+  const { table, languages, defaultCode } = buildLangTable(loc);
+  CFG['default-code'] = defaultCode;
+  CFG.languages = CFG.languages || languages;
+  CFG['ui-strings'] = table;
+}
+
+// Active language for string lookups. During PDF generation this is overridden to the
+// output language (see outputLang / onGenerate); otherwise it is the UI language.
+let renderLang = null;
+function curLang() { return renderLang || state.lang; }
+
+// PDF/output language: follows the UI when output-language is "user-selected",
+// otherwise the default (first defined) language.
+function outputLang() {
+  return pdfOutputLang(CFG, state.lang);
+}
+
+// UI string lookup with {placeholder} interpolation; falls back to default lang then key.
+function T(key, vars) {
+  return lookupString(CFG['ui-strings'], key, curLang(), CFG['default-code'], vars);
+}
+
+function applyLang(lc) {
+  const loc = CFG && CFG.localisation;
+  if (!loc) return;
+  const def = CFG['default-code'];
+  const L = loc[lc] || loc[def] || {};
+  const a = L.about || {};
+  CFG['about-title']   = a.title  || 'About';
+  CFG['about-content'] = a.content || '';
+  CFG['about-button']  = a.button || 'Close';
+  CFG['fx-rate-message']       = L['fx-rate-message']       || (loc[def] && loc[def]['fx-rate-message'])       || '';
+  CFG['fx-rate-message-other'] = L['fx-rate-message-other'] || (loc[def] && loc[def]['fx-rate-message-other']) || '';
+  const names = L.currencies || (loc[def] && loc[def].currencies) || {};
+  (CFG.currencies || []).forEach(c => { if (names[c.code] != null) c.name = names[c.code]; });
+  // The footer About link lives in static HTML outside render() — keep it in
+  // step with the active language.
+  const al = document.getElementById('about-link');
+  if (al) al.textContent = CFG['about-title'] || 'About';
+}
+
+// ========== STATE ==========
+const state = { staff: '', periodFrom: '', periodTo: '', baseCurrency: '', lang: 'en', fxRateMemory: {}, items: [], _grandTotal: 0 };
+
+function newItem() { return { id: uid(), name: '', lines: [newLine()], _subtotal: 0 }; }
+function newLine() {
+  return {
+    id: uid(), date: state.periodFrom || '', description: '', currency: state.baseCurrency,
+    fxRate: '1.00000', fxDir: 'foreign', vendor: '', hasReceipt: true, receipts: [],
+    noReceiptExplanation: '', amount: '', account: '', customCurrency: false,
+    programs: [{ program: '', percent: '', programOther: '' }]
+  };
+}
+
+// ========== PERSISTENCE ==========
+let db = null;
+let autoSaveTimer = null;
+
+async function initDB() {
+  return new Promise(resolve => {
+    if (!window.indexedDB) { resolve(false); return; }
+    const req = indexedDB.open('reimb-db', 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore('receipts');
+    req.onsuccess = e => { db = e.target.result; resolve(true); };
+    req.onerror = () => resolve(false);
+  });
+}
+
+function dbOp(mode, fn) {
+  return new Promise(resolve => {
+    if (!db) { resolve(undefined); return; }
+    const tx = db.transaction('receipts', mode);
+    const req = fn(tx.objectStore('receipts'));
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => resolve(undefined);
+  });
+}
+const dbPut = (k, v) => dbOp('readwrite', s => s.put(v, k));
+const dbGet = k => dbOp('readonly', s => s.get(k));
+const dbDel = k => dbOp('readwrite', s => s.delete(k));
+const dbAllKeys = () => dbOp('readonly', s => s.getAllKeys());
+
+async function saveState() {
+  const serial = {
+    staff: state.staff, periodFrom: state.periodFrom, periodTo: state.periodTo,
+    baseCurrency: state.baseCurrency, fxRateMemory: state.fxRateMemory,
+    items: state.items.map(item => ({
+      id: item.id, name: item.name,
+      lines: item.lines.map(ln => ({
+        id: ln.id, date: ln.date, description: ln.description,
+        currency: ln.currency, fxRate: ln.fxRate, fxDir: ln.fxDir || 'foreign', vendor: ln.vendor,
+        hasReceipt: ln.hasReceipt, noReceiptExplanation: ln.noReceiptExplanation,
+        amount: ln.amount, account: ln.account, customCurrency: ln.customCurrency || false,
+        programs: ln.programs,
+        receipts: ln.receipts.map(r => ({id: r.id, name: r.name, type: r.type}))
+      }))
+    }))
+  };
+  try { localStorage.setItem('reimb-state', JSON.stringify(serial)); } catch(e) {}
+  if (!db) return;
+  const kept = new Set();
+  for (const item of state.items)
+    for (const ln of item.lines)
+      for (const r of ln.receipts)
+        if (r.id && r.data) { kept.add(r.id); await dbPut(r.id, {name:r.name, type:r.type, data:r.data}); }
+  const all = await dbAllKeys();
+  if (Array.isArray(all)) for (const k of all) if (!kept.has(k)) await dbDel(k);
+}
+
+async function loadState() {
+  const raw = localStorage.getItem('reimb-state');
+  if (!raw) return false;
+  try {
+    const d = JSON.parse(raw);
+    if (d.staff) state.staff = d.staff;
+    if (d.periodFrom) state.periodFrom = d.periodFrom;
+    if (d.periodTo) state.periodTo = d.periodTo;
+    if (d.baseCurrency) state.baseCurrency = d.baseCurrency;
+    if (d.fxRateMemory) state.fxRateMemory = d.fxRateMemory;
+    if (d.items && d.items.length > 0) {
+      state.items = [];
+      for (const id of d.items) {
+        const item = { id: id.id, name: id.name, lines: [], _subtotal: 0 };
+        for (const ld of (id.lines || [])) {
+          const ln = {
+            id: ld.id, date: ld.date, description: ld.description,
+            currency: ld.currency, fxRate: ld.fxRate, fxDir: ld.fxDir || 'foreign', vendor: ld.vendor,
+            hasReceipt: ld.hasReceipt, receipts: [],
+            noReceiptExplanation: ld.noReceiptExplanation,
+            amount: ld.amount, account: ld.account,
+            customCurrency: ld.customCurrency || false,
+            programs: ld.programs || [{ program: '', percent: '', programOther: '' }]
+          };
+          for (const rm of (ld.receipts || [])) {
+            if (rm.id && db) {
+              const rd = await dbGet(rm.id);
+              if (rd) ln.receipts.push({ id: rm.id, name: rd.name, type: rd.type, data: rd.data });
+            }
+          }
+          item.lines.push(ln);
+        }
+        state.items.push(item);
+      }
+    }
+    return true;
+  } catch(e) { console.error('State load failed:', e); return false; }
+}
+
+function scheduleAutoSave() {
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(saveState, 1000);
+}
+
+// ========== CALCULATIONS ==========
+function recalc() {
+  let grand = 0;
+  state.items.forEach(item => {
+    let sub = 0;
+    item.lines.forEach(ln => {
+      const amt = parseFloat(ln.amount) || 0;
+      const rate = parseFloat(ln.fxRate) || 1;
+      sub += rate > 0 ? amt / rate : 0;
+    });
+    item._subtotal = sub;
+    grand += sub;
+    const se = $(`#sub-${item.id}`);
+    if (se) se.textContent = `${state.baseCurrency} ${fmtAmt(sub)}`;
+  });
+  state._grandTotal = grand;
+  const ge = $('#grand-total');
+  if (ge) ge.textContent = fmtAmt(grand);
+  const gl = $('#grand-total-label');
+  if (gl) gl.textContent = T('total-claim', {cur: state.baseCurrency});
+}
+
+// ========== CURRENCY HELPERS ==========
+function getCurrencyName(code) {
+  const c = (CFG.currencies || []).find(c => c.code === code);
+  return c ? c.name : code;
+}
+
+// ========== CURRENCY DROPDOWN ==========
+function makeCDD(currencies, value, onChange) {
+  const wrap = el('div', {className:'cdd'});
+  const trigger = el('button', {className:'cdd-trigger', type:'button'}, value || 'Select');
+  const panel = el('div', {className:'cdd-panel'});
+  currencies.forEach(c => {
+    const opt = el('div', {className:'cdd-opt', onClick: () => {
+      trigger.textContent = c.code;
+      panel.classList.remove('open');
+      onChange(c.code);
+    }}, [el('div', {className:'code'}, c.code), el('div', {className:'name'}, c.name)]);
+    panel.appendChild(opt);
+  });
+  trigger.addEventListener('click', e => { e.stopPropagation(); panel.classList.toggle('open'); });
+  // Close on outside click; self-detach once this dropdown leaves the DOM so
+  // re-renders don't accumulate document-level listeners.
+  const onDocClick = () => {
+    if (!wrap.isConnected) { document.removeEventListener('click', onDocClick); return; }
+    panel.classList.remove('open');
+  };
+  document.addEventListener('click', onDocClick);
+  wrap.append(trigger, panel);
+  wrap._setValue = code => { trigger.textContent = code; };
+  return wrap;
+}
+
+// ========== SELECT HELPER ==========
+function makeSelect(options, value, onChange, placeholder) {
+  const s = el('select', {className:'kb-select'});
+  if (placeholder) s.appendChild(el('option', {value:'', disabled:'', selected: !value ? '' : undefined}, placeholder));
+  options.forEach(o => {
+    const opt = el('option', {value: o}, o);
+    if (o === value) opt.selected = true;
+    s.appendChild(opt);
+  });
+  s.addEventListener('change', () => onChange(s.value));
+  return s;
+}
+
+// ========== FORM RENDERING ==========
+function appIconSVG() {
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('viewBox', '0 0 48 48');
+  s.setAttribute('aria-hidden', 'true');
+  s.style.cssText = 'width:100%;height:100%;display:block;';
+  s.innerHTML = `<rect width="48" height="48" rx="12" fill="var(--accent)"/><rect x="7.5" y="14" width="33" height="20" rx="3.2" fill="none" stroke="#fff" stroke-width="2.8"/><circle cx="24" cy="24" r="4.6" fill="none" stroke="#fff" stroke-width="2.6"/><path d="M12.7 21.4V26.6M35.3 21.4V26.6" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>`;
+  return s;
+}
+
+function render() {
+  const app = $('#app');
+  app.innerHTML = '';
+  const wrap = el('div', {className:'kb-wrap'});
+
+  // Validation summary placeholder
+  const valBox = el('div', {id:'val-box'});
+  wrap.appendChild(valBox);
+
+  // ── Toolbar ──────────────────────────────────────────────────────────────
+  const toolbar = el('div', {className:'kb-toolbar'});
+
+  // Nav dropdown (apps + links defined in the root config) — goes first
+  toolbar.appendChild(makeNavMenu(NAV));
+
+  toolbar.appendChild(el('div', {className:'spacer'}));
+
+  // Font size — A− / A+ control (built by app.js, drives --font-scale)
+  const { seg: sizeSeg, label: szLabel } = makeSizeControl();
+  toolbar.appendChild(sizeSeg);
+  toolbar.appendChild(szLabel);
+
+  // Theme + About icon buttons (built by app.js)
+  toolbar.appendChild(makeThemeButton());
+  toolbar.appendChild(makeAboutButton(showAboutModal));
+
+  // Language selector (only when CFG.languages has >1 entry) — goes last, far right
+  const langSel = makeLangSelect(CFG.languages, state.lang, value => {
+    state.lang = value;
+    localStorage.setItem('reimb-lang', state.lang);
+    applyLang(state.lang);
+    render();
+  });
+  if (langSel) toolbar.appendChild(langSel);
+
+  wrap.appendChild(toolbar);
+
+  // ── Header ────────────────────────────────────────────────────────────────
+  const hdr = el('div', {className:'kb-header'});
+  const brand = el('div', {className:'kb-brand'});
+  const rbOrg     = CFG.organization || '';
+  const rbTagline = CFG.tagline != null ? CFG.tagline : '';
+  const rbHasLogo = CFG.logo === true || CFG.logo === 'yes';
+
+  if (!rbOrg) {
+    const tile = el('span', {className:'logo'}); tile.innerHTML = KB_BRAND_SVG;
+    const orgSpan = el('span', {className:'org'}, 'kbenestad/reimburse');
+    orgSpan.appendChild(el('small', null, T('subtitle')));
+    brand.append(tile, orgSpan);
+  } else if (rbHasLogo) {
+    const img = el('img', {alt: rbOrg});
+    img.src = '../assets/logo.png';
+    img.style.cssText = 'max-height:52px;width:auto;display:block;';
+    if (CFG['logo-maxwidth']) img.style.maxWidth = CFG['logo-maxwidth'] + 'cm';
+    img.onerror = function() { this.src = '../assets/logo.jpg'; this.onerror = function() { const s = el('span', {className:'logo'}); s.innerHTML = KB_BRAND_SVG; this.replaceWith(s); }; };
+    brand.appendChild(img);
+    hdr.style.cssText = 'background:#ffffff;border:1px solid var(--border);border-radius:8px;padding:16px 20px;';
+  } else {
+    const tile = el('span', {className:'logo'}); tile.appendChild(appIconSVG());
+    const orgSpan = el('span', {className:'org'}, rbOrg);
+    if (rbTagline) orgSpan.appendChild(el('small', null, rbTagline));
+    brand.append(tile, orgSpan);
+  }
+
+  const docTitle = el('div', {className:'kb-doctitle'});
+  const h1 = el('h1');
+  h1.innerHTML = `<svg width="24" height="24" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="48" height="48" rx="12" fill="var(--accent)"/><rect x="7.5" y="14" width="33" height="20" rx="3.2" fill="none" stroke="#fff" stroke-width="2.8"/><circle cx="24" cy="24" r="4.6" fill="none" stroke="#fff" stroke-width="2.6"/><path d="M12.7 21.4V26.6M35.3 21.4V26.6" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>reimburse`;
+  const periodMeta = el('div', {className:'meta'});
+  function fmtPeriodDate(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    let month;
+    try { month = new Date(y, m - 1, 1).toLocaleString(curLang(), { month: 'long' }); }
+    catch (e) { month = new Date(y, m - 1, 1).toLocaleString('en', { month: 'long' }); }
+    return `${d} ${month}`;
+  }
+  function updatePeriodMeta() {
+    const from = state.periodFrom, to = state.periodTo;
+    if (from && to) periodMeta.textContent = `${fmtPeriodDate(from)} – ${fmtPeriodDate(to)}`;
+    else if (from) periodMeta.textContent = T('meta-from', { d: fmtPeriodDate(from) });
+    else if (to) periodMeta.textContent = T('meta-until', { d: fmtPeriodDate(to) });
+    else periodMeta.textContent = '';
+  }
+  updatePeriodMeta();
+  docTitle.append(h1, periodMeta);
+  hdr.append(brand, docTitle);
+  wrap.appendChild(hdr);
+
+  // ── Claimant card ─────────────────────────────────────────────────────────
+  const savedStaff = localStorage.getItem('reimb-staff') || '';
+  if (savedStaff && !state.staff) state.staff = savedStaff;
+  const period = defaultPeriod();
+  if (!state.periodFrom) state.periodFrom = period.from;
+  if (!state.periodTo) state.periodTo = period.to;
+
+  const staffInput = el('input', {className:'kb-input', type:'text', value: state.staff, placeholder:T('ph-fullname')});
+  staffInput.addEventListener('input', () => { state.staff = staffInput.value; localStorage.setItem('reimb-staff', staffInput.value); });
+
+  const fromInput = el('input', {className:'kb-input', type:'date'});
+  fromInput.value = state.periodFrom;
+  fromInput.addEventListener('change', () => { state.periodFrom = fromInput.value; updatePeriodMeta(); });
+
+  const toInput = el('input', {className:'kb-input', type:'date'});
+  toInput.value = state.periodTo;
+  toInput.addEventListener('change', () => { state.periodTo = toInput.value; updatePeriodMeta(); });
+
+  const baseCurDD = makeCDD(CFG.currencies || [], state.baseCurrency, code => {
+    state.baseCurrency = code;
+    const box = $('#items-box');
+    if (box) { box.innerHTML = ''; state.items.forEach(item => box.appendChild(renderItem(item))); }
+    recalc();
+  });
+
+  const claimCard = el('div', {className:'kb-card'});
+
+  const claimGrid = el('div', {className:'kb-grid claim-grid', style:{gridTemplateColumns:'2fr 0.85fr 0.85fr 0.5fr', alignItems:'end'}});
+  claimGrid.appendChild(kbField(T('staff'), staffInput));
+  claimGrid.appendChild(kbField(T('period-from'), fromInput));
+  claimGrid.appendChild(kbField(T('period-to'), toInput));
+  claimGrid.appendChild(kbField(T('base-currency'), baseCurDD));
+  claimCard.appendChild(claimGrid);
+
+  const newFormBtn = el('button', {type:'button', className:'kb-btn kb-btn--soft', style:{marginTop:'12px'}, onClick: onNewForm}, T('new-form'));
+  claimCard.appendChild(newFormBtn);
+  wrap.appendChild(claimCard);
+
+  // ── Expenses card ─────────────────────────────────────────────────────────
+  const expCard = el('div', {className:'kb-card'});
+  const expTitle = el('h2', {className:'kb-card__title'}, T('expenses'));
+  expCard.appendChild(expTitle);
+
+  const itemsBox = el('div', {id:'items-box'});
+  state.items.forEach(item => itemsBox.appendChild(renderItem(item)));
+  expCard.appendChild(itemsBox);
+
+  const addItemBtn = el('button', {className:'kb-btn kb-btn--dashed', style:{marginTop:'4px'}, onClick: () => {
+    const item = newItem();
+    state.items.push(item);
+    itemsBox.appendChild(renderItem(item));
+    recalc();
+  }}, T('add-item'));
+  expCard.appendChild(addItemBtn);
+  wrap.appendChild(expCard);
+
+  // ── Totals + actions card ─────────────────────────────────────────────────
+  const actCard = el('div', {className:'kb-card'});
+  const totals = el('div', {className:'kb-totals'});
+  const grandRow = el('div', {className:'grand'});
+  grandRow.append(
+    el('span', {className:'lab', id:'grand-total-label'}, T('total-claim', {cur: state.baseCurrency})),
+    el('span', {className:'val kb-mono', id:'grand-total'}, fmtAmt(0))
+  );
+  totals.appendChild(grandRow);
+  actCard.appendChild(totals);
+
+  const actionRow = el('div', {className:'kb-actbar'});
+  const actionFeedback = el('div', {style:{marginTop:'8px'}});
+
+  const saveBtn = el('button', {className:'kb-btn kb-btn--ghost kb-btn--lg', style:{flex:'2'}}, T('save'));
+  saveBtn.addEventListener('click', onSave);
+
+  const validateBtn = el('button', {className:'kb-btn kb-btn--ghost kb-btn--lg', style:{flex:'2'}}, T('validate'));
+  validateBtn.addEventListener('click', () => {
+    actionFeedback.innerHTML = '';
+    const errs = validate();
+    if (errs.length) {
+      const note = el('div', {className:'kb-note kb-note--error'});
+      note.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>`;
+      const txt = el('div');
+      txt.innerHTML = '<strong>'+kbEsc(T('val-fix'))+'</strong><br>' + errs.map(kbEsc).join('<br>');
+      note.appendChild(txt);
+      actionFeedback.appendChild(note);
+    } else {
+      const note = el('div', {className:'kb-note kb-note--success'});
+      note.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.061L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/></svg><div><strong>${kbEsc(T('val-ok-head'))}</strong> ${kbEsc(T('val-ok-body'))}</div>`;
+      actionFeedback.appendChild(note);
+    }
+  });
+
+  const genBtn = el('button', {className:'kb-btn kb-btn--primary kb-btn--lg', id:'gen-btn', style:{flex:'6'}, onClick: onGenerate});
+  genBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M8 2v9m0 0 4-4M8 11 4 7"/><line x1="2" y1="14" x2="14" y2="14"/></svg>${kbEsc(T('download'))}`;
+
+  actionRow.append(saveBtn, validateBtn, genBtn);
+  wrap.appendChild(actCard);
+  wrap.appendChild(actionRow);
+  wrap.appendChild(actionFeedback);
+
+  app.appendChild(wrap);
+  recalc();
+}
+
+function renderItem(item) {
+  const blk = el('div', {className:'kb-block', id:`item-${item.id}`});
+  const itemNum = state.items.indexOf(item) + 1;
+
+  const nameIn = el('input', {className:'kb-input kb-block__name', type:'text', value: item.name, placeholder:T('ph-item-name')});
+  nameIn.addEventListener('input', () => { item.name = nameIn.value; });
+
+  const rmBtn = el('button', {className:'kb-btn kb-btn--danger', type:'button', onClick: () => {
+    state.items = state.items.filter(i => i.id !== item.id);
+    blk.remove();
+    recalc();
+  }}, T('remove'));
+
+  const head = el('div', {className:'kb-block__head'});
+  head.append(
+    el('span', {className:'kb-block__tag'}, `${T('item')} ${itemNum}`),
+    nameIn,
+    el('span', {className:'kb-subtotal', id:`sub-${item.id}`}, `${state.baseCurrency} ${fmtAmt(0)}`),
+    rmBtn
+  );
+  blk.appendChild(head);
+
+  const linesBox = el('div', {id:`lines-${item.id}`});
+  item.lines.forEach(ln => linesBox.appendChild(renderLine(ln, item)));
+  blk.appendChild(linesBox);
+
+  blk.appendChild(el('button', {className:'kb-btn kb-btn--dashed', style:{marginTop:'10px'}, onClick: () => {
+    const ln = newLine();
+    item.lines.push(ln);
+    linesBox.appendChild(renderLine(ln, item));
+    recalc();
+  }}, T('add-line')));
+
+  return blk;
+}
+
+function renderLine(ln, item) {
+  const blk = el('div', {className:'kb-line', id:`line-${ln.id}`});
+  let progAreaEl;
+
+  const currencies = CFG.currencies || [];
+  const baseCur = state.baseCurrency;
+
+  // Date input
+  const dateIn = el('input', {className:'kb-input' + (ln.date && !isDateInPeriod(ln.date) ? ' is-warn' : ''), type:'date'});
+  if (ln.date) dateIn.value = ln.date;
+  dateIn.addEventListener('change', async () => {
+    ln.date = dateIn.value;
+    if (ln.date && !isDateInPeriod(ln.date)) {
+      dateIn.classList.add('is-warn');
+      await showWarningModal(T('msg-date-outside'));
+    } else {
+      dateIn.classList.remove('is-warn');
+    }
+  });
+
+  // Vendor
+  const vendIn = el('input', {className:'kb-input', type:'text', value: ln.vendor, placeholder:T('ph-vendor')});
+  vendIn.addEventListener('input', () => { ln.vendor = vendIn.value; });
+
+  // FX — bidirectional rate entry
+  // Canonical: ln.fxRate is always "foreign per 1 base" (divide to get base amount).
+  // ln.fxDir controls display direction: 'foreign' = show canonical, 'base' = show 1/canonical.
+  const fxIn = el('input', {className:'kb-input num', type:'text', placeholder:'0.00000', style:{minWidth:'0', width:'90px'}});
+  const fxDirContainer = el('div', {style:{display:'inline-block'}});
+  const fxPerLbl = el('span', {style:{fontSize:'var(--fs-small)', color:'var(--text-muted)', whiteSpace:'nowrap', userSelect:'none'}});
+  const fxWrap = el('div', {style:{display:'flex', alignItems:'center', gap:'4px'}});
+  fxWrap.append(fxIn, fxDirContainer, fxPerLbl);
+
+  let fxDirDD = null;
+
+  function fxDisplayVal() {
+    if (!ln.fxRate || ln.fxRate === '' || ln.fxRate === '1.00000') return ln.fxRate;
+    const r = parseFloat(ln.fxRate);
+    if (ln.fxDir === 'base' && r > 0) return (1 / r).toFixed(5);
+    return ln.fxRate;
+  }
+  function fxStoreFromDisplay(displayVal) {
+    const v = parseFloat(displayVal);
+    if (isNaN(v) || v <= 0) { ln.fxRate = displayVal; return; }
+    ln.fxRate = ln.fxDir === 'base' ? (1 / v).toFixed(5) : displayVal;
+  }
+  function rebuildFxDirSel() {
+    const fcy = ln.currency || '???';
+    const initCode = ln.fxDir === 'base' ? baseCur : fcy;
+    const opts = [
+      {code: fcy, name: getCurrencyName(fcy) || fcy},
+      {code: baseCur, name: getCurrencyName(baseCur) || baseCur}
+    ];
+    fxDirDD = makeCDD(opts, initCode, code => {
+      ln.fxDir = code === baseCur ? 'base' : 'foreign';
+      fxIn.value = fxDisplayVal();
+      fxPerLbl.textContent = T('fx-per') + ' ' + (ln.fxDir === 'foreign' ? baseCur : ln.currency || '???');
+    });
+    fxDirContainer.innerHTML = '';
+    fxDirContainer.appendChild(fxDirDD);
+    fxPerLbl.textContent = T('fx-per') + ' ' + (ln.fxDir === 'foreign' ? baseCur : fcy);
+  }
+  function showFxControls(show) {
+    fxDirContainer.style.display = show ? '' : 'none';
+    fxPerLbl.style.display = show ? '' : 'none';
+  }
+
+  fxIn.value = fxDisplayVal();
+  fxIn.readOnly = !ln.customCurrency && ln.currency === baseCur;
+  rebuildFxDirSel();
+  showFxControls(ln.currency !== baseCur);
+
+  fxIn.addEventListener('input', () => {
+    fxStoreFromDisplay(fxIn.value);
+    const rate = parseFloat(ln.fxRate);
+    if (ln.currency && ln.currency !== baseCur && rate > 0) state.fxRateMemory[ln.currency] = ln.fxRate;
+    recalc();
+    if (progAreaEl) progAreaEl._refresh();
+  });
+
+  async function showFxModal(code) {
+    const bn = getCurrencyName(baseCur);
+    const isOther = !code || code === 'Other';
+    const tmpl = isOther
+      ? (CFG['fx-rate-message-other'] || 'You have selected an expense in a currency different from the one in which you are submitting your claim. Enter the three letter currency code first, and then enter the exchange rate as amount of the foreign currency you pay for 1 {base}.')
+      : (CFG['fx-rate-message'] || 'You have selected an expense in a currency different from the one in which you are submitting your claim. Please enter the exchange rate as amount of {foreign} you pay for 1 {base}.');
+    const fn = isOther ? 'the foreign currency' : getCurrencyName(code);
+    await showWarningModal(tmpl.replace(/\{foreign\}/g, fn).replace(/\{base\}/g, bn));
+  }
+
+  function applyFxCurrency(code) {
+    if (code === baseCur) {
+      ln.fxRate = '1.00000'; ln.fxDir = 'foreign';
+      fxIn.value = '1.00000'; fxIn.readOnly = true;
+      showFxControls(false);
+    } else {
+      fxIn.readOnly = false;
+      const mem = state.fxRateMemory[code];
+      if (mem) { ln.fxRate = mem; }
+      else if (ln.fxRate === '1.00000') { ln.fxRate = ''; }
+      rebuildFxDirSel();
+      fxIn.value = fxDisplayVal();
+      showFxControls(true);
+    }
+    recalc();
+    if (progAreaEl) progAreaEl._refresh();
+  }
+
+  const currenciesWithOther = [...currencies, {code: 'Other', name: 'Enter ISO code'}];
+  const curDD = makeCDD(currenciesWithOther, ln.customCurrency ? 'Other' : ln.currency, async code => {
+    if (code === 'Other') {
+      ln.customCurrency = true;
+      ln.currency = '';
+      curDD.style.display = 'none';
+      otherCurWrap.style.display = 'flex';
+      ln.fxRate = ''; fxIn.value = ''; fxIn.readOnly = false;
+      recalc(); if (progAreaEl) progAreaEl._refresh();
+      await showFxModal('Other');
+      otherCurIn.focus();
+    } else {
+      ln.customCurrency = false;
+      ln.currency = code;
+      applyFxCurrency(code);
+      if (code !== baseCur) await showFxModal(code);
+    }
+  });
+  if (ln.customCurrency) curDD.style.display = 'none';
+
+  const otherCurIn = el('input', {className:'kb-input', type:'text', maxlength:'3', placeholder:T('ph-other-cur'),
+    style:{textTransform:'uppercase', letterSpacing:'1px', minWidth:'0', width:'80px'}});
+  if (ln.customCurrency && ln.currency) otherCurIn.value = ln.currency;
+  otherCurIn.addEventListener('input', () => {
+    const val = otherCurIn.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+    otherCurIn.value = val;
+    ln.currency = val;
+    if (val.length === 3) applyFxCurrency(val);
+    else { ln.fxRate = ''; fxIn.value = ''; fxIn.readOnly = false; recalc(); if (progAreaEl) progAreaEl._refresh(); }
+  });
+
+  const cancelOtherBtn = el('button', {type:'button', className:'kb-btn kb-btn--danger', style:{padding:'6px 8px'}}, '×');
+  cancelOtherBtn.addEventListener('click', () => {
+    ln.customCurrency = false; ln.currency = baseCur;
+    otherCurWrap.style.display = 'none'; curDD.style.display = '';
+    curDD._setValue(baseCur); applyFxCurrency(baseCur);
+  });
+
+  const otherCurWrap = el('div', {style:{display: ln.customCurrency ? 'flex' : 'none', gap:'4px', alignItems:'center'}});
+  otherCurWrap.append(otherCurIn, cancelOtherBtn);
+
+  const curWrap = el('div');
+  curWrap.append(curDD, otherCurWrap);
+
+  // Row 1: Date | Vendor | Currency | FX rate
+  const row1 = el('div', {className:'kb-line-section row1'});
+  row1.append(
+    kbField(T('date'), dateIn),
+    kbField(T('vendor'), vendIn),
+    kbField(T('currency'), curWrap),
+    kbField(T('fx-rate'), fxWrap)
+  );
+  blk.appendChild(row1);
+
+  // Description, Receipt, Amount
+  const descIn = el('input', {className:'kb-input', type:'text', value: ln.description, placeholder:T('description')});
+  descIn.addEventListener('input', () => { ln.description = descIn.value; });
+
+  const receiptSel = makeSelect([T('opt-yes'),T('opt-no')], ln.hasReceipt ? T('opt-yes') : T('opt-no'), v => {
+    ln.hasReceipt = v === T('opt-yes');
+    receiptArea.innerHTML = '';
+    receiptArea.appendChild(buildReceiptArea(ln));
+  });
+
+  const amtIn = el('input', {className:'kb-input num', type:'text', value: ln.amount, placeholder:'0.00', style:{minWidth:'0'}});
+  amtIn.addEventListener('input', () => { ln.amount = amtIn.value; recalc(); if (progAreaEl) progAreaEl._refresh(); });
+
+  const row2 = el('div', {className:'kb-line-section row2'});
+  row2.append(
+    kbField(T('description'), descIn),
+    kbField(T('receipt'), receiptSel),
+    kbField(T('amount'), amtIn)
+  );
+  blk.appendChild(row2);
+
+  // Account, Program
+  const acctSel = makeSelect(CFG.accounts || [], ln.account, v => { ln.account = v; }, T('select-account'));
+  progAreaEl = buildProgramArea(ln);
+
+  const row3 = el('div', {className:'kb-line-section row3'});
+  row3.append(
+    kbField(T('account'), acctSel),
+    kbField(T('program'), progAreaEl)
+  );
+  blk.appendChild(row3);
+
+  // Receipt area
+  const receiptArea = el('div');
+  receiptArea.appendChild(buildReceiptArea(ln));
+  blk.appendChild(receiptArea);
+
+  // Remove line
+  const rmBtn = el('button', {className:'kb-btn kb-btn--danger', style:{marginTop:'8px'}, onClick: () => {
+    item.lines = item.lines.filter(l => l.id !== ln.id);
+    blk.remove();
+    recalc();
+  }}, T('remove-line'));
+  blk.appendChild(rmBtn);
+
+  return blk;
+}
+
+function buildReceiptArea(ln) {
+  const area = el('div', {className:'rb-receipt-area'});
+  if (ln.hasReceipt) {
+    ln.receipts.forEach((r, i) => {
+      const row = el('div', {className:'rb-receipt'});
+      row.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 1.5A1.5 1.5 0 0 1 4.5 0h4.7c.4 0 .8.16 1.06.44l2.3 2.3c.28.27.44.66.44 1.06v8.7A1.5 1.5 0 0 1 11.5 16h-7A1.5 1.5 0 0 1 3 14.5zM9 1.5V4h2.5z"/></svg>`;
+      row.appendChild(el('span', {className:'name'}, r.name));
+      const rmBtn = el('button', {className:'rm', type:'button'}, '×');
+      rmBtn.addEventListener('click', () => { ln.receipts.splice(i, 1); area.replaceWith(buildReceiptArea(ln)); saveState(); });
+      row.appendChild(rmBtn);
+      area.appendChild(row);
+    });
+    const fileIn = el('input', {type:'file', accept:'.pdf,.jpg,.jpeg,.png', style:{display:'none'}});
+    fileIn.addEventListener('change', async () => {
+      for (const f of fileIn.files) ln.receipts.push({ id: uid(), name: f.name, type: f.type, data: await f.arrayBuffer() });
+      area.replaceWith(buildReceiptArea(ln));
+      saveState();
+    });
+    const addBtn = el('button', {className:'kb-btn kb-btn--dashed', style:{marginTop:'6px'}, onClick: () => fileIn.click()}, T('add-receipt'));
+    area.append(addBtn, fileIn);
+  } else {
+    const ta = el('textarea', {className:'kb-textarea rb-no-receipt', placeholder:T('ph-no-receipt'), rows:'2'});
+    ta.value = ln.noReceiptExplanation || '';
+    ta.addEventListener('input', () => { ln.noReceiptExplanation = ta.value; });
+    area.appendChild(kbField(T('reason-no-receipt'), ta));
+  }
+  return area;
+}
+
+function buildProgramArea(ln) {
+  const wrapper = el('div');
+  const progOptions = CFG.programs || [];
+
+  function rebuild() {
+    while (wrapper.firstChild) wrapper.removeChild(wrapper.firstChild);
+    const isMulti = ln.programs.length > 1;
+    const amtSpans = [];
+    let totalSpan = null;
+
+    function getBaseAmt() {
+      const amt = parseFloat(ln.amount) || 0;
+      const rate = parseFloat(ln.fxRate) || 1;
+      return rate > 0 ? amt / rate : 0;
+    }
+
+    function updateDerived() {
+      const base = getBaseAmt();
+      amtSpans.forEach((span, i) => {
+        const pct = parseFloat((ln.programs[i] || {}).percent) || 0;
+        span.textContent = `${state.baseCurrency} ${fmtAmt(base * pct / 100)}`;
+      });
+      if (totalSpan) {
+        const sum = ln.programs.reduce((s, pe) => s + (parseFloat(pe.percent) || 0), 0);
+        totalSpan.textContent = sum.toFixed(2) + '%';
+        totalSpan.style.color = sum < 99.995 ? 'var(--warning)' : sum <= 100.005 ? 'var(--success)' : 'var(--danger)';
+      }
+    }
+
+    ln.programs.forEach((pe, pi) => {
+      const progSel = makeSelect(progOptions, pe.program, v => {
+        pe.program = v;
+        otherIn.style.display = v === 'Other' ? '' : 'none';
+      }, T('select-program'));
+      progSel.style.flex = '1';
+
+      const otherIn = el('input', {className:'kb-input', type:'text', value: pe.programOther, placeholder:T('ph-specify-program'),
+        style:{display: pe.program === 'Other' ? '' : 'none', marginTop:'6px'}});
+      otherIn.addEventListener('input', () => { pe.programOther = otherIn.value; });
+
+      if (!isMulti) {
+        const addBtn = el('button', {type:'button', className:'kb-btn kb-btn--dashed', style:{whiteSpace:'nowrap'}}, T('add-program'));
+        addBtn.addEventListener('click', () => { ln.programs.push({program:'', percent:'', programOther:''}); rebuild(); });
+        const row = el('div', {style:{display:'flex', gap:'8px', alignItems:'center'}});
+        row.append(progSel, addBtn);
+        wrapper.append(row, otherIn);
+      } else {
+        const pctIn = el('input', {className:'kb-input num', type:'number', min:'0', max:'100', step:'0.01',
+          value: pe.percent, style:{width:'80px'}});
+        pctIn.addEventListener('input', () => { pe.percent = pctIn.value; updateDerived(); });
+
+        const amtSpan = el('span', {className:'kb-mono', style:{fontSize:'var(--fs-small)', color:'var(--text-muted)', whiteSpace:'nowrap'}});
+        amtSpans.push(amtSpan);
+
+        const rmBtn = el('button', {type:'button', className:'kb-btn kb-btn--danger', style:{padding:'4px 8px'}}, '×');
+        rmBtn.addEventListener('click', () => { ln.programs.splice(pi, 1); rebuild(); });
+
+        const row = el('div', {style:{display:'flex', gap:'8px', alignItems:'center', marginBottom:'6px', flexWrap:'wrap'}});
+        row.append(progSel,
+          el('span', {style:{fontSize:'var(--fs-small)', color:'var(--text-muted)', whiteSpace:'nowrap'}}, '%:'),
+          pctIn,
+          el('span', {style:{fontSize:'var(--fs-small)', color:'var(--text-muted)'}}, '–'),
+          amtSpan, rmBtn);
+        wrapper.append(row, otherIn);
+      }
+    });
+
+    if (isMulti) {
+      totalSpan = el('span', {className:'kb-mono', style:{fontWeight:'600', fontSize:'var(--fs-small)'}});
+      const totalRow = el('div', {style:{display:'flex', justifyContent:'flex-end', alignItems:'center', gap:'6px', marginTop:'4px', marginBottom:'4px'}},
+        [el('span', {style:{fontSize:'var(--fs-small)', color:'var(--text-muted)'}}, T('total')), totalSpan]);
+      wrapper.appendChild(totalRow);
+
+      const addBtn = el('button', {type:'button', className:'kb-btn kb-btn--dashed', style:{marginTop:'4px'}}, T('add-program'));
+      addBtn.addEventListener('click', () => { ln.programs.push({program:'', percent:'', programOther:''}); rebuild(); });
+      wrapper.appendChild(addBtn);
+    }
+
+    updateDerived();
+  }
+
+  wrapper._refresh = rebuild;
+  rebuild();
+  return wrapper;
+}
+
+// ========== VALIDATION ==========
+function validate(checkReceipts = true) {
+  const errs = [];
+  if (!state.staff.trim()) errs.push(T('val-staff'));
+  if (!state.periodFrom || !state.periodTo) errs.push(T('val-period'));
+  if (state.items.length === 0) errs.push(T('val-add-item'));
+  state.items.forEach((item, ii) => {
+    const idx = ii + 1;
+    if (!item.name.trim()) errs.push(T('val-item-name',{n:idx}));
+    if (item.lines.length === 0) errs.push(T('val-item-line',{n:idx}));
+    item.lines.forEach((ln, li) => {
+      if (!ln.date) errs.push(T('val-date',{i:idx,l:li+1}));
+      if (!ln.description.trim()) errs.push(T('val-desc',{i:idx,l:li+1}));
+      if (!ln.vendor.trim()) errs.push(T('val-vendor',{i:idx,l:li+1}));
+      const amt = parseFloat(ln.amount);
+      if (isNaN(amt) || amt <= 0) errs.push(T('val-amount',{i:idx,l:li+1}));
+      if (ln.currency !== state.baseCurrency) {
+        const rate = parseFloat(ln.fxRate);
+        if (isNaN(rate) || rate <= 0) errs.push(T('val-fx',{i:idx,l:li+1}));
+      }
+      if (!ln.account) errs.push(T('val-account',{i:idx,l:li+1}));
+      const progs = ln.programs || [];
+      if (progs.length === 0 || !progs[0].program) {
+        errs.push(T('val-program',{i:idx,l:li+1}));
+      } else {
+        progs.forEach((pe, pi) => {
+          if (!pe.program) errs.push(T('val-program-sel',{i:idx,l:li+1,p:pi+1}));
+          if (pe.program === 'Other' && !pe.programOther.trim()) errs.push(T('val-program-other',{i:idx,l:li+1,p:pi+1}));
+        });
+        if (progs.length > 1) {
+          progs.forEach((pe, pi) => {
+            const pct = parseFloat(pe.percent);
+            if (isNaN(pct) || pct <= 0) errs.push(T('val-percent',{i:idx,l:li+1,p:pi+1}));
+          });
+          const total = progs.reduce((s, pe) => s + (parseFloat(pe.percent) || 0), 0);
+          if (Math.abs(total - 100) > 0.005) errs.push(T('val-percent-total',{i:idx,l:li+1,t:total.toFixed(2)}));
+        }
+      }
+      if (checkReceipts && ln.hasReceipt && ln.receipts.length === 0) errs.push(T('val-receipt',{i:idx,l:li+1,no:T('opt-no')}));
+      if (!ln.hasReceipt && !ln.noReceiptExplanation.trim()) errs.push(T('val-no-receipt',{i:idx,l:li+1}));
+    });
+  });
+  return errs;
+}
+
+// ========== PDF ENGINE ==========
+async function generatePDF() {
+  await pdfLibReady;
+  const { PDFDocument, rgb, StandardFonts } = PDFLib;
+  const doc = await PDFDocument.create();
+  const pageW = CFG['page-size'] === 'letter' ? 612 : 595.28;
+  const pageH = CFG['page-size'] === 'letter' ? 792 : 841.89;
+  const M = { top: 52, bottom: 65, left: 48, right: 48 };
+  const W = pageW - M.left - M.right;
+
+  const fontBody = await doc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const fontMono = await doc.embedFont(StandardFonts.Courier);
+  const sz  = CFG['font-size'] || 10;
+  const szSm = sz - 1;
+  const szXs = Math.max(sz - 2, 7);  // eyebrow labels
+  const szLg = sz + 4;               // section headings, grand total figure
+  const lh  = sz + 5;                // line height
+
+  // ── kBenestad color tokens ────────────────────────────────────────────────
+  const clrAccent       = parseHex(CFG['accent-colour'] || '#2F6FED');
+  const clrText         = rgb(0.078, 0.094, 0.118);    // #14181E
+  const clrTextSoft     = rgb(0.227, 0.263, 0.310);    // #3A434F
+  const clrMuted        = rgb(0.373, 0.412, 0.459);    // #5F6975
+  const clrBorder       = rgb(0.890, 0.918, 0.933);    // #E3E7EE
+  const clrBorderStrong = rgb(0.827, 0.851, 0.886);    // #D3D9E2
+  const clrSurface2     = rgb(0.918, 0.937, 0.973);    // #EAF0F8 icy brand blue-grey
+  const clrWarn         = rgb(0.788, 0.318, 0.000);    // out-of-period date
+
+  const baseCur = state.baseCurrency;
+
+  let logoImage = null;
+  if (CFG.logo === true || CFG.logo === 'yes') logoImage = await loadLogo(doc);
+
+  const pages = [];
+  let pg, y;
+  const receiptRefs = [];
+  let justBroke = false;
+
+  // ── Drawing helpers ───────────────────────────────────────────────────────
+
+  // Eyebrow label: uppercase, bold, muted, szXs
+  function lbl(text, x, yy) {
+    pg.drawText(text.toUpperCase(), { x, y: yy, size: szXs, font: fontBold, color: clrMuted });
+  }
+  // Body value in Helvetica
+  function val(text, x, yy, extra) {
+    pg.drawText(text, { x, y: yy, size: sz, font: fontBody, color: clrText, ...(extra||{}) });
+  }
+  // Mono value (amounts, dates, FX rates) in Courier
+  function mono(text, x, yy, extra) {
+    pg.drawText(text, { x, y: yy, size: sz, font: fontMono, color: clrText, ...(extra||{}) });
+  }
+  // 3pt accent left-stripe for item/section headers
+  function accentStripe(yy) {
+    pg.drawRectangle({ x: M.left, y: yy - 1, width: 3, height: lh + 1, color: clrAccent });
+  }
+
+  // ── Page management ───────────────────────────────────────────────────────
+  function addPage(isFirst) {
+    pg = doc.addPage([pageW, pageH]);
+    pages.push(pg);
+    y = pageH - M.top;
+    justBroke = true;
+    if (!isFirst) drawContHeader();
+  }
+
+  function needSpace(h) {
+    justBroke = false;
+    if (y - h < M.bottom) addPage(false);
+  }
+
+  // Continuation header: light strip with staff + period
+  function drawContHeader() {
+    const cPad = 7;
+    const stripH = 2 * cPad + szXs + 5 + sz;
+    pg.drawRectangle({ x: 0, y: y - stripH, width: pageW, height: stripH, color: clrSurface2 });
+    pg.drawLine({ start:{x:0, y}, end:{x:pageW, y}, thickness:0.5, color:clrBorder });
+    pg.drawLine({ start:{x:0, y:y-stripH}, end:{x:pageW, y:y-stripH}, thickness:0.5, color:clrBorder });
+
+    const labY = y - Math.round(cPad + szXs * 0.72);
+    const valY = labY - szXs - 5;
+    lbl(T('staff'), M.left, labY);
+    lbl(T('period'), M.left + W * 0.45, labY);
+    pg.drawText(state.staff, { x:M.left, y:valY, size:sz, font:fontBold, color:clrText });
+    val(`${state.periodFrom} to ${state.periodTo}`, M.left + W * 0.45, valY);
+
+    y -= stripH + 12;
+  }
+
+  // ── Page 1 ────────────────────────────────────────────────────────────────
+  addPage(true);
+
+  // Header: org name left | REIMBURSEMENT right  (timesheet style)
+  const hdrTopY = y;
+  const nowD = new Date();
+
+  const hdrNameSize = szLg;  // org name and title same size
+  const hdrNameY = hdrTopY - Math.round(hdrNameSize * 0.28);  // cap top near hdrTopY
+
+  if (logoImage) {
+    const maxWLogo = (CFG['logo-maxwidth'] || 4) * 28.3465;
+    const scale = Math.min(maxWLogo / logoImage.width, hdrNameSize * 1.6 / logoImage.height, 1);
+    const lw = logoImage.width * scale, lhImg = logoImage.height * scale;
+    pg.drawImage(logoImage, { x: M.left, y: hdrTopY - lhImg, width: lw, height: lhImg });
+  } else {
+    pg.drawText(CFG.organization || '', { x: M.left, y: hdrNameY, size: hdrNameSize, font: fontBold, color: clrText });
+  }
+  const hdrSubtY = hdrNameY - hdrNameSize - 5;
+  pg.drawText(T('subtitle'), { x: M.left, y: hdrSubtY, size: szSm, font: fontBody, color: clrMuted });
+
+  const titleStr = T('pdf-title');
+  const titleW = fontBold.widthOfTextAtSize(titleStr, hdrNameSize);
+  pg.drawText(titleStr, { x: M.left + W - titleW, y: hdrNameY, size: hdrNameSize, font: fontBold, color: clrText });
+
+  const claimDate = `Claim · ${nowD.getDate()} ${MONTHS_SHORT[nowD.getMonth()]} ${nowD.getFullYear()}`;
+  const claimDateW = fontBody.widthOfTextAtSize(claimDate, szSm);
+  pg.drawText(claimDate, { x: M.left + W - claimDateW, y: hdrSubtY, size: szSm, font: fontBody, color: clrMuted });
+
+  y = hdrSubtY - szSm - 12;
+
+  // Thick accent divider below header
+  pg.drawLine({ start:{x:M.left, y}, end:{x:M.left+W, y}, thickness:2.5, color:clrAccent });
+  y -= 16;
+
+  // Intro text
+  if (CFG.intro) {
+    const introLines = wrapText(CFG.intro, fontBody, sz, W);
+    introLines.forEach(line => { pg.drawText(line, {x:M.left, y, size:sz, font:fontBody, color:clrMuted}); y -= lh; });
+    y -= 6;
+  }
+
+  // Staff / Period / Currency info block — equal visual padding top and bottom
+  const infoPad = 7;
+  const infoH = 2 * infoPad + szXs + 5 + sz;
+  pg.drawRectangle({ x: M.left - 8, y: y - infoH, width: W + 16, height: infoH, color: clrSurface2 });
+  pg.drawLine({ start:{x:M.left-8, y}, end:{x:M.left+W+8, y}, thickness:0.5, color:clrBorder });
+  pg.drawLine({ start:{x:M.left-8, y:y-infoH}, end:{x:M.left+W+8, y:y-infoH}, thickness:0.5, color:clrBorder });
+
+  const iLabY = y - Math.round(infoPad + szXs * 0.72);
+  const iValY = iLabY - szXs - 5;
+  const iC2 = W * 0.45, iC3 = W * 0.78;
+
+  lbl(T('staff'),    M.left,       iLabY);
+  lbl(T('period'),   M.left + iC2, iLabY);
+  lbl(T('currency'), M.left + iC3, iLabY);
+
+  pg.drawText(state.staff, { x: M.left, y: iValY, size: sz, font: fontBold, color: clrText });
+  val(`${state.periodFrom} to ${state.periodTo}`, M.left + iC2, iValY);
+  pg.drawText(baseCur, { x: M.left + iC3, y: iValY, size: sz, font: fontBold, color: clrAccent });
+
+  y -= infoH + 20;
+
+  // ── Items ─────────────────────────────────────────────────────────────────
+  state.items.forEach(item => {
+    needSpace(lh * 7);
+
+    // Section header strip — equal visual padding, accent left bar
+    const secH = sz + 16;
+    const secTextY = Math.round(y - secH / 2 - sz * 0.36);
+    pg.drawRectangle({ x: M.left, y: y - secH, width: W, height: secH, color: clrSurface2 });
+    pg.drawLine({ start:{x:M.left, y}, end:{x:M.left+W, y}, thickness:0.5, color:clrBorder });
+    pg.drawLine({ start:{x:M.left, y:y-secH}, end:{x:M.left+W, y:y-secH}, thickness:0.5, color:clrBorder });
+    pg.drawRectangle({ x: M.left, y: y - secH, width: 3, height: secH, color: clrAccent });
+    const itemIdx = state.items.indexOf(item) + 1;
+    const headingTxt = `${T('item')} ${itemIdx}` + (item.name ? `  ·  ${item.name}` : '');
+    pg.drawText(headingTxt, { x: M.left + 10, y: secTextY, size: sz, font: fontBold, color: clrTextSoft });
+    const subStr = `${baseCur} ${fmtAmt(item._subtotal)}`;
+    const subW = fontBold.widthOfTextAtSize(subStr, sz);
+    pg.drawText(subStr, { x: M.left + W - subW, y: secTextY, size: sz, font: fontBold, color: clrAccent });
+    y -= secH + 14;
+
+    // Lines
+    item.lines.forEach((ln, li) => {
+      needSpace(lh * 9);
+      if (li > 0 && !justBroke) {
+        y -= 8;
+        pg.drawLine({ start:{x:M.left, y}, end:{x:M.left+W, y}, thickness:0.3, color:clrBorder });
+        y -= 12;
+      }
+
+      const c1=0, c2=W*0.22, c3=W*0.64;
+
+      // Row 1 — Date | Vendor | Currency | FX rate
+      lbl(T('date'),     M.left + c1, y);
+      lbl(T('vendor'),   M.left + c2, y);
+      lbl(T('currency'), M.left + c3, y);
+      const fxLblStr = T('fx-rate').toUpperCase();
+      pg.drawText(fxLblStr, { x: M.left + W - fontBold.widthOfTextAtSize(fxLblStr, szXs), y,
+        size: szXs, font: fontBold, color: clrMuted });
+      y -= szXs + 6;
+
+      const dateInPeriod = isDateInPeriod(ln.date);
+      val((ln.date || '–') + (dateInPeriod ? '' : ' (!)'), M.left + c1, y,
+        { color: dateInPeriod ? clrText : clrWarn });
+      val(truncate(ln.vendor, fontBody, sz, (c3 - c2) - 8), M.left + c2, y);
+      val(ln.currency || '–', M.left + c3, y);
+      const fxStr = ln.currency === baseCur ? '–' : parseFloat(ln.fxRate).toFixed(5);
+      const fxW = fontBody.widthOfTextAtSize(fxStr, sz);
+      val(fxStr, M.left + W - fxW, y);
+      y -= lh + 10;
+
+      // Row 2 — Description | Receipt | Amount
+      lbl(T('description'), M.left, y);
+      lbl(T('receipt'), M.left + c3, y);
+      const amtLblStr = T('amount').toUpperCase();
+      pg.drawText(amtLblStr, { x: M.left + W - fontBold.widthOfTextAtSize(amtLblStr, szXs), y,
+        size: szXs, font: fontBold, color: clrMuted });
+      y -= szXs + 6;
+
+      val(truncate(ln.description, fontBody, sz, c3 - 8), M.left, y);
+      val(ln.hasReceipt ? T('opt-yes') : T('opt-no'), M.left + c3, y);
+      const amtStr = `${ln.currency} ${fmtAmt(ln.amount)}`;
+      const amtW = fontBody.widthOfTextAtSize(amtStr, sz);
+      val(amtStr, M.left + W - amtW, y);
+      y -= lh + 10;
+
+      // Row 3 — Account | Program
+      lbl(T('account'), M.left, y);
+      lbl(T('program'), M.left + W * 0.5, y);
+      y -= szXs + 6;
+
+      val(truncate(ln.account || '–', fontBody, sz, W * 0.5 - 8), M.left, y);
+      const progs = ln.programs || [];
+      if (progs.length <= 1) {
+        const pe = progs[0] || {};
+        const progStr = pe.program === 'Other' ? `Other: ${pe.programOther}` : (pe.program || '–');
+        val(truncate(progStr, fontBody, sz, W * 0.5 - 8), M.left + W * 0.5, y);
+        y -= lh + 4;
+      } else {
+        const lineBaseAmt = (() => { const a=parseFloat(ln.amount)||0, r=parseFloat(ln.fxRate)||1; return r>0?a/r:0; })();
+        progs.forEach((pe, pi) => {
+          if (pi > 0) needSpace(lh);
+          const progStr = pe.program === 'Other' ? `Other: ${pe.programOther}` : (pe.program || '–');
+          const pct = parseFloat(pe.percent) || 0;
+          const progAmt = lineBaseAmt * pct / 100;
+          const suffix = `${pct.toFixed(2)}% · ${baseCur} ${fmtAmt(progAmt)}`;
+          val(truncate(progStr, fontBody, sz, W * 0.42 - 8), M.left + W * 0.5, y);
+          const sfxW = fontBody.widthOfTextAtSize(suffix, szSm);
+          pg.drawText(suffix, { x: M.left + W - sfxW, y, size: szSm, font: fontBody, color: clrMuted });
+          y -= lh;
+        });
+      }
+
+      // Receipt page reference (filled in after receipt pages are built)
+      if (ln.hasReceipt && ln.receipts.length > 0) {
+        ln.receipts.forEach((r, ri) => {
+          const key = `${ln.id}-${ri}`;
+          receiptRefs.push({ pageIdx: pages.length - 1, x: M.left + W * 0.55, y, key });
+          y -= lh;
+        });
+      } else if (!ln.hasReceipt) {
+        needSpace(lh * 2);
+        lbl(T('reason-no-receipt'), M.left, y);
+        y -= szXs + 4;
+        const explLines = wrapText(ln.noReceiptExplanation || '–', fontBody, sz, W);
+        explLines.forEach(line => { needSpace(lh); val(line, M.left, y); y -= lh; });
+      }
+
+      y -= 2;
+    });
+
+    y -= 10;
+  });
+
+  // Grand total
+  needSpace(lh * 3 + 6);
+  y -= 4;
+  pg.drawLine({ start:{x:M.left, y}, end:{x:M.left+W, y}, thickness:1.5, color:clrBorderStrong });
+  y -= lh;
+
+  pg.drawText(T('pdf-total-claim'), { x: M.left, y, size: sz, font: fontBold, color: clrTextSoft });
+  const gtStr = `${baseCur} ${fmtAmt(state._grandTotal)}`;
+  const gtW = fontBold.widthOfTextAtSize(gtStr, szLg);
+  pg.drawText(gtStr, { x: M.left + W - gtW, y: y - (szLg - sz) / 2, size: szLg, font: fontBold, color: clrAccent });
+
+  // ── Receipt pages ─────────────────────────────────────────────────────────
+  const formPageCount = pages.length;
+  const receiptPageMap = {};
+
+  for (const item of state.items) {
+    for (const ln of item.lines) {
+      if (!ln.hasReceipt) continue;
+      for (let ri = 0; ri < ln.receipts.length; ri++) {
+        const r = ln.receipts[ri];
+        const key = `${ln.id}-${ri}`;
+        const startPage = pages.length + 1;
+
+        if (r.type === 'application/pdf') {
+          try {
+            const srcDoc = await PDFDocument.load(r.data);
+            const srcPages = await doc.copyPages(srcDoc, srcDoc.getPageIndices());
+            srcPages.forEach(p => { doc.addPage(p); pages.push(p); });
+          } catch (e) {
+            const ep = doc.addPage([pageW, pageH]);
+            pages.push(ep);
+            ep.drawText(`Could not embed: ${r.name}`, {x:M.left, y:pageH-M.top, size:sz, font:fontBody, color:rgb(0.8,0,0)});
+            ep.drawText(String(e.message || e), {x:M.left, y:pageH-M.top-lh, size:szSm, font:fontBody, color:clrMuted});
+          }
+        } else {
+          const rp = doc.addPage([pageW, pageH]);
+          pages.push(rp);
+          try {
+            let img;
+            if (r.type === 'image/png') img = await doc.embedPng(r.data);
+            else img = await doc.embedJpg(r.data);
+            const maxW2 = pageW - M.left - M.right, maxH2 = pageH - M.top - M.bottom;
+            const sc = Math.min(maxW2 / img.width, maxH2 / img.height, 1);
+            const iw = img.width * sc, ih = img.height * sc;
+            rp.drawImage(img, { x: M.left + (maxW2-iw)/2, y: M.bottom + (maxH2-ih)/2, width:iw, height:ih });
+          } catch (e) {
+            rp.drawText(`Could not embed: ${r.name}`, {x:M.left, y:pageH-M.top, size:sz, font:fontBody, color:rgb(0.8,0,0)});
+          }
+        }
+        receiptPageMap[key] = startPage;
+      }
+    }
+  }
+
+  // ── Back-fill receipt page references ─────────────────────────────────────
+  receiptRefs.forEach(ref => {
+    const pageNum = receiptPageMap[ref.key];
+    if (pageNum != null)
+      pages[ref.pageIdx].drawText(T('pdf-see-receipt',{n:pageNum}),
+        { x:ref.x, y:ref.y, size:szSm, font:fontBody, color:clrMuted });
+  });
+
+  // ── Footers on every page ─────────────────────────────────────────────────
+  const totalPages = pages.length;
+  const nowTs = new Date();
+  const printed = `${nowTs.getFullYear()}-${String(nowTs.getMonth()+1).padStart(2,'0')}-${String(nowTs.getDate()).padStart(2,'0')} ${String(nowTs.getHours()).padStart(2,'0')}:${String(nowTs.getMinutes()).padStart(2,'0')}`;
+
+  pages.forEach((p, i) => {
+    const fy = M.bottom - 30;
+    p.drawLine({ start:{x:M.left, y:fy+18}, end:{x:M.left+W, y:fy+18}, thickness:0.5, color:clrBorder });
+    p.drawText(T('pdf-footer'), { x:M.left, y:fy, size:szXs, font:fontBody, color:clrMuted });
+    p.drawText(state.staff, { x:M.left, y:fy-lh+2, size:szXs, font:fontBody, color:clrMuted });
+    const pgStr = T('pdf-page',{i:i+1,n:totalPages});
+    const pgW2 = fontBody.widthOfTextAtSize(pgStr, szXs);
+    p.drawText(pgStr, { x:M.left+W-pgW2, y:fy, size:szXs, font:fontBody, color:clrMuted });
+    const prStr = `${T('pdf-printed')}: ${printed}`;
+    const prW = fontBody.widthOfTextAtSize(prStr, szXs);
+    p.drawText(prStr, { x:M.left+W-prW, y:fy-lh+2, size:szXs, font:fontBody, color:clrMuted });
+  });
+
+  // ── Save and download ──────────────────────────────────────────────────────
+  const pdfBytes = await doc.save();
+  const blob = new Blob([pdfBytes], {type:'application/pdf'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const staff = kbSafeFilename(state.staff) || 'staff';
+  a.download = `${staff}_${state.periodFrom}_Reimbursement.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// PDF helpers
+function parseHex(hex) {
+  const c = kbHexRgb(hex) || kbHexRgb('#2F6FED');
+  return PDFLib.rgb(c[0]/255, c[1]/255, c[2]/255);
+}
+function wrapText(text, font, size, maxW) {
+  const words = text.split(/\s+/);
+  const lines = [];
+  let cur = '';
+  words.forEach(w => {
+    const test = cur ? cur + ' ' + w : w;
+    if (font.widthOfTextAtSize(test, size) > maxW) { if (cur) lines.push(cur); cur = w; } else cur = test;
+  });
+  if (cur) lines.push(cur);
+  return lines.length ? lines : [''];
+}
+function truncate(text, font, size, maxW) {
+  if (!text) return '–';
+  if (font.widthOfTextAtSize(text, size) <= maxW) return text;
+  let t = text;
+  while (t.length > 1 && font.widthOfTextAtSize(t + '…', size) > maxW) t = t.slice(0, -1);
+  return t + '…';
+}
+async function loadLogo(doc) {
+  for (const ext of ['png','jpg']) {
+    try {
+      const res = await fetch(`../assets/logo.${ext}`);
+      if (!res.ok) continue;
+      const buf = await res.arrayBuffer();
+      return ext === 'png' ? await doc.embedPng(buf) : await doc.embedJpg(buf);
+    } catch(e) { continue; }
+  }
+  return null;
+}
+
+// ========== GENERATE HANDLER ==========
+async function onGenerate() {
+  const valBox = $('#val-box');
+  valBox.innerHTML = '';
+  const errs = validate();
+  if (errs.length) {
+    const note = el('div', {className:'kb-note kb-note--error'});
+    note.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>`;
+    const txt = el('div');
+    txt.innerHTML = '<strong>'+kbEsc(T('val-fix'))+'</strong><br>' + errs.map(kbEsc).join('<br>');
+    note.appendChild(txt);
+    valBox.appendChild(note);
+    valBox.scrollIntoView({behavior:'smooth'});
+    return;
+  }
+  const btn = $('#gen-btn');
+  btn.disabled = true;
+  try {
+    renderLang = outputLang();
+    await generatePDF();
+  } catch (e) {
+    kbAlert({ title: 'PDF', message: 'Error generating PDF: ' + e.message });
+    console.error(e);
+  } finally {
+    renderLang = null;
+  }
+  btn.disabled = false;
+}
+
+// ========== NEW FORM HANDLER ==========
+async function onNewForm() {
+  const confirmed = await showConfirmModal(T('msg-new-form'));
+  if (!confirmed) return;
+  try { localStorage.removeItem('reimb-state'); } catch(e) {}
+  if (db) { const keys = await dbAllKeys(); if (Array.isArray(keys)) for (const k of keys) await dbDel(k); }
+  const p = defaultPeriod();
+  state.periodFrom = p.from; state.periodTo = p.to;
+  state.baseCurrency = CFG['currency-base'];
+  state.fxRateMemory = {}; state.items = [newItem()]; state._grandTotal = 0;
+  render();
+}
+
+// ========== SAVE HANDLER ==========
+async function onSave() {
+  const valBox = $('#val-box');
+  valBox.innerHTML = '';
+  const errs = validate(false);
+  if (errs.length) {
+    const note = el('div', {className:'kb-note kb-note--error'});
+    note.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>`;
+    const txt = el('div');
+    txt.innerHTML = '<strong>'+kbEsc(T('val-fix'))+'</strong><br>' + errs.map(kbEsc).join('<br>');
+    note.appendChild(txt);
+    valBox.appendChild(note);
+    valBox.scrollIntoView({behavior:'smooth'});
+    return;
+  }
+  await saveState();
+  await showWarningModal(T('msg-saved'));
+}
+
+// ========== INIT ==========
+async function init() {
+  try {
+    await loadConfig();
+    NAV = await loadNavItems('../config.yml');   // root config's apps/links, for the nav dropdown
+    initFontScale();
+    state.lang = localStorage.getItem('reimb-lang') || CFG['default-code'] || 'en';
+    applyLang(state.lang);
+    await initDB();
+    state.baseCurrency = CFG['currency-base'];
+    const p = defaultPeriod();
+    state.periodFrom = p.from; state.periodTo = p.to;
+    const hasState = await loadState();
+    if (!hasState || state.items.length === 0) state.items.push(newItem());
+    render();
+    document.addEventListener('input', scheduleAutoSave);
+    document.addEventListener('change', scheduleAutoSave);
+    const canSaveReceipts = !!db;
+    let entryMsg = T('msg-entry');
+    if (!canSaveReceipts) entryMsg += '\n\n' + T('msg-entry-noreceipt');
+    await showWarningModal(entryMsg);
+  } catch (e) {
+    $('#app').innerHTML = `<div class="kb-wrap"><div class="kb-note kb-note--error"><span>Failed to load: ${kbEsc(e.message)}</span></div></div>`;
+    console.error(e);
+  }
+}
+
+const aboutLink = document.getElementById('about-link');
+if (aboutLink) aboutLink.addEventListener('click', e => { e.preventDefault(); showAboutModal(); });
+
+init();
+})();
+</script>
+</body>
+</html>

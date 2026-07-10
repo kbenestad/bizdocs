@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════════════════
+  contactmanager — a bizdocs family app (see ../CLAUDE.md, ../DESIGN.md).
+
+  This ONE file is two things:
+    • the EDITOR (Kristian / assistants): add/edit/delete contacts, then export.
+    • the ROUTER staff land on: on boot, if a contactbook.html exists alongside
+      this file and the URL has no ?edit, it redirects there (the viewer).
+
+  It exports the same contact data as two viewer files (see buildViewerHTML):
+    • standalone   — shared CSS/JS inlined, for email/offline use.
+    • contactbook.html (server) — links ../assets/*, for deploying on the server.
+  Both variants offer VCF and CSV downloads. The viewer core is assembled ONCE
+  (viewerRuntime + VIEWER_CSS) for both. The editor also accepts CSV (and the
+  legacy contactbook.html JSON) as an import format — see pickFileToImport.
+  ════════════════════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.bunny.net; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="format-detection" content="telephone=no">
+<title>Contact Manager</title>
+
+<!-- Favicons / PWA -->
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon-32x32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="assets/favicon-16x16.png" sizes="16x16" type="image/png">
+<link rel="shortcut icon" href="assets/favicon.ico">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="assets/site.webmanifest">
+<meta name="theme-color" content="#2f6fed">
+
+<!-- Restore persisted theme BEFORE first paint (avoids a flash). Keep this. -->
+<script>
+  (function(){var t=localStorage.getItem('kb-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
+</script>
+
+<!-- CDN library: js-yaml (config). -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"
+        integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
+        crossorigin="anonymous"></script>
+
+<!-- Shared design + runtime. app.js MUST load before this app's inline <script>. -->
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/ui.css">
+<script src="../assets/app.js"></script>
+
+<!-- App-specific styles ONLY (the shared look lives in ../assets/*.css). -->
+<style>
+/* ── Editor: contact list ──────────────────────────────────────────────────── */
+.cm-status { margin-bottom: 14px; }
+.cm-count { font-size: var(--fs-small); color: var(--text-muted); margin: 2px 2px 10px; }
+.cm-list { display: flex; flex-direction: column; gap: 0; }
+.cm-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 6px; border-bottom: 1px solid var(--border);
+}
+.cm-row:last-child { border-bottom: 0; }
+.cm-row__main { flex: 1; min-width: 0; }
+.cm-row__name { font-weight: 700; color: var(--text); }
+.cm-row__sub { font-size: var(--fs-small); color: var(--text-muted); margin-top: 2px; }
+.cm-row__sub span + span::before { content: "·"; margin: 0 6px; color: var(--border-strong); }
+.cm-row__chip { flex-shrink: 0; }
+.cm-row__chips { display: flex; flex-wrap: wrap; gap: 4px; flex-shrink: 0; justify-content: flex-end; max-width: 45%; }
+.cm-row__actions { display: flex; gap: 6px; flex-shrink: 0; }
+.cm-empty { padding: 28px 10px; text-align: center; color: var(--text-muted); font-size: var(--fs-small); }
+.cm-export-hint { font-size: var(--fs-small); color: var(--text-muted); margin-bottom: 14px; line-height: 1.6; }
+.cm-form .kb-field + .kb-field { margin-top: 0; }
+.cm-nick { font-weight: 400; color: var(--text-muted); }
+
+/* ── Editor: nickname + bigger address + repeatable phones table ───────────── */
+.cm-field--address .kb-textarea { min-height: 96px; }
+.cm-phones { display: flex; flex-direction: column; gap: 8px; }
+.cm-phone-row { display: flex; gap: 8px; align-items: center; }
+.cm-phone-row .kb-select { flex: 0 0 120px; }
+.cm-phone-row .kb-input { flex: 1; min-width: 0; }
+.cm-phone-rm { flex: 0 0 auto; line-height: 1; }
+.cm-phone-add { align-self: flex-start; margin-top: 8px; }
+
+/* ── Phone-width fallback (shared chrome has no <480px breakpoint) ──────────── */
+@media (max-width: 480px) {
+  .kb-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .kb-doctitle { text-align: left; }
+  .cm-row { flex-wrap: wrap; }
+  .cm-row__actions { width: 100%; }
+}
+</style>
+</head>
+<body>
+<div id="app"><p class="kb-loading">Loading configuration…</p></div>
+
+<script>
+(async function () {
+'use strict';
+/* IIFE — top-level functions here are NOT globals. Helpers from app.js
+ * ($, el, kbModal, lookupString, buildLangTable, applyAccent, …) are visible. */
+
+let CFG;                 // parsed config.yml (editor side)
+let VERSION_INFO = null; // version.json (written by the release workflow), or null before the first tag
+let NAV = { apps: [], links: [] };  // root config's apps/links, for the nav dropdown
+let lang = 'en';         // active editor UI language
+let contacts = [];       // working contact list (persisted as a draft, see saveDraft)
+let statusKey = null;    // one-shot status note key (loaded / empty / imported)
+let statusVars = null;
+
+// ── i18n (editor UI) ─────────────────────────────────────────────────────────
+function S(key, vars) {
+  return lookupString(CFG['ui-strings'], key, lang, CFG['default-code'], vars);
+}
+
+function normaliseConfig() {
+  const { table, languages, defaultCode } = buildLangTable(CFG.localisation);
+  CFG['default-code'] = defaultCode;
+  CFG.languages = languages;
+  CFG['ui-strings'] = table;
+}
+
+function applyLang(lc) {
+  lang = lc;
+  const loc = CFG.localisation || {};
+  const a = (loc[lc] && loc[lc].about) || (loc[CFG['default-code']] && loc[CFG['default-code']].about) || {};
+  CFG['about-title']   = a.title   || 'About';
+  CFG['about-content'] = a.content || '';
+  CFG['about-button']  = a.button  || 'Close';
+}
+
+function showAboutModal() {
+  return kbAbout({
+    title: CFG['about-title'],
+    contentMD: applyVersionTokens(CFG['about-content'], VERSION_INFO),
+    closeLabel: CFG['about-button'],
+  });
+}
+
+// ── Draft persistence ────────────────────────────────────────────────────────
+// The editor has no backend: without this, a reload throws away every
+// unexported edit. The working list is mirrored to localStorage on each
+// mutation and restored (in preference to a deployed contactbook.html) at boot.
+const DRAFT_KEY = 'contactmanager-contacts';
+function saveDraft() {
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(contacts)); } catch (e) {}
+}
+function loadDraft() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(DRAFT_KEY));
+    return Array.isArray(arr) && arr.length ? arr : null;
+  } catch (e) { return null; }
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function render() {
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  const wrap = el('div', { className: 'kb-wrap' });
+
+  wrap.appendChild(buildToolbar());
+  wrap.appendChild(buildHeader());
+  if (statusKey) {
+    const note = el('div', { className: 'kb-note kb-note--info cm-status' });
+    note.append(el('span', null, '•'), el('div', null, S(statusKey, statusVars)));
+    wrap.appendChild(note);
+  }
+  wrap.appendChild(buildContactsCard());
+  wrap.appendChild(buildExportCard());
+  wrap.appendChild(buildFooter());
+
+  app.appendChild(wrap);
+  updateThemeIcon();
+}
+
+function buildToolbar() {
+  const toolbar = el('div', { className: 'kb-toolbar' });
+  const { seg: sizeSeg, label: szLabel } = makeSizeControl();
+  toolbar.append(makeNavMenu(NAV), el('div', { className: 'spacer' }), sizeSeg, szLabel, makeThemeButton(), makeAboutButton(showAboutModal));
+  const langSel = makeLangSelect(CFG.languages, lang, value => {
+    applyLang(value);
+    localStorage.setItem('contactmanager-lang', value);
+    render();
+  });
+  if (langSel) toolbar.appendChild(langSel);
+  return toolbar;
+}
+
+function buildHeader() {
+  const header = el('header', { className: 'kb-header' });
+  const brand = el('div', { className: 'kb-brand' });
+  const tile = el('span', { className: 'logo' });
+  if (CFG.logo === 'yes' || CFG.logo === true) {
+    const img = el('img', { src: '../assets/logo.png', alt: CFG.organization || '' });
+    img.onerror = () => { img.src = '../assets/logo.jpg'; img.onerror = () => { tile.innerHTML = KB_BRAND_SVG; }; };
+    tile.appendChild(img);
+  } else { tile.innerHTML = KB_BRAND_SVG; }
+  const org = el('span', { className: 'org' });
+  org.appendChild(document.createTextNode(CFG.organization || 'contactmanager'));
+  const small = el('small'); small.textContent = CFG.tagline || S('subtitle');
+  org.appendChild(small);
+  brand.append(tile, org);
+
+  const title = el('div', { className: 'kb-doctitle' });
+  title.appendChild(el('h1', null, S('doc-title')));
+  header.append(brand, title);
+  return header;
+}
+
+function buildContactsCard() {
+  const card = el('div', { className: 'kb-card' });
+  const titleRow = el('div', { className: 'kb-card__title' }, S('contacts-title'));
+  titleRow.appendChild(el('span', { className: 'count' }, S('count-n', { n: contacts.length })));
+  card.appendChild(titleRow);
+
+  if (!contacts.length) {
+    card.appendChild(el('div', { className: 'cm-empty' }, S('no-contacts')));
+  } else {
+    const list = el('div', { className: 'cm-list' });
+    contacts.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '')).forEach(c => {
+      const row = el('div', { className: 'cm-row' });
+      const main = el('div', { className: 'cm-row__main' });
+      const nameNode = el('div', { className: 'cm-row__name' });
+      nameNode.appendChild(document.createTextNode(c.name || '—'));
+      if (c.nickname) nameNode.appendChild(el('span', { className: 'cm-nick' }, ' “' + c.nickname + '”'));
+      main.append(
+        nameNode,
+        el('div', { className: 'cm-row__sub' }, [
+          c.organisation ? el('span', null, c.organisation) : null,
+          c.role ? el('span', null, c.role) : null,
+        ].filter(Boolean))
+      );
+      row.append(main);
+      const cats = contactCategories(c);
+      if (cats.length) {
+        const chips = el('span', { className: 'cm-row__chips' });
+        cats.forEach(cat => chips.appendChild(el('span', { className: 'kb-chip' }, cat)));
+        row.append(chips);
+      }
+      const actions = el('div', { className: 'cm-row__actions' });
+      actions.append(
+        el('button', { className: 'kb-btn kb-btn--soft kb-btn--sm', onClick: () => openContactForm(c) }, S('edit-contact')),
+        el('button', { className: 'kb-btn kb-btn--danger kb-btn--sm', onClick: () => removeContact(c) }, S('delete-contact'))
+      );
+      row.append(actions);
+      list.appendChild(row);
+    });
+    card.appendChild(list);
+  }
+
+  const actions = el('div', { className: 'kb-actions' });
+  actions.append(
+    el('button', { className: 'kb-btn kb-btn--primary', onClick: () => openContactForm(null) }, S('add-contact')),
+    el('button', { className: 'kb-btn kb-btn--ghost', onClick: pickFileToImport }, S('upload-existing'))
+  );
+  card.appendChild(actions);
+  return card;
+}
+
+function buildExportCard() {
+  const card = el('div', { className: 'kb-card' });
+  card.appendChild(el('div', { className: 'kb-card__title' }, S('export-title')));
+  card.appendChild(el('div', { className: 'cm-export-hint' }, S('export-hint')));
+  const actions = el('div', { className: 'kb-actions' });
+  actions.append(
+    el('button', { className: 'kb-btn kb-btn--ghost', onClick: () => downloadViewer({ inline: true }) }, S('download-standalone')),
+    el('button', { className: 'kb-btn kb-btn--ghost', onClick: () => downloadFile(contactsToCSV(contacts), 'contacts.csv', 'text/csv') }, S('download-csv')),
+    el('button', { className: 'kb-btn kb-btn--primary', onClick: () => downloadViewer({ inline: false }) }, S('download-server'))
+  );
+  card.appendChild(actions);
+  return card;
+}
+
+function buildFooter() {
+  const sep = () => el('span', { className: 'sep' }, '·');
+  const footer = el('footer', { className: 'kb-footer' });
+  const mark = el('span', { className: 'kb-mark' }); mark.innerHTML = KB_FOOTER_MARK_SVG + 'kBenestad';
+  footer.append(
+    mark,
+    sep(), el('span', null, '© 2026 Kristian Benestad'),
+    sep(), el('a', { href: 'https://github.com/kbenestad/bizdocs', target: '_blank', rel: 'noopener' }, 'kbenestad/bizdocs'),
+    sep(), el('button', { type: 'button', onClick: showAboutModal }, CFG['about-title'] || 'About')
+  );
+  const marker = buildVersionMarker(VERSION_INFO);
+  if (marker) footer.appendChild(marker);
+  return footer;
+}
+
+// ── Phones (several per contact, table-style in the form) ────────────────────
+const PHONE_TYPES = ['mobile', 'office', 'home', 'fax', 'other'];
+// Normalise a contact's phones to [{type, value}], tolerating the legacy single
+// `phone` string baked into earlier exports.
+function contactPhones(c) {
+  if (Array.isArray(c.phones)) return c.phones.filter(p => p && (p.value || '').trim());
+  if (c.phone) return [{ type: '', value: c.phone }];
+  return [];
+}
+
+// A contact's `category` is a comma-separated string; split it into trimmed,
+// non-empty category names (so a contact can belong to several categories).
+function contactCategories(c) {
+  return String(c.category || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
+function downloadFile(data, filename, mime) {
+  const url = URL.createObjectURL(new Blob([data], { type: mime }));
+  const a = el('a', { href: url, download: filename });
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// ── Add / edit / delete ──────────────────────────────────────────────────────
+// Single-value fields, in form order. Phones sit between role and email and are
+// handled separately (see buildPhonesSection).
+const FIELDS = [
+  ['name', 'field-name', 'input', 'ph-name'],
+  ['nickname', 'field-nickname', 'input', 'ph-nickname'],
+  ['organisation', 'field-organisation', 'input'],
+  ['role', 'field-role', 'input'],
+  ['email', 'field-email', 'input'],
+  ['address', 'field-address', 'textarea'],
+  ['category', 'field-category', 'input', 'ph-category'],
+  ['notes', 'field-notes', 'textarea'],
+];
+const TEXT_KEYS = FIELDS.map(f => f[0]);
+
+// A repeatable [type · number · remove] table; returns the field with a
+// _collect() that reads back the non-empty rows as [{type, value}].
+function buildPhonesSection(data) {
+  const field = el('div', { className: 'kb-field' });
+  field.appendChild(el('span', { className: 'kb-label' }, S('field-phones')));
+  const table = el('div', { className: 'cm-phones' });
+  const addRow = (p) => {
+    const row = el('div', { className: 'cm-phone-row' });
+    const sel = el('select', { className: 'kb-select' });
+    PHONE_TYPES.forEach(t => {
+      const o = el('option', { value: t }, S('phone-type-' + t));
+      if (t === p.type) o.selected = true;
+      sel.appendChild(o);
+    });
+    const input = el('input', { className: 'kb-input', placeholder: S('phone-number'), value: p.value || '' });
+    const rm = el('button', { type: 'button', className: 'kb-btn kb-btn--soft kb-btn--sm cm-phone-rm', 'aria-label': S('remove'), onClick: () => row.remove() }, '×');
+    row.append(sel, input, rm);
+    row._get = () => ({ type: sel.value, value: input.value.trim() });
+    table.appendChild(row);
+  };
+  const existing = contactPhones(data).map(p => ({ type: p.type || 'mobile', value: p.value }));
+  (existing.length ? existing : [{ type: 'mobile', value: '' }]).forEach(addRow);
+  field.appendChild(table);
+  field.appendChild(el('button', { type: 'button', className: 'kb-btn kb-btn--ghost kb-btn--sm cm-phone-add', onClick: () => addRow({ type: 'mobile', value: '' }) }, S('add-phone')));
+  field._collect = () => Array.from(table.children).map(r => r._get()).filter(p => p.value);
+  return field;
+}
+
+async function openContactForm(existing) {
+  const data = Object.assign({}, existing);   // edit copy, or {} for new
+  const body = el('div', { className: 'kb-modal__body cm-form' });
+  const grid = el('div', { className: 'kb-grid' });
+  const refs = {};
+  const makeField = ([key, labelKey, kind, phKey]) => {
+    const input = kind === 'textarea'
+      ? el('textarea', { className: 'kb-textarea', rows: key === 'address' ? 4 : 2 })
+      : el('input', { className: 'kb-input', placeholder: phKey ? S(phKey) : '' });
+    input.value = data[key] || '';
+    refs[key] = input;
+    const f = el('div', { className: 'kb-field' + (key === 'address' ? ' cm-field--address' : '') });
+    f.append(el('span', { className: 'kb-label' }, S(labelKey)), input);
+    return f;
+  };
+  FIELDS.slice(0, 4).forEach(spec => grid.appendChild(makeField(spec)));  // name…role
+  const phonesSection = buildPhonesSection(data);
+  grid.appendChild(phonesSection);
+  FIELDS.slice(4).forEach(spec => grid.appendChild(makeField(spec)));      // email…notes
+  body.appendChild(grid);
+
+  // Organisation is freetext, but suggests organisations already on file (a
+  // native datalist) and — since contacts at the same organisation share a
+  // postal address — offers that organisation's known address. We only fill the
+  // address when it's empty or still holds a previous auto-fill, never clobbering
+  // something the user typed.
+  const orgIndex = new Map();   // lower-cased org name → { name, address }
+  contacts.forEach(c => {
+    if (existing && existing.id && c.id === existing.id) return;
+    const name = (c.organisation || '').trim();
+    if (!name) return;
+    const key = name.toLowerCase();
+    const rec = orgIndex.get(key) || { name, address: '' };
+    if (!rec.address && (c.address || '').trim()) rec.address = c.address.trim();
+    orgIndex.set(key, rec);
+  });
+  const orgList = el('datalist', { id: 'cm-org-list' });
+  [...orgIndex.values()].map(r => r.name).sort((a, b) => a.localeCompare(b))
+    .forEach(n => orgList.appendChild(el('option', { value: n })));
+  body.appendChild(orgList);
+  refs.organisation.setAttribute('list', 'cm-org-list');
+  let autoAddr = '';
+  const fillAddress = () => {
+    const rec = orgIndex.get((refs.organisation.value || '').trim().toLowerCase());
+    if (rec && rec.address && (!refs.address.value.trim() || refs.address.value === autoAddr)) {
+      refs.address.value = rec.address;
+      autoAddr = rec.address;
+    }
+  };
+  refs.organisation.addEventListener('input', fillAddress);
+  refs.organisation.addEventListener('change', fillAddress);
+
+  const result = await kbModal({
+    title: existing && existing.id ? S('edit-contact') : S('add-contact'),
+    bodyNode: body,
+    dismissValue: false,
+    buttons: [
+      { label: S('cancel'), value: false, variant: 'kb-btn--ghost' },
+      { label: S('save'), value: true, variant: 'kb-btn--primary', autofocus: false },
+    ],
+  });
+  if (!result) return;
+
+  const next = {};
+  TEXT_KEYS.forEach(key => { next[key] = refs[key].value.trim(); });
+  next.phones = phonesSection._collect();
+  if (!next.name) {
+    await kbAlert({ title: S('add-contact'), message: S('name-required'), okLabel: S('cancel') });
+    next.id = existing && existing.id;
+    return openContactForm(next);   // reopen, preserving what was typed
+  }
+
+  if (existing && existing.id) {
+    next.id = existing.id;
+    const i = contacts.findIndex(c => c.id === existing.id);
+    if (i >= 0) contacts[i] = next; else contacts.push(next);
+  } else {
+    next.id = uid();
+    contacts.push(next);
+  }
+  saveDraft();
+  statusKey = null;
+  render();
+}
+
+async function removeContact(c) {
+  const ok = await kbConfirm({
+    title: S('delete-contact'),
+    message: S('confirm-delete', { name: c.name || '—' }),
+    confirmLabel: S('delete-contact'),
+    cancelLabel: S('cancel'),
+  });
+  if (!ok) return;
+  contacts = contacts.filter(x => x.id !== c.id);
+  saveDraft();
+  statusKey = null;
+  render();
+}
+
+// ── Import (manual upload fallback) ──────────────────────────────────────────
+async function pickFileToImport() {
+  if (contacts.length) {
+    const ok = await kbConfirm({
+      title: S('upload-existing'),
+      message: S('confirm-import', { n: contacts.length }),
+      confirmLabel: S('upload-existing'),
+      cancelLabel: S('cancel'),
+    });
+    if (!ok) return;
+  }
+  const input = el('input', { type: 'file', accept: '.html,text/html,.csv,text/csv', style: { display: 'none' } });
+  input.addEventListener('change', () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const isCSV = /\.csv$/i.test(file.name) || /csv/i.test(file.type);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const imported = isCSV ? csvToContacts(String(reader.result)) : extractContacts(String(reader.result));
+        contacts = imported;
+        saveDraft();
+        statusKey = 'imported-n'; statusVars = { n: imported.length };
+      } catch (e) {
+        statusKey = 'import-failed'; statusVars = null;
+      }
+      render();
+    };
+    reader.readAsText(file);
+  });
+  document.body.appendChild(input);
+  input.click();
+  input.remove();
+}
+
+// Parse the contacts JSON baked into a generated viewer file (any variant).
+function extractContacts(htmlText) {
+  const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+  const node = doc.getElementById('cb-contacts');
+  if (!node) throw new Error('no contact data found');
+  const arr = JSON.parse(node.textContent);
+  if (!Array.isArray(arr)) throw new Error('contact data is not a list');
+  return arr.map(c => Object.assign({ id: c.id || uid() }, c));
+}
+
+// ── CSV import / export ───────────────────────────────────────────────────────
+// One column per standard phone type (rather than a nested structure) so the
+// file opens cleanly in a spreadsheet. Multiple numbers of the same type are
+// joined with "; " on export and split back apart on import.
+const CSV_HEADERS = ['Name', 'Nickname', 'Organisation', 'Role', 'Mobile', 'Office', 'Home', 'Fax', 'Other', 'Email', 'Address', 'Category', 'Notes'];
+
+function csvEscape(v) {
+  const s = String(v == null ? '' : v);
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function contactsToCSV(list) {
+  const rows = [CSV_HEADERS];
+  list.forEach(c => {
+    const byType = {};
+    contactPhones(c).forEach(p => {
+      const t = p.type || 'other';
+      byType[t] = byType[t] ? byType[t] + '; ' + p.value : p.value;
+    });
+    rows.push([
+      c.name, c.nickname, c.organisation, c.role,
+      byType.mobile, byType.office, byType.home, byType.fax, byType.other,
+      c.email, c.address, c.category, c.notes,
+    ]);
+  });
+  return rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
+}
+
+// Minimal RFC4180-ish parser: handles quoted fields with embedded commas,
+// newlines and escaped ("") quotes.
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; }
+      else field += ch;
+    } else if (ch === '"') inQuotes = true;
+    else if (ch === ',') { row.push(field); field = ''; }
+    else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+    else if (ch === '\r') { /* line end is \n; \r is just skipped */ }
+    else field += ch;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.length > 1 || r[0] !== '');
+}
+
+function csvToContacts(text) {
+  const rows = parseCSV(text);
+  if (!rows.length) return [];
+  const header = rows[0].map(h => h.trim().toLowerCase());
+  const col = name => header.indexOf(name);
+  const iName = col('name'), iNick = col('nickname'), iOrg = col('organisation'), iRole = col('role'),
+    iMobile = col('mobile'), iOffice = col('office'), iHome = col('home'), iFax = col('fax'), iOther = col('other'),
+    iEmail = col('email'), iAddress = col('address'), iCategory = col('category'), iNotes = col('notes');
+  const get = (r, i) => (i >= 0 && r[i] != null) ? r[i].trim() : '';
+  return rows.slice(1).filter(r => r.some(v => (v || '').trim())).map(r => {
+    const phones = [];
+    [['mobile', iMobile], ['office', iOffice], ['home', iHome], ['fax', iFax], ['other', iOther]].forEach(([type, i]) => {
+      get(r, i).split(';').map(s => s.trim()).filter(Boolean).forEach(value => phones.push({ type, value }));
+    });
+    return {
+      id: uid(),
+      name: get(r, iName), nickname: get(r, iNick), organisation: get(r, iOrg), role: get(r, iRole),
+      phones, email: get(r, iEmail), address: get(r, iAddress), category: get(r, iCategory), notes: get(r, iNotes),
+    };
+  });
+}
+
+// ── Export: assemble a viewer file (shared by both variants) ─────────────────
+function escAttr(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+// Escape '<' in embedded JSON so a stray closing script tag in data is inert.
+function jsonForScript(obj) { return JSON.stringify(obj).replace(/</g, '\\u003c'); }
+
+function viewerConfigObject() {
+  return {
+    organization: CFG.organization || '',
+    tagline: CFG.tagline || '',
+    'footer-mark': CFG['footer-mark'] || '',
+    'accent-colour': CFG['accent-colour'] || '',
+    localisation: CFG['viewer-localisation'] || {},
+  };
+}
+
+async function buildViewerHTML({ inline }) {
+  const cfgObj = viewerConfigObject();
+  const lc = (cfgObj.localisation && cfgObj.localisation['default-language']) || 'en';
+  const subtitle = (((cfgObj.localisation || {})[lc] || {}).ui || {}).subtitle || 'Contact Book';
+  const title = (cfgObj.organization ? cfgObj.organization + ' — ' : '') + subtitle;
+  const accent = cfgObj['accent-colour'] || '#2f6fed';
+
+  let headAssets;
+  if (inline) {
+    const [styleCss, uiCss, appJs, faviconSvg] = await Promise.all([
+      fetch('../assets/style.css').then(r => r.text()),
+      fetch('../assets/ui.css').then(r => r.text()),
+      fetch('../assets/app.js').then(r => r.text()),
+      fetch('../assets/favicon.svg').then(r => r.text()).catch(() => ''),
+    ]);
+    const favTag = faviconSvg
+      ? '<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,' + btoa(faviconSvg) + '">'
+      : '';
+    // Neutralise any closing style/script tag inside the shared files (they appear
+    // in those files' header comments) so inlining them can't close the tag early.
+    const css = s => s.replace(/<\/(style)/gi, '<\\/$1');
+    const js = s => s.replace(/<\/(script)/gi, '<\\/$1');
+    headAssets = favTag + '\n<style>\n' + css(styleCss) + '\n</style>\n<style>\n' + css(uiCss) + '\n</style>\n<scr' + 'ipt>\n' + js(appJs) + '\n</scr' + 'ipt>';
+  } else {
+    headAssets =
+      '<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">\n' +
+      '<link rel="stylesheet" href="../assets/style.css">\n' +
+      '<link rel="stylesheet" href="../assets/ui.css">\n' +
+      '<scr' + 'ipt src="../assets/app.js"></scr' + 'ipt>';
+  }
+
+  return '<!DOCTYPE html>\n' +
+'<html lang="' + escAttr(lc) + '">\n' +
+'<head>\n' +
+'<meta charset="utf-8">\n' +
+'<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
+'<meta name="format-detection" content="telephone=no">\n' +
+'<title>' + escAttr(title) + '</title>\n' +
+'<meta name="theme-color" content="' + escAttr(accent) + '">\n' +
+'<scr' + 'ipt>(function(){var t=localStorage.getItem("kb-theme");if(t)document.documentElement.setAttribute("data-theme",t);})();</scr' + 'ipt>\n' +
+headAssets + '\n' +
+'<style>\n' + VIEWER_CSS + '\n</style>\n' +
+'</head>\n' +
+'<body>\n' +
+'<div id="app"><p class="kb-loading">Loading…</p></div>\n' +
+'<scr' + 'ipt id="cb-config" type="application/json">' + jsonForScript(cfgObj) + '</scr' + 'ipt>\n' +
+'<scr' + 'ipt id="cb-contacts" type="application/json">' + jsonForScript(contacts) + '</scr' + 'ipt>\n' +
+'<scr' + 'ipt>\n(' + viewerRuntime.toString() + ')();\n</scr' + 'ipt>\n' +
+'</body>\n</html>\n';
+}
+
+async function downloadViewer({ inline }) {
+  try {
+    const html = await buildViewerHTML({ inline });
+    const name = inline ? 'contactbook-standalone.html' : 'contactbook.html';
+    downloadFile(html, name, 'text/html');
+  } catch (e) {
+    await kbAlert({ title: 'Error', message: String(e && e.message || e) });
+  }
+}
+
+// ── Viewer CSS (baked verbatim into every generated file) ─────────────────────
+const VIEWER_CSS = [
+'.cb-toolbar-row { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:4px; }',
+'.cb-toolbar-row .kb-field { flex: 1 1 180px; min-width: 140px; }',
+'.cb-toolbar-row .kb-field.grow-2 { flex: 2 1 240px; }',
+'.cb-count { font-size: var(--fs-small); color: var(--text-muted); margin: 10px 2px 4px; }',
+'.cb-list { display:flex; flex-direction:column; gap:0; }',
+'.cb-row { display:flex; align-items:center; gap:14px; padding:12px 6px; border-bottom:1px solid var(--border); cursor:pointer; text-align:left; background:none; border-left:0; border-right:0; border-top:0; width:100%; font:inherit; color:inherit; }',
+'.cb-row:last-child { border-bottom:0; }',
+'.cb-row:hover { background: var(--surface-2); }',
+'.cb-row__main { flex:1; min-width:0; }',
+'.cb-row__name { font-weight:700; color:var(--text); font-size:var(--fs-base); }',
+'.cb-row__sub { font-size:var(--fs-small); color:var(--text-muted); margin-top:2px; }',
+'.cb-row__sub span + span::before { content:"\\00b7"; margin:0 6px; color:var(--border-strong); }',
+'.cb-row__chip { flex-shrink:0; }',
+'.cb-chips { display:flex; flex-wrap:wrap; gap:4px; }',
+'.cb-row__chip.cb-chips { justify-content:flex-end; max-width:45%; }',
+'.cb-empty { padding:40px 10px; text-align:center; color:var(--text-muted); font-size:var(--fs-small); }',
+'.cb-detail__name { font-size: calc(19px * var(--font-scale)); font-weight:700; color:var(--text); }',
+'.cb-detail__sub { font-size: var(--fs-small); color: var(--text-muted); margin-top:2px; }',
+'.cb-detail__grid { margin-top: 18px; }',
+'.cb-detail__field { padding: 10px 0; border-top: 1px solid var(--border); }',
+'.cb-detail__field:first-child { border-top: 0; }',
+'.cb-detail__notes { white-space: pre-wrap; }',
+'.cb-nick { font-weight:400; color:var(--text-muted); }',
+'.cb-link { color: var(--accent); text-decoration:none; }',
+'.cb-link:hover { text-decoration: underline; }',
+'.cb-detail__phones { display:flex; flex-direction:column; gap:4px; }',
+'.cb-detail__phone { display:flex; gap:10px; align-items:baseline; }',
+'.cb-phone-type { font-size:var(--fs-small); color:var(--text-muted); min-width:56px; flex-shrink:0; }',
+'@media (max-width: 480px) { .kb-header { flex-direction:column; align-items:flex-start; gap:12px; } .kb-doctitle { text-align:left; } }',
+].join('\n');
+
+// ── Viewer runtime (serialised into every generated file via toString()) ─────
+// Self-contained: relies ONLY on app.js globals (present in both variants) and
+// the embedded #cb-config / #cb-contacts JSON. Does NOT reference any
+// editor-scope variable above.
+function viewerRuntime() {
+  'use strict';
+  let CFG, CONTACTS = [], lang = 'en';
+  const state = { view: 'list', q: '', cat: '', org: '', id: null };
+
+  // Phones: [{type, value}], tolerating the legacy single `phone` string.
+  const VCF_TEL = { mobile: 'CELL', office: 'WORK', home: 'HOME', fax: 'FAX', other: 'VOICE' };
+  function contactPhones(c) {
+    if (Array.isArray(c.phones)) return c.phones.filter(p => p && (p.value || '').trim());
+    if (c.phone) return [{ type: '', value: c.phone }];
+    return [];
+  }
+  // `category` is a comma-separated string → array of trimmed category names.
+  function contactCategories(c) {
+    return String(c.category || '').split(',').map(s => s.trim()).filter(Boolean);
+  }
+  function telHref(v) { return 'tel:' + String(v).replace(/[^\d+]/g, ''); }
+
+  function S(key, vars) { return lookupString(CFG['ui-strings'], key, lang, CFG['default-code'], vars); }
+  function normaliseConfig() {
+    const r = buildLangTable(CFG.localisation);
+    CFG['default-code'] = r.defaultCode; CFG.languages = r.languages; CFG['ui-strings'] = r.table;
+  }
+  function applyLang(lc) {
+    lang = lc;
+    const loc = CFG.localisation || {};
+    const a = (loc[lc] && loc[lc].about) || (loc[CFG['default-code']] && loc[CFG['default-code']].about) || {};
+    CFG['about-title'] = a.title || 'About'; CFG['about-content'] = a.content || ''; CFG['about-button'] = a.button || 'Close';
+  }
+  function showAboutModal() { return kbAbout({ title: CFG['about-title'], contentMD: CFG['about-content'], closeLabel: CFG['about-button'] }); }
+  function uniqueValues(field) { return [...new Set(CONTACTS.map(c => c[field]).filter(Boolean))].sort(); }
+  function uniqueCategories() { return [...new Set(CONTACTS.flatMap(contactCategories))].sort(); }
+  function filteredContacts() {
+    const q = state.q.trim().toLowerCase();
+    return CONTACTS.filter(c => {
+      if (state.cat && !contactCategories(c).includes(state.cat)) return false;
+      if (state.org && c.organisation !== state.org) return false;
+      if (q && !((c.name || '') + ' ' + (c.nickname || '') + ' ' + (c.organisation || '') + ' ' + (c.role || '')).toLowerCase().includes(q)) return false;
+      return true;
+    }).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  }
+
+  // vCard (no library)
+  function vcfEscape(s) { return String(s).replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n'); }
+  function contactToVCard(c) {
+    const lines = ['BEGIN:VCARD', 'VERSION:3.0', 'FN:' + vcfEscape(c.name || ''), 'N:' + vcfEscape(c.name || '') + ';;;;'];
+    if (c.nickname) lines.push('NICKNAME:' + vcfEscape(c.nickname));
+    if (c.organisation) lines.push('ORG:' + vcfEscape(c.organisation));
+    if (c.role) lines.push('TITLE:' + vcfEscape(c.role));
+    contactPhones(c).forEach(p => lines.push('TEL;TYPE=' + (VCF_TEL[p.type] || 'VOICE') + ':' + vcfEscape(p.value)));
+    if (c.email) lines.push('EMAIL;TYPE=WORK:' + vcfEscape(c.email));
+    if (c.address) lines.push('ADR;TYPE=WORK:;;' + vcfEscape(c.address) + ';;;;');
+    const cats = contactCategories(c);
+    if (cats.length) lines.push('CATEGORIES:' + cats.map(vcfEscape).join(','));
+    if (c.notes) lines.push('NOTE:' + vcfEscape(c.notes));
+    lines.push('END:VCARD');
+    return lines.join('\r\n');
+  }
+  function download(text, filename, mime) {
+    const url = URL.createObjectURL(new Blob([text], { type: mime }));
+    const a = el('a', { href: url, download: filename });
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  // CSV of the current filtered contacts — one column per standard phone type
+  // (mirrors the editor's contactsToCSV, kept separate since this scope must
+  // stay self-contained; see the comment above viewerRuntime).
+  const CSV_HEADERS = ['Name', 'Nickname', 'Organisation', 'Role', 'Mobile', 'Office', 'Home', 'Fax', 'Other', 'Email', 'Address', 'Category', 'Notes'];
+  function csvEscape(v) {
+    const s = String(v == null ? '' : v);
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function downloadCSV() {
+    const rows = [CSV_HEADERS];
+    filteredContacts().forEach(c => {
+      const byType = {};
+      contactPhones(c).forEach(p => {
+        const t = p.type || 'other';
+        byType[t] = byType[t] ? byType[t] + '; ' + p.value : p.value;
+      });
+      rows.push([
+        c.name, c.nickname, c.organisation, c.role,
+        byType.mobile, byType.office, byType.home, byType.fax, byType.other,
+        c.email, c.address, c.category, c.notes,
+      ]);
+    });
+    const csv = rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
+    download(csv, 'contacts.csv', 'text/csv');
+  }
+
+  function render() {
+    const app = document.getElementById('app');
+    app.innerHTML = '';
+    const wrap = el('div', { className: 'kb-wrap' });
+    wrap.appendChild(buildToolbar());
+    wrap.appendChild(buildHeader());
+    wrap.appendChild(state.view === 'detail' ? buildDetail() : buildListView());
+    wrap.appendChild(buildFooter());
+    app.appendChild(wrap);
+    updateThemeIcon();
+  }
+  function buildToolbar() {
+    const toolbar = el('div', { className: 'kb-toolbar' });
+    const sc = makeSizeControl();
+    toolbar.append(el('div', { className: 'spacer' }), sc.seg, sc.label, makeThemeButton(), makeAboutButton(showAboutModal));
+    const langSel = makeLangSelect(CFG.languages, lang, value => { applyLang(value); render(); });
+    if (langSel) toolbar.appendChild(langSel);
+    return toolbar;
+  }
+  function buildHeader() {
+    const header = el('header', { className: 'kb-header' });
+    const brand = el('div', { className: 'kb-brand' });
+    const tile = el('span', { className: 'logo' }); tile.innerHTML = KB_BRAND_SVG;
+    const org = el('span', { className: 'org' });
+    org.appendChild(document.createTextNode(CFG.organization || ''));
+    const small = el('small'); small.textContent = CFG.tagline || S('subtitle'); org.appendChild(small);
+    brand.append(tile, org);
+    const title = el('div', { className: 'kb-doctitle' });
+    title.appendChild(el('h1', null, S('subtitle')));
+    header.append(brand, title);
+    return header;
+  }
+  function buildListView() {
+    const container = el('div');
+    const filterCard = el('div', { className: 'kb-card' });
+    const row = el('div', { className: 'cb-toolbar-row' });
+
+    const searchField = el('div', { className: 'kb-field grow-2' });
+    const searchInput = el('input', { className: 'kb-input', placeholder: S('search-ph'), value: state.q });
+    searchInput.addEventListener('input', () => { state.q = searchInput.value; renderResults(); });
+    searchField.append(el('span', { className: 'kb-label' }, S('search-ph')), searchInput);
+
+    const catField = el('div', { className: 'kb-field' });
+    const catSel = el('select', { className: 'kb-select' });
+    catSel.appendChild(el('option', { value: '' }, S('filter-all')));
+    uniqueCategories().forEach(v => { const o = el('option', { value: v }, v); if (state.cat === v) o.selected = true; catSel.appendChild(o); });
+    catSel.addEventListener('change', () => { state.cat = catSel.value; renderResults(); });
+    catField.append(el('span', { className: 'kb-label' }, S('filter-category')), catSel);
+
+    const orgField = el('div', { className: 'kb-field' });
+    const orgSel = el('select', { className: 'kb-select' });
+    orgSel.appendChild(el('option', { value: '' }, S('filter-all')));
+    uniqueValues('organisation').forEach(v => { const o = el('option', { value: v }, v); if (state.org === v) o.selected = true; orgSel.appendChild(o); });
+    orgSel.addEventListener('change', () => { state.org = orgSel.value; renderResults(); });
+    orgField.append(el('span', { className: 'kb-label' }, S('filter-org')), orgSel);
+
+    row.append(searchField, catField, orgField);
+    filterCard.appendChild(row);
+
+    const actions = el('div', { className: 'kb-actions' });
+    actions.append(el('button', {
+      className: 'kb-btn kb-btn--ghost kb-btn--sm',
+      onClick: () => { const list = filteredContacts(); download(list.map(contactToVCard).join('\r\n'), 'contacts.vcf', 'text/vcard'); }
+    }, S('dl-vcf-list')));
+    actions.append(el('button', { className: 'kb-btn kb-btn--ghost kb-btn--sm', onClick: downloadCSV }, S('dl-csv-list')));
+    filterCard.appendChild(actions);
+    container.appendChild(filterCard);
+
+    const listCard = el('div', { className: 'kb-card', id: 'cb-list-card' });
+    container.appendChild(listCard);
+    renderResultsInto(listCard);
+    function renderResults() { renderResultsInto(document.getElementById('cb-list-card')); }
+    return container;
+  }
+  function renderResultsInto(listCard) {
+    if (!listCard) return;
+    listCard.innerHTML = '';
+    const results = filteredContacts();
+    listCard.appendChild(el('div', { className: 'cb-count' }, S('count-n', { n: results.length })));
+    if (!results.length) { listCard.appendChild(el('div', { className: 'cb-empty' }, S('empty'))); return; }
+    const list = el('div', { className: 'cb-list' });
+    results.forEach(c => {
+      const row = el('button', { type: 'button', className: 'cb-row', onClick: () => { state.view = 'detail'; state.id = c.id; render(); } });
+      const main = el('div', { className: 'cb-row__main' });
+      const nameNode = el('div', { className: 'cb-row__name' });
+      nameNode.appendChild(document.createTextNode(c.name || '-'));
+      if (c.nickname) nameNode.appendChild(el('span', { className: 'cb-nick' }, ' “' + c.nickname + '”'));
+      main.append(
+        nameNode,
+        el('div', { className: 'cb-row__sub' }, [
+          c.organisation ? el('span', null, c.organisation) : null,
+          c.role ? el('span', null, c.role) : null,
+        ].filter(Boolean))
+      );
+      row.append(main);
+      const cats = contactCategories(c);
+      if (cats.length) {
+        const chips = el('span', { className: 'cb-row__chip cb-chips' });
+        cats.forEach(cat => chips.appendChild(el('span', { className: 'kb-chip' }, cat)));
+        row.append(chips);
+      }
+      list.appendChild(row);
+    });
+    listCard.appendChild(list);
+  }
+  function buildDetail() {
+    const c = CONTACTS.find(x => x.id === state.id);
+    const card = el('div', { className: 'kb-card' });
+    if (!c) { card.appendChild(el('div', { className: 'cb-empty' }, S('empty'))); return card; }
+    const nameNode = el('div', { className: 'cb-detail__name' });
+    nameNode.appendChild(document.createTextNode(c.name || '-'));
+    if (c.nickname) nameNode.appendChild(el('span', { className: 'cb-nick' }, ' “' + c.nickname + '”'));
+    card.append(
+      nameNode,
+      el('div', { className: 'cb-detail__sub' }, [c.role, c.organisation].filter(Boolean).join(' · '))
+    );
+    const grid = el('div', { className: 'cb-detail__grid' });
+    const addField = (labelText, valueNode) => {
+      const f = el('div', { className: 'cb-detail__field' });
+      f.append(el('span', { className: 'kb-label' }, labelText), valueNode);
+      grid.appendChild(f);
+    };
+    const phones = contactPhones(c);
+    if (phones.length) {
+      const box = el('div', { className: 'cb-detail__phones' });
+      phones.forEach(p => {
+        const lineEl = el('div', { className: 'cb-detail__phone' });
+        if (p.type) lineEl.appendChild(el('span', { className: 'cb-phone-type' }, S('phone-type-' + p.type)));
+        lineEl.appendChild(el('a', { className: 'cb-link', href: telHref(p.value) }, p.value));
+        box.appendChild(lineEl);
+      });
+      addField(S('f-phone'), box);
+    }
+    if (c.email) addField(S('f-email'), el('a', { className: 'cb-link', href: 'mailto:' + c.email }, c.email));
+    if (c.address) addField(S('f-address'), el('div', { className: 'cb-detail__notes' }, c.address));
+    const cats = contactCategories(c);
+    if (cats.length) {
+      const chips = el('div', { className: 'cb-chips' });
+      cats.forEach(cat => chips.appendChild(el('span', { className: 'kb-chip' }, cat)));
+      addField(S('f-category'), chips);
+    }
+    if (c.notes) addField(S('f-notes'), el('div', { className: 'cb-detail__notes' }, c.notes));
+    card.appendChild(grid);
+    const actions = el('div', { className: 'kb-actions' });
+    actions.append(
+      el('button', { className: 'kb-btn kb-btn--ghost', onClick: () => { state.view = 'list'; render(); } }, S('back')),
+      el('div', { className: 'spacer' }),
+      el('button', { className: 'kb-btn kb-btn--primary', onClick: () => download(contactToVCard(c), (c.name || 'contact').replace(/\s+/g, '_') + '.vcf', 'text/vcard') }, S('dl-vcf-contact'))
+    );
+    card.appendChild(actions);
+    return card;
+  }
+  function buildFooter() {
+    const sep = () => el('span', { className: 'sep' }, '·');
+    const footer = el('footer', { className: 'kb-footer' });
+    const mark = el('span', { className: 'kb-mark' });
+    mark.innerHTML = KB_FOOTER_MARK_SVG;
+    mark.appendChild(document.createTextNode(CFG['footer-mark'] || CFG.organization || ''));
+    footer.append(mark, sep(), el('span', null, '© ' + new Date().getFullYear() + ' ' + (CFG.organization || '')));
+    footer.append(sep(), el('a', { href: 'index.html?edit' }, S('edit-contacts')));
+    footer.append(sep(), el('button', { type: 'button', onClick: showAboutModal }, CFG['about-title']));
+    return footer;
+  }
+
+  try {
+    CFG = JSON.parse(document.getElementById('cb-config').textContent);
+    CONTACTS = JSON.parse(document.getElementById('cb-contacts').textContent);
+    normaliseConfig();
+    applyAccent(CFG);
+    initFontScale();
+    lang = CFG['default-code'] || 'en';
+    applyLang(lang);
+    render();
+  } catch (e) {
+    document.getElementById('app').innerHTML =
+      '<div class="kb-wrap"><div class="kb-note kb-note--error"><span>&#9888;</span>' +
+      '<div><b>Error</b><br>' + kbEsc(e && e.message || e) + '</div></div></div>';
+  }
+}
+
+// ── Boot: route (viewer vs editor), then load existing data ──────────────────
+try {
+  const editMode = new URLSearchParams(location.search).has('edit');
+
+  // One fetch of contactbook.html serves both the routing check and the data
+  // load. Guard against SPA-fallback hosts that return an HTML 200 for a
+  // missing file: only treat it as a real contact book if it has our marker
+  // (otherwise a redirect would loop back to this page forever).
+  let cbText = null, found = false;
+  try {
+    const r = await fetch('contactbook.html', { cache: 'no-store' });
+    if (r.ok) { cbText = await r.text(); found = /id=["']cb-contacts["']/.test(cbText); }
+  } catch (e) { /* not present */ }
+
+  if (found && !editMode) { location.replace('contactbook.html'); }
+  else {
+    CFG = await loadYamlConfig();
+    VERSION_INFO = await loadVersionInfo('../version.json');
+    await applySharedBranding(CFG);
+    NAV = await loadNavItems('../config.yml');   // root config's apps/links, for the nav dropdown
+    normaliseConfig();
+    applyAccent(CFG);
+    initFontScale();
+    lang = localStorage.getItem('contactmanager-lang') || CFG['default-code'] || 'en';
+    applyLang(lang);
+    const draft = loadDraft();
+    if (draft) {
+      contacts = draft;
+      statusKey = 'restored-draft'; statusVars = { n: draft.length };
+    } else if (found) {
+      try { contacts = extractContacts(cbText); statusKey = 'loaded-from-folder'; }
+      catch (e) { statusKey = 'no-existing-found'; }
+    } else {
+      statusKey = 'no-existing-found';
+    }
+    render();
+  }
+} catch (e) {
+  document.getElementById('app').innerHTML =
+    `<div class="kb-wrap"><div class="kb-note kb-note--error"><span>⚠</span>` +
+    `<div><b>Failed to load config.yml</b><br>${kbEsc(e.message)}</div></div></div>`;
+}
+})();
+</script>
+</body>
+</html>

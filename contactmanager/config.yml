@@ -1,0 +1,140 @@
+# =============================================================================
+# contactmanager — Configuration
+# =============================================================================
+# Two audiences, two localisation blocks (see BRIEF / DESIGN):
+#   localisation:         contactmanager's OWN editor UI (used directly via S())
+#   viewer-localisation:  baked into the generated contactbook.html / standalone
+#                         files at export time (same shape, same i18n helpers)
+#
+# Branding (organisation, accent-colour, footer-mark) and the contact schema's
+# field labels are placeholders confirmed against the project brief — adjust
+# with the project owner before treating as final.
+
+# Organization
+organization: "Center for Asylum Protection"
+logo: no                     # yes|no — if yes, loads ../assets/logo.png or .jpg
+logo-maxwidth: 4
+tagline: "Contact manager"
+footer-mark: "CAP"           # short wordmark shown in the generated viewer footer
+
+# Branding — confirm CAP's actual accent colour; this is the template default.
+accent-colour: "#2f6fed"
+
+# ── Localisation: contactmanager's OWN editor UI ────────────────────────────
+# Used directly via S() inside contactmanager's index.html.
+localisation:
+  default-language: en
+
+  languages:
+    - code: en
+      name: English
+
+  en:
+    about:
+      title: "About"
+      button: "Close"
+      content: |
+        ### CAP Contact Manager
+        Internal tool for maintaining CAP's contact directory. Edits made
+        here are exported as files — there is no live database, so changes
+        only reach staff once an exported file is deployed.
+
+        {repo}
+        {version-line}
+
+        Licensed under the Apache 2 licence. Please see LICENSE in root.
+    ui:
+      doc-title: "Contact Manager"
+      subtitle: "Contact manager"
+      contacts-title: "Contacts"
+      add-contact: "Add contact"
+      edit-contact: "Edit contact"
+      delete-contact: "Delete"
+      confirm-delete: "Delete {name}? This cannot be undone."
+      save: "Save"
+      cancel: "Cancel"
+      upload-existing: "Upload a file…"
+      loaded-from-folder: "Loaded the current contact book from this folder."
+      no-existing-found: "No existing contact book found here — starting empty."
+      imported-n: "Imported {n} contacts from the uploaded file."
+      import-failed: "Could not read contacts from that file."
+      restored-draft: "Restored your unexported working copy ({n} contacts) from this browser."
+      confirm-import: "Replace the current working list ({n} contacts) with the uploaded file\u2019s contacts?"
+      no-contacts: "No contacts yet — add one to get started."
+      count-n: "{n} contacts"
+      name-required: "Name is required."
+      field-name: "Name"
+      field-nickname: "Nickname"
+      field-organisation: "Organisation"
+      field-role: "Role"
+      field-phones: "Phone numbers"
+      field-email: "Email"
+      field-address: "Address"
+      field-category: "Category"
+      field-notes: "Notes"
+      ph-name: "Full name"
+      ph-nickname: "What they go by"
+      ph-category: "Comma-separated, e.g. Legal, Partner"
+      add-phone: "Add phone"
+      phone-number: "Number"
+      remove: "Remove"
+      phone-type-mobile: "Mobile"
+      phone-type-office: "Office"
+      phone-type-home: "Home"
+      phone-type-fax: "Fax"
+      phone-type-other: "Other"
+      export-title: "Export contact book"
+      download-standalone: "Download standalone file"
+      download-csv: "Download CSV"
+      download-server: "Download contactbook.html (for the server)"
+      export-hint: >
+        Standalone is one self-contained file (email it, or use it offline).
+        CSV opens the list in a spreadsheet. contactbook.html is for
+        deploying next to this tool on the web server.
+
+# ── viewer-localisation: baked into the GENERATED contactbook.html /────────
+# standalone files at export time. Same shape as `localisation:` above, so
+# the same buildLangTable()/lookupString()/S() helpers work unchanged when
+# embedded in the generated file — just pointed at this block instead.
+viewer-localisation:
+  default-language: en
+
+  languages:
+    - code: en
+      name: English
+
+  en:
+    about:
+      title: "About"
+      button: "Close"
+      content: |
+        ### CAP Contact Book
+        A directory of CAP's external contacts. Use search and the filters
+        to find someone, then open a contact for full details or to
+        download it as a vCard.
+    ui:
+      subtitle: "Contact Book"
+      search-ph: "Search by name, organisation…"
+      filter-category: "Category"
+      filter-org: "Organisation"
+      filter-all: "All"
+      count-n: "{n} contacts"
+      dl-vcf-list: "Download list (VCF)"
+      dl-csv-list: "Download list (CSV)"
+      dl-vcf-contact: "Download vCard"
+      back: "Back"
+      edit-contacts: "Edit contacts"
+      f-org: "Organisation"
+      f-role: "Role"
+      f-nickname: "Nickname"
+      f-phone: "Phone"
+      f-email: "Email"
+      f-address: "Address"
+      f-category: "Category"
+      f-notes: "Notes"
+      phone-type-mobile: "Mobile"
+      phone-type-office: "Office"
+      phone-type-home: "Home"
+      phone-type-fax: "Fax"
+      phone-type-other: "Other"
+      empty: "No contacts match your search."

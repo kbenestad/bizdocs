@@ -1,0 +1,503 @@
+# =============================================================================
+# Reimbursement Form — Configuration
+# =============================================================================
+
+# ── Dependencies ───────────────────────────────────────────────────────────
+# CDN libraries loaded dynamically after this file parses — swap `url` to
+# point at a local vendored copy instead of the CDN without touching
+# index.html; drop/blank `integrity` when doing so (a local file won't match
+# the CDN's SRI hash). See ../docs/dependencies.md for the current versions/hashes.
+# Note: js-yaml itself stays hardcoded in index.html's <head> — it's needed
+# to fetch and parse this very file, so it can't be config-driven.
+dependencies:
+  pdf-lib:
+    url: "https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"
+    integrity: "sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI"
+
+# Organization — inherited from ../config.yml (root, org-wide settings) when
+# left blank here. Set a value below only to override it for this app alone.
+organization:
+logo:                         # yes|no — if yes, loads ../assets/logo.png (shared org logo)
+logo-maxwidth:                # cm — maximum logo width on PDF
+tagline:
+
+# Page setup
+page-size: A4                # A4 or letter
+
+# PDF output language: default (the first defined language) or user-selected (follow the UI)
+output-language: default
+
+# Typography
+# Standard fonts: Helvetica, Times, Courier (plus Bold/Italic variants)
+# Custom: place a .ttf file in assets/ and use the filename (e.g. "assets/MyFont.ttf")
+font-body: Helvetica
+font-heading: Helvetica
+font-monospace: Courier
+font-size: 10                # base font size in pt for PDF
+
+# Branding — inherited from ../config.yml when blank; override here if needed.
+accent-colour:
+
+# Form text (appears on PDF)
+intro: ""
+footer: "Confidential"
+
+# Base currency (ISO code — must appear in currencies list)
+currency-base: USD
+
+# Available currencies
+currencies:
+  - code: USD
+  - code: THB
+  - code: EUR
+  - code: NOK
+
+# Account codes (shown in dropdown)
+accounts:
+  - "1000 - General Operations"
+  - "2000 - Travel & Transport"
+  - "3000 - Office Supplies"
+  - "4000 - Professional Services"
+
+# Programs (shown in dropdown — "Other" adds a text field)
+programs:
+  - "General Operations"
+  - "Legal Aid Program"
+  - "Protection Program"
+  - Other
+
+# ── Localisation ──────────────────────────────────────────────────────────────
+localisation:
+  default-language: en
+
+  # ── Language declarations ──────────────────────────────────────────────────
+  languages:
+    - code: en
+      name: English
+      direction: ltr
+    - code: de
+      name: Deutsch
+      direction: ltr
+    - code: fr
+      name: Français
+      direction: ltr
+    - code: es
+      name: Español
+      direction: ltr
+
+  # ── English ────────────────────────────────────────────────────────────────
+  en:
+    # About modal (shown when "About" is clicked in the footer)
+    about:
+      title: "About This Form"
+      button: "Close"
+      content: |
+        This reimbursement form lets you collect expense data and generate a PDF with attached receipts.
+
+        **Documentation:** [docs.benestad.net](https://docs.benestad.net/invoice)
+
+        **Source code:** [kbenestad/reimburse](https://github.com/kbenestad/reimburse)
+
+        {repo}
+        {version-line}
+
+        Licensed under the Apache 2 licence. Please see LICENSE in root.
+    currencies:
+      USD: United States dollar
+      THB: Thai baht
+      EUR: Euro
+      NOK: Norwegian krone
+    # FX rate modal messages ({foreign} = foreign currency name, {base} = base currency name)
+    fx-rate-message: "You have selected an expense in a currency different from the one in which you are submitting your claim. Please enter the exchange rate as amount of {foreign} you pay for 1 {base}."
+    fx-rate-message-other: "You have selected an expense in a currency different from the one in which you are submitting your claim. Enter the three letter currency code first, and then enter the exchange rate as amount of the foreign currency you pay for 1 {base}."
+
+    ui:
+      subtitle: "Expense reimbursement"
+      staff: "Staff"
+      period-from: "Period from"
+      period-to: "Period to"
+      meta-from: "From {d}"
+      meta-until: "Until {d}"
+      fx-per: per
+      base-currency: "Base currency"
+      ph-fullname: "Full name"
+      new-form: "New form"
+      expenses: "Expenses"
+      save: "Save"
+      validate: "Validate"
+      download: "Download reimbursement form"
+      item: "Item"
+      ph-item-name: "Item / project / travel name"
+      remove: "Remove"
+      add-line: "+ Add line"
+      date: "Date"
+      vendor: "Vendor"
+      ph-vendor: "Vendor name"
+      currency: "Currency"
+      fx-rate: "FX rate"
+      ph-other-cur: "e.g. THB"
+      description: "Description"
+      receipt: "Receipt"
+      amount: "Amount"
+      account: "Account"
+      select-account: "Select account"
+      program: "Program"
+      select-program: "Select program"
+      ph-specify-program: "Specify program"
+      add-program: "+ Add program"
+      add-item: "+ Add expense item"
+      total-claim: "Total claim ({cur})"
+      remove-line: "Remove line"
+      reason-no-receipt: "Reason for no receipt"
+      ph-no-receipt: "Explain why there is no receipt"
+      add-receipt: "+ Add receipt"
+      opt-yes: "Yes"
+      opt-no: "No"
+      total: "Total:"
+      cancel: "Cancel"
+      ok: "OK"
+      confirm-new-form: "Yes, start new form"
+      msg-new-form: "This will clear all current form data and start a fresh form. Are you sure?"
+      msg-date-outside: "The date is outside the claim period. You can continue, but it will be flagged on the PDF."
+      msg-saved: "Form saved in this browser. The data will be visible next time you visit in <strong>this browser on this device</strong>. Clearing your browser history or cache will remove it."
+      msg-entry: "This form saves your input in the browser. As long as you do not clear your browser history or cache, the information is preserved on your next visit."
+      msg-entry-noreceipt: "Note: PDFs and images cannot be saved in the browser. Do not attach receipts until you are ready to generate and submit the form."
+      val-fix: "Please fix the following:"
+      val-ok-head: "All good."
+      val-ok-body: "The form is ready to download."
+      val-staff: "Staff name is required."
+      val-period: "Period dates are required."
+      val-add-item: "Add at least one expense item."
+      val-item-name: "Item {n}: name is required."
+      val-item-line: "Item {n}: add at least one line."
+      val-date: "Item {i}, line {l}: date is required."
+      val-desc: "Item {i}, line {l}: description is required."
+      val-vendor: "Item {i}, line {l}: vendor is required."
+      val-amount: "Item {i}, line {l}: amount must be a positive number."
+      val-fx: "Item {i}, line {l}: FX rate must be a positive number."
+      val-account: "Item {i}, line {l}: account is required."
+      val-program: "Item {i}, line {l}: program is required."
+      val-program-sel: "Item {i}, line {l}: program {p} selection is required."
+      val-program-other: "Item {i}, line {l}: please specify program {p}."
+      val-percent: "Item {i}, line {l}: percent for program {p} must be a positive number."
+      val-percent-total: "Item {i}, line {l}: program percentages must total 100% (currently {t}%)."
+      val-receipt: 'Item {i}, line {l}: upload at least one receipt, or set Receipt to "{no}".'
+      val-no-receipt: "Item {i}, line {l}: explain why there is no receipt."
+
+      period: "Period"
+      pdf-title: "REIMBURSEMENT"
+      pdf-total-claim: "Total reimbursement claim"
+      pdf-see-receipt: "See page {n} for receipt"
+      pdf-footer: "Reimbursement form"
+      pdf-printed: "Printed"
+      pdf-page: "Page {i}/{n}"
+  # ── German ─────────────────────────────────────────────────────────────────
+  de:
+    about:
+      title: "Über dieses Formular"
+      button: "Schließen"
+      content: |
+        Dieses Spesenformular ermöglicht es Ihnen, Ausgabendaten zu erfassen und eine PDF mit angehängten Belegen zu erstellen.
+
+        **Dokumentation:** [docs.benestad.net](https://docs.benestad.net/invoice)
+
+        **Quellcode:** [kbenestad/reimburse](https://github.com/kbenestad/reimburse)
+
+        {repo}
+        {version-line}
+
+        Lizenziert unter der Apache-2-Lizenz. Siehe LICENSE im Root-Verzeichnis.
+    currencies:
+      USD: US-Dollar
+      THB: Thailändischer Baht
+      EUR: Euro
+      NOK: Norwegische Krone
+    fx-rate-message: "Sie haben eine Ausgabe in einer anderen Währung als der Einreichungswährung ausgewählt. Bitte geben Sie den Wechselkurs als Betrag {foreign} ein, den Sie für 1 {base} zahlen."
+    fx-rate-message-other: "Sie haben eine Ausgabe in einer anderen Währung als der Einreichungswährung ausgewählt. Geben Sie zunächst den dreistelligen Währungscode ein und dann den Wechselkurs als Betrag der Fremdwährung, den Sie für 1 {base} zahlen."
+
+    ui:
+      subtitle: "Spesenabrechnung"
+      staff: "Mitarbeiter"
+      period-from: "Zeitraum von"
+      period-to: "Zeitraum bis"
+      meta-from: "Ab {d}"
+      meta-until: "Bis {d}"
+      fx-per: pro
+      base-currency: "Basiswährung"
+      ph-fullname: "Vollständiger Name"
+      new-form: "Neues Formular"
+      expenses: "Ausgaben"
+      save: "Speichern"
+      validate: "Prüfen"
+      download: "Spesenformular herunterladen"
+      item: "Posten"
+      ph-item-name: "Posten / Projekt / Reise"
+      remove: "Entfernen"
+      add-line: "+ Zeile hinzufügen"
+      date: "Datum"
+      vendor: "Lieferant"
+      ph-vendor: "Name des Lieferanten"
+      currency: "Währung"
+      fx-rate: "Wechselkurs"
+      ph-other-cur: "z. B. THB"
+      description: "Beschreibung"
+      receipt: "Beleg"
+      amount: "Betrag"
+      account: "Konto"
+      select-account: "Konto auswählen"
+      program: "Programm"
+      select-program: "Programm auswählen"
+      ph-specify-program: "Programm angeben"
+      add-program: "+ Programm hinzufügen"
+      add-item: "+ Ausgabenposten hinzufügen"
+      total-claim: "Gesamtforderung ({cur})"
+      remove-line: "Zeile entfernen"
+      reason-no-receipt: "Grund für fehlenden Beleg"
+      ph-no-receipt: "Erklären Sie, warum kein Beleg vorliegt"
+      add-receipt: "+ Beleg hinzufügen"
+      opt-yes: "Ja"
+      opt-no: "Nein"
+      total: "Gesamt:"
+      cancel: "Abbrechen"
+      ok: "OK"
+      confirm-new-form: "Ja, neues Formular starten"
+      msg-new-form: "Dadurch werden alle aktuellen Formulardaten gelöscht und ein neues Formular begonnen. Sind Sie sicher?"
+      msg-date-outside: "Das Datum liegt außerhalb des Abrechnungszeitraums. Sie können fortfahren, aber es wird im PDF markiert."
+      msg-saved: "Formular in diesem Browser gespeichert. Die Daten sind bei Ihrem nächsten Besuch in <strong>diesem Browser auf diesem Gerät</strong> sichtbar. Das Löschen Ihres Browserverlaufs oder Caches entfernt sie."
+      msg-entry: "Dieses Formular speichert Ihre Eingaben im Browser. Solange Sie Ihren Browserverlauf oder Cache nicht löschen, bleiben die Informationen bei Ihrem nächsten Besuch erhalten."
+      msg-entry-noreceipt: "Hinweis: PDFs und Bilder können nicht im Browser gespeichert werden. Fügen Sie Belege erst hinzu, wenn Sie bereit sind, das Formular zu erstellen und einzureichen."
+      val-fix: "Bitte korrigieren Sie Folgendes:"
+      val-ok-head: "Alles in Ordnung."
+      val-ok-body: "Das Formular ist bereit zum Herunterladen."
+      val-staff: "Mitarbeitername ist erforderlich."
+      val-period: "Zeitraumdaten sind erforderlich."
+      val-add-item: "Fügen Sie mindestens einen Ausgabenposten hinzu."
+      val-item-name: "Posten {n}: Name ist erforderlich."
+      val-item-line: "Posten {n}: Fügen Sie mindestens eine Zeile hinzu."
+      val-date: "Posten {i}, Zeile {l}: Datum ist erforderlich."
+      val-desc: "Posten {i}, Zeile {l}: Beschreibung ist erforderlich."
+      val-vendor: "Posten {i}, Zeile {l}: Lieferant ist erforderlich."
+      val-amount: "Posten {i}, Zeile {l}: Betrag muss eine positive Zahl sein."
+      val-fx: "Posten {i}, Zeile {l}: Wechselkurs muss eine positive Zahl sein."
+      val-account: "Posten {i}, Zeile {l}: Konto ist erforderlich."
+      val-program: "Posten {i}, Zeile {l}: Programm ist erforderlich."
+      val-program-sel: "Posten {i}, Zeile {l}: Auswahl von Programm {p} ist erforderlich."
+      val-program-other: "Posten {i}, Zeile {l}: Bitte geben Sie Programm {p} an."
+      val-percent: "Posten {i}, Zeile {l}: Prozentsatz für Programm {p} muss eine positive Zahl sein."
+      val-percent-total: "Posten {i}, Zeile {l}: Programmprozentsätze müssen 100% ergeben (derzeit {t}%)."
+      val-receipt: 'Posten {i}, Zeile {l}: Laden Sie mindestens einen Beleg hoch oder setzen Sie Beleg auf "{no}".'
+      val-no-receipt: "Posten {i}, Zeile {l}: Erklären Sie, warum kein Beleg vorliegt."
+
+      period: "Zeitraum"
+      pdf-title: "SPESENABRECHNUNG"
+      pdf-total-claim: "Gesamte Spesenforderung"
+      pdf-see-receipt: "Siehe Seite {n} für Beleg"
+      pdf-footer: "Spesenformular"
+      pdf-printed: "Gedruckt"
+      pdf-page: "Seite {i}/{n}"
+  # ── French ─────────────────────────────────────────────────────────────────
+  fr:
+    about:
+      title: "À propos de ce formulaire"
+      button: "Fermer"
+      content: |
+        Ce formulaire de remboursement vous permet de collecter des données de dépenses et de générer un PDF avec les reçus joints.
+
+        **Documentation :** [docs.benestad.net](https://docs.benestad.net/invoice)
+
+        **Code source :** [kbenestad/reimburse](https://github.com/kbenestad/reimburse)
+
+        {repo}
+        {version-line}
+
+        Sous licence Apache 2. Voir LICENSE à la racine du dépôt.
+    currencies:
+      USD: Dollar américain
+      THB: Baht thaïlandais
+      EUR: Euro
+      NOK: Couronne norvégienne
+    fx-rate-message: "Vous avez sélectionné une dépense dans une devise différente de celle dans laquelle vous soumettez votre note de frais. Veuillez saisir le taux de change comme le montant en {foreign} que vous payez pour 1 {base}."
+    fx-rate-message-other: "Vous avez sélectionné une dépense dans une devise différente de celle dans laquelle vous soumettez votre note de frais. Saisissez d'abord le code de devise à trois lettres, puis le taux de change comme le montant en devise étrangère que vous payez pour 1 {base}."
+
+    ui:
+      subtitle: "Note de frais"
+      staff: "Employé"
+      period-from: "Période du"
+      period-to: "Période au"
+      meta-from: "À partir du {d}"
+      meta-until: "Jusqu'au {d}"
+      fx-per: par
+      base-currency: "Devise de base"
+      ph-fullname: "Nom complet"
+      new-form: "Nouveau formulaire"
+      expenses: "Dépenses"
+      save: "Enregistrer"
+      validate: "Valider"
+      download: "Télécharger la note de frais"
+      item: "Élément"
+      ph-item-name: "Élément / projet / déplacement"
+      remove: "Supprimer"
+      add-line: "+ Ajouter une ligne"
+      date: "Date"
+      vendor: "Fournisseur"
+      ph-vendor: "Nom du fournisseur"
+      currency: "Devise"
+      fx-rate: "Taux de change"
+      ph-other-cur: "p. ex. THB"
+      description: "Description"
+      receipt: "Reçu"
+      amount: "Montant"
+      account: "Compte"
+      select-account: "Sélectionner un compte"
+      program: "Programme"
+      select-program: "Sélectionner un programme"
+      ph-specify-program: "Préciser le programme"
+      add-program: "+ Ajouter un programme"
+      add-item: "+ Ajouter un élément de dépense"
+      total-claim: "Total de la note de frais ({cur})"
+      remove-line: "Supprimer la ligne"
+      reason-no-receipt: "Raison de l'absence de reçu"
+      ph-no-receipt: "Expliquez pourquoi il n'y a pas de reçu"
+      add-receipt: "+ Ajouter un reçu"
+      opt-yes: "Oui"
+      opt-no: "Non"
+      total: "Total :"
+      cancel: "Annuler"
+      ok: "OK"
+      confirm-new-form: "Oui, créer un nouveau formulaire"
+      msg-new-form: "Cela effacera toutes les données du formulaire actuel et commencera un nouveau formulaire. Êtes-vous sûr(e) ?"
+      msg-date-outside: "La date est en dehors de la période de la note de frais. Vous pouvez continuer, mais elle sera signalée sur le PDF."
+      msg-saved: "Formulaire enregistré dans ce navigateur. Les données seront visibles lors de votre prochaine visite dans <strong>ce navigateur sur cet appareil</strong>. Effacer l'historique ou le cache de votre navigateur les supprimera."
+      msg-entry: "Ce formulaire enregistre vos saisies dans le navigateur. Tant que vous n'effacez pas l'historique ou le cache de votre navigateur, les informations sont conservées lors de votre prochaine visite."
+      msg-entry-noreceipt: "Remarque : les PDF et les images ne peuvent pas être enregistrés dans le navigateur. N'ajoutez pas de reçus tant que vous n'êtes pas prêt(e) à générer et soumettre le formulaire."
+      val-fix: "Veuillez corriger ce qui suit :"
+      val-ok-head: "Tout est bon."
+      val-ok-body: "Le formulaire est prêt à télécharger."
+      val-staff: "Le nom de l'employé est obligatoire."
+      val-period: "Les dates de la période sont obligatoires."
+      val-add-item: "Ajoutez au moins un élément de dépense."
+      val-item-name: "Élément {n} : le nom est obligatoire."
+      val-item-line: "Élément {n} : ajoutez au moins une ligne."
+      val-date: "Élément {i}, ligne {l} : la date est obligatoire."
+      val-desc: "Élément {i}, ligne {l} : la description est obligatoire."
+      val-vendor: "Élément {i}, ligne {l} : le fournisseur est obligatoire."
+      val-amount: "Élément {i}, ligne {l} : le montant doit être un nombre positif."
+      val-fx: "Élément {i}, ligne {l} : le taux de change doit être un nombre positif."
+      val-account: "Élément {i}, ligne {l} : le compte est obligatoire."
+      val-program: "Élément {i}, ligne {l} : le programme est obligatoire."
+      val-program-sel: "Élément {i}, ligne {l} : la sélection du programme {p} est obligatoire."
+      val-program-other: "Élément {i}, ligne {l} : veuillez préciser le programme {p}."
+      val-percent: "Élément {i}, ligne {l} : le pourcentage du programme {p} doit être un nombre positif."
+      val-percent-total: "Élément {i}, ligne {l} : les pourcentages des programmes doivent totaliser 100 % (actuellement {t} %)."
+      val-receipt: 'Élément {i}, ligne {l} : téléchargez au moins un reçu, ou réglez Reçu sur "{no}".'
+      val-no-receipt: "Élément {i}, ligne {l} : expliquez pourquoi il n'y a pas de reçu."
+
+      period: "Période"
+      pdf-title: "NOTE DE FRAIS"
+      pdf-total-claim: "Total de la note de frais"
+      pdf-see-receipt: "Voir page {n} pour le reçu"
+      pdf-footer: "Note de frais"
+      pdf-printed: "Imprimé"
+      pdf-page: "Page {i}/{n}"
+  # ── Spanish ────────────────────────────────────────────────────────────────
+  es:
+    about:
+      title: "Acerca de este formulario"
+      button: "Cerrar"
+      content: |
+        Este formulario de reembolso le permite recopilar datos de gastos y generar un PDF con los recibos adjuntos.
+
+        **Documentación:** [docs.benestad.net](https://docs.benestad.net/invoice)
+
+        **Código fuente:** [kbenestad/reimburse](https://github.com/kbenestad/reimburse)
+
+        {repo}
+        {version-line}
+
+        Con licencia Apache 2. Consulte LICENSE en la raíz del repositorio.
+    currencies:
+      USD: Dólar estadounidense
+      THB: Baht tailandés
+      EUR: Euro
+      NOK: Corona noruega
+    fx-rate-message: "Ha seleccionado un gasto en una divisa diferente a la de su reclamación. Por favor, introduzca el tipo de cambio como la cantidad de {foreign} que paga por 1 {base}."
+    fx-rate-message-other: "Ha seleccionado un gasto en una divisa diferente a la de su reclamación. Introduzca primero el código de divisa de tres letras y luego el tipo de cambio como la cantidad de divisa extranjera que paga por 1 {base}."
+    ui:
+      subtitle: "Reembolso de gastos"
+      staff: "Empleado"
+      period-from: "Período desde"
+      period-to: "Período hasta"
+      meta-from: "Desde {d}"
+      meta-until: "Hasta {d}"
+      fx-per: por
+      base-currency: "Divisa base"
+      ph-fullname: "Nombre completo"
+      new-form: "Nuevo formulario"
+      expenses: "Gastos"
+      save: "Guardar"
+      validate: "Validar"
+      download: "Descargar formulario de reembolso"
+      item: "Concepto"
+      ph-item-name: "Concepto / proyecto / viaje"
+      remove: "Eliminar"
+      add-line: "+ Añadir línea"
+      date: "Fecha"
+      vendor: "Proveedor"
+      ph-vendor: "Nombre del proveedor"
+      currency: "Divisa"
+      fx-rate: "Tipo de cambio"
+      ph-other-cur: "p. ej. THB"
+      description: "Descripción"
+      receipt: "Recibo"
+      amount: "Importe"
+      account: "Cuenta"
+      select-account: "Seleccionar cuenta"
+      program: "Programa"
+      select-program: "Seleccionar programa"
+      ph-specify-program: "Especificar programa"
+      add-program: "+ Añadir programa"
+      add-item: "+ Añadir concepto de gasto"
+      total-claim: "Total de la reclamación ({cur})"
+      remove-line: "Eliminar línea"
+      reason-no-receipt: "Motivo de la falta de recibo"
+      ph-no-receipt: "Explique por qué no hay recibo"
+      add-receipt: "+ Añadir recibo"
+      opt-yes: "Sí"
+      opt-no: "No"
+      total: "Total:"
+      cancel: "Cancelar"
+      ok: "OK"
+      confirm-new-form: "Sí, empezar un formulario nuevo"
+      msg-new-form: "Esto borrará todos los datos del formulario actual y comenzará un formulario nuevo. ¿Está seguro?"
+      msg-date-outside: "La fecha está fuera del período de la reclamación. Puede continuar, pero se marcará en el PDF."
+      msg-saved: "Formulario guardado en este navegador. Los datos serán visibles en su próxima visita en <strong>este navegador en este dispositivo</strong>. Borrar el historial o la caché del navegador los eliminará."
+      msg-entry: "Este formulario guarda sus datos en el navegador. Mientras no borre el historial o la caché del navegador, la información se conserva en su próxima visita."
+      msg-entry-noreceipt: "Nota: los PDF y las imágenes no se pueden guardar en el navegador. No adjunte recibos hasta que esté listo para generar y enviar el formulario."
+      val-fix: "Por favor, corrija lo siguiente:"
+      val-ok-head: "Todo correcto."
+      val-ok-body: "El formulario está listo para descargar."
+      val-staff: "El nombre del empleado es obligatorio."
+      val-period: "Las fechas del período son obligatorias."
+      val-add-item: "Añada al menos un concepto de gasto."
+      val-item-name: "Concepto {n}: el nombre es obligatorio."
+      val-item-line: "Concepto {n}: añada al menos una línea."
+      val-date: "Concepto {i}, línea {l}: la fecha es obligatoria."
+      val-desc: "Concepto {i}, línea {l}: la descripción es obligatoria."
+      val-vendor: "Concepto {i}, línea {l}: el proveedor es obligatorio."
+      val-amount: "Concepto {i}, línea {l}: el importe debe ser un número positivo."
+      val-fx: "Concepto {i}, línea {l}: el tipo de cambio debe ser un número positivo."
+      val-account: "Concepto {i}, línea {l}: la cuenta es obligatoria."
+      val-program: "Concepto {i}, línea {l}: el programa es obligatorio."
+      val-program-sel: "Concepto {i}, línea {l}: la selección del programa {p} es obligatoria."
+      val-program-other: "Concepto {i}, línea {l}: especifique el programa {p}."
+      val-percent: "Concepto {i}, línea {l}: el porcentaje del programa {p} debe ser un número positivo."
+      val-percent-total: "Concepto {i}, línea {l}: los porcentajes de los programas deben sumar 100% (actualmente {t}%)."
+      val-receipt: 'Concepto {i}, línea {l}: suba al menos un recibo, o establezca Recibo en "{no}".'
+      val-no-receipt: "Concepto {i}, línea {l}: explique por qué no hay recibo."
+      period: "Período"
+      pdf-title: "REEMBOLSO DE GASTOS"
+      pdf-total-claim: "Total de la reclamación"
+      pdf-see-receipt: "Ver página {n} para el recibo"
+      pdf-footer: "Formulario de reembolso"
+      pdf-printed: "Impreso"
+      pdf-page: "Página {i}/{n}"

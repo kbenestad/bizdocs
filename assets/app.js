@@ -1,0 +1,728 @@
+/* =============================================================================
+ * bizdocs — Shared app runtime   (assets/app.js)
+ * -----------------------------------------------------------------------------
+ * Cross-cutting JavaScript shared by every app (invoice, reimburse, timesheet…)
+ * via, just before each app's own inline <script>:
+ *     <script src="../assets/app.js"></script>
+ *
+ * Classic (non-module) script: the names below become globals visible to the
+ * app script that loads after it. Each app deletes its own copy of these and
+ * calls into here instead, so behaviour stays identical across apps and is
+ * fixed in one place.
+ *
+ * Provides: DOM helpers ($, $$, el, uid) · markdown() · brand/icon SVGs ·
+ * theme (currentTheme/toggleTheme/makeThemeButton) · modals (kbModal/kbConfirm/
+ * kbAlert/kbAbout).
+ * ========================================================================== */
+"use strict";
+
+/* ── DOM helpers ───────────────────────────────────────────────────────────── */
+const $  = (sel, ctx) => (ctx || document).querySelector(sel);
+const $$ = (sel, ctx) => [...(ctx || document).querySelectorAll(sel)];
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+/** Create an element. attrs: className, style(object), on<Event> handlers, or
+ *  plain attributes. children: string | Node | array of them. */
+const el = (tag, attrs, children) => {
+  const e = document.createElement(tag);
+  if (attrs) Object.entries(attrs).forEach(([k, v]) => {
+    if (k === 'className') e.className = v;
+    else if (k === 'style' && typeof v === 'object') Object.assign(e.style, v);
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2).toLowerCase(), v);
+    else if (v != null && v !== false) e.setAttribute(k, v);
+  });
+  if (children) (Array.isArray(children) ? children : [children]).forEach(c => {
+    if (c == null) return;
+    e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  });
+  return e;
+};
+
+/** Escape a string for interpolation into HTML (element and attribute
+ *  contexts). Use for ANY dynamic value — error messages, config strings,
+ *  user input — that ends up inside an innerHTML/template-literal build. */
+function kbEsc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/* ── Minimal markdown → HTML (for About boxes) ─────────────────────────────── */
+/* Supports #/##/### headings, **bold**, *italic*, [text](url), - bullet lists,
+ * and blank-line-separated paragraphs. Escapes HTML (including quotes, so the
+ * link href attribute can't be broken out of) first, and only linkifies
+ * http(s)/mailto/relative URLs — anything else (javascript:, data:, …) is left
+ * as plain text. */
+function markdown(md) {
+  if (!md) return '';
+  const safeUrl = u => /^(https?:|mailto:)/i.test(u) || !/^[a-z][a-z0-9+.-]*:/i.test(u);
+  let html = md
+    .replace(/&(?!#?\w+;)/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    .replace(/^#{3}\s+(.+)$/gm, '<h3>$1</h3>')
+    .replace(/^#{2}\s+(.+)$/gm, '<h2>$1</h2>')
+    .replace(/^#{1}\s+(.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([\s\S]+?)\*/g, '<em>$1</em>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, text, url) =>
+      safeUrl(url.trim()) ? `<a href="${url.trim()}" target="_blank" rel="noopener">${text}</a>` : m);
+  html = html.replace(/((?:^- .+\n?)+)/gm, m => '<ul>' + m.replace(/^- (.+)$/gm, '<li>$1</li>') + '</ul>');
+  html = html.split(/\n{2,}/).map(b => b.trim()).filter(Boolean)
+             .map(b => /^<[hul]/.test(b) ? b : `<p>${b.replace(/\n/g, '<br>')}</p>`).join('\n');
+  return html;
+}
+
+/* ── Brand & icon SVGs ─────────────────────────────────────────────────────── */
+const KB_BRAND_SVG = `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true" style="width:100%;height:100%;display:block"><rect x="3" y="14" width="29" height="29" rx="8" fill="var(--accent)"/><rect x="16" y="3" width="29" height="29" rx="8" fill="none" stroke="var(--accent)" stroke-width="4"/></svg>`;
+const KB_FOOTER_MARK_SVG = `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><rect x="1" y="5" width="11" height="11" rx="3" fill="var(--accent)"/><rect x="6" y="1" width="11" height="11" rx="3" fill="none" stroke="var(--accent)" stroke-width="1.5"/></svg>`;
+
+const KB_ICON = {
+  moon:  `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>`,
+  sun:   `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>`,
+  about: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>`,
+  warn:  `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/></svg>`,
+  info:  `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--info)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>`,
+  menu:  `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>`,
+};
+
+/* ── Theme (light/dark) ────────────────────────────────────────────────────── */
+/* The pre-paint inline snippet in each app reads this same key before first
+ * paint; here we read/write it on toggle. */
+const KB_THEME_KEY = 'kb-theme';
+
+function currentTheme() {
+  return document.documentElement.getAttribute('data-theme') ||
+    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+}
+
+/** Repaint every theme button's icon to match the active theme. */
+function updateThemeIcon() {
+  const icon = currentTheme() === 'dark' ? KB_ICON.sun : KB_ICON.moon;
+  $$('.kb-theme-btn').forEach(b => { b.innerHTML = icon; });
+}
+
+function toggleTheme() {
+  const next = currentTheme() === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem(KB_THEME_KEY, next); } catch (e) {}
+  updateThemeIcon();
+}
+
+/** A ready-wired theme toggle icon button. */
+function makeThemeButton() {
+  const btn = el('button', { type: 'button', className: 'kb-iconbtn kb-theme-btn',
+    title: 'Toggle light/dark', 'aria-label': 'Toggle dark mode', onClick: toggleTheme });
+  btn.innerHTML = currentTheme() === 'dark' ? KB_ICON.sun : KB_ICON.moon;
+  return btn;
+}
+
+/** A ready-wired "About" icon button. */
+function makeAboutButton(onClick) {
+  const btn = el('button', { type: 'button', className: 'kb-iconbtn', 'aria-label': 'About', onClick });
+  btn.innerHTML = KB_ICON.about;
+  return btn;
+}
+
+/* ── Modals ────────────────────────────────────────────────────────────────── */
+/* Generic dialog. Returns a Promise resolving to the clicked button's `value`
+ * (or `dismissValue` when closed via backdrop / Escape).
+ *
+ * opts = {
+ *   title?, icon?,                         // header (omitted entirely if no title)
+ *   bodyHTML? | bodyNode?,                 // body content
+ *   buttons: [{ label, value, variant?, autofocus? }],
+ *   dismissable = true, dismissValue = undefined
+ * } */
+function kbModal(opts) {
+  return new Promise(resolve => {
+    const overlay = el('div', { className: 'kb-overlay' });
+    const modal = el('div', { className: 'kb-modal' });
+
+    if (opts.title != null) {
+      const hdr = el('div', { className: 'kb-modal__hdr' });
+      if (opts.icon) { const w = el('span'); w.innerHTML = opts.icon; hdr.appendChild(w.firstElementChild || w); }
+      hdr.appendChild(el('span', null, opts.title));
+      modal.appendChild(hdr);
+    }
+
+    const body = opts.bodyNode || el('div', { className: 'kb-modal__body' });
+    if (opts.bodyHTML != null) body.innerHTML = opts.bodyHTML;
+    modal.appendChild(body);
+
+    const footer = el('div', { className: 'kb-modal__footer' });
+    let focusEl = null;
+    (opts.buttons || []).forEach(b => {
+      const btn = el('button', { className: 'kb-btn ' + (b.variant || 'kb-btn--primary') }, b.label);
+      btn.addEventListener('click', () => { cleanup(); resolve(b.value); });
+      if (b.autofocus) focusEl = btn;
+      footer.appendChild(btn);
+    });
+    modal.appendChild(footer);
+    overlay.appendChild(modal);
+
+    const dismissable = opts.dismissable !== false;
+    function cleanup() { overlay.remove(); document.removeEventListener('keydown', onKey); }
+    function onKey(e) { if (e.key === 'Escape' && dismissable) { cleanup(); resolve(opts.dismissValue); } }
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay && dismissable) { cleanup(); resolve(opts.dismissValue); }
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(overlay);
+    (focusEl || footer.querySelector('button') || modal).focus();
+  });
+}
+
+/* kbConfirm/kbAlert treat `message` as PLAIN TEXT (escaped; newlines become
+ * <br>). Callers with genuinely rich content should pass a bodyNode to
+ * kbModal, or route config markdown through kbAbout. */
+function kbMessageHTML(message) {
+  return message == null ? message : kbEsc(message).replace(/\n/g, '<br>');
+}
+
+/** Confirm dialog → resolves true (confirm) / false (cancel or dismiss). */
+function kbConfirm({ title, message, confirmLabel, cancelLabel, icon } = {}) {
+  return kbModal({
+    title, icon: title != null ? (icon || KB_ICON.warn) : undefined,
+    bodyHTML: kbMessageHTML(message), dismissValue: false,
+    buttons: [
+      { label: cancelLabel || 'Cancel', value: false, variant: 'kb-btn--ghost', autofocus: true },
+      { label: confirmLabel || 'OK', value: true, variant: 'kb-btn--primary' },
+    ],
+  });
+}
+
+/** Alert / notice dialog → resolves once dismissed. */
+function kbAlert({ title, message, okLabel, icon } = {}) {
+  return kbModal({
+    title, icon: title != null ? (icon || KB_ICON.info) : undefined,
+    bodyHTML: kbMessageHTML(message),
+    buttons: [{ label: okLabel || 'OK', value: true, variant: 'kb-btn--primary', autofocus: true }],
+  });
+}
+
+/** About dialog (renders markdown content). */
+function kbAbout({ title, contentMD, closeLabel } = {}) {
+  return kbModal({
+    title: title || 'About',
+    bodyHTML: markdown(contentMD || ''),
+    buttons: [{ label: closeLabel || 'Close', value: true, variant: 'kb-btn--primary', autofocus: true }],
+  });
+}
+
+/* ── Config loading ────────────────────────────────────────────────────────── */
+/** Fetch + parse a YAML config file, validating the result.
+ *  Throws on HTTP error, and on a successful fetch that returns the WRONG bytes:
+ *  on a static host a missing config.yml (or an SPA fallback, or a stale cached
+ *  page) is served as an HTML page with a 200, so jsyaml.load() returns a plain
+ *  string instead of the config object. Without this guard CFG.localisation is
+ *  undefined, each app's adapter silently early-returns, and the app renders its
+ *  chrome with every label as a raw key and an empty language dropdown — with no
+ *  error at all. Fail loudly and actionably instead. */
+async function loadYamlConfig(url = 'config.yml', { requireLocalisation = true } = {}) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const cfg = jsyaml.load(await res.text());
+  if (!cfg || typeof cfg !== 'object' || (requireLocalisation && !cfg.localisation)) {
+    throw new Error(
+      'config.yml loaded but did not parse to a valid configuration. The server ' +
+      'most likely returned an HTML page (a 404 or single-page-app fallback, or a ' +
+      'stale cached page) instead of the YAML file. Confirm config.yml is deployed ' +
+      'next to index.html and served as plain text (not rewritten to index.html).'
+    );
+  }
+  return cfg;
+}
+
+/** Org-wide branding keys that live in the root config.yml and cascade down
+ *  to every app, so an office admin sets them once instead of in every app's
+ *  config.yml. An app overrides a key by giving it a non-blank value in its
+ *  own config.yml. */
+const KB_SHARED_CONFIG_KEYS = ['organization', 'logo', 'logo-maxwidth', 'tagline', 'accent-colour'];
+
+let _kbSharedConfigPromise = null;
+/** Fetch the root config.yml once and cache it. Tolerant of failure — an app
+ *  deployed standalone (outside the bizdocs suite, with no root config.yml
+ *  reachable at ../config.yml) just falls back to its own config.yml values. */
+function loadSharedConfig() {
+  if (!_kbSharedConfigPromise) {
+    _kbSharedConfigPromise = loadYamlConfig('../config.yml', { requireLocalisation: false }).catch(() => ({}));
+  }
+  return _kbSharedConfigPromise;
+}
+
+/** Fill in KB_SHARED_CONFIG_KEYS on `cfg` from the root config.yml wherever
+ *  the app's own config.yml left them blank. Call after loadYamlConfig() and
+ *  before normalising localisation / applying the accent colour. */
+async function applySharedBranding(cfg) {
+  const shared = await loadSharedConfig();
+  KB_SHARED_CONFIG_KEYS.forEach(key => {
+    if (cfg[key] === undefined || cfg[key] === null || cfg[key] === '') cfg[key] = shared[key];
+  });
+  return cfg;
+}
+
+/** Load a CDN library declared in config.yml's `dependencies:` block (see
+ *  DESIGN.md / docs/dependencies.md) instead of hardcoding its <script> tag in
+ *  index.html. `dep` is `{ url, integrity? }`; omit integrity when pointing
+ *  at a local/vendored copy that won't match a CDN's SRI hash. Caches by
+ *  url so repeated calls for the same dependency reuse one <script> tag.
+ *  js-yaml itself can't go through this path — it's needed to fetch and
+ *  parse config.yml in the first place, so it stays hardcoded per app. */
+const _kbDepPromises = {};
+function loadDependency(dep) {
+  if (!dep || !dep.url) return Promise.reject(new Error('Missing dependency url in config.yml'));
+  if (_kbDepPromises[dep.url]) return _kbDepPromises[dep.url];
+  const p = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = dep.url;
+    if (dep.integrity) { script.integrity = dep.integrity; script.crossOrigin = 'anonymous'; }
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load dependency: ' + dep.url));
+    document.head.appendChild(script);
+  });
+  _kbDepPromises[dep.url] = p;
+  return p;
+}
+
+/** Apply a config's accent-colour to the --accent token (no-op if unset; the
+ *  token already has a sensible default in style.css). */
+function applyAccent(cfg) {
+  if (cfg && cfg['accent-colour']) {
+    document.documentElement.style.setProperty('--accent', cfg['accent-colour']);
+  }
+}
+
+/** Parse a #rgb / #rrggbb hex colour to [r, g, b] (0–255), or null if it isn't
+ *  one. PDF builders should fall back to their default accent on null rather
+ *  than emit NaN colours. */
+function kbHexRgb(hex) {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(hex || '').trim());
+  if (!m) return null;
+  let x = m[1];
+  if (x.length === 3) x = x[0] + x[0] + x[1] + x[1] + x[2] + x[2];
+  const n = parseInt(x, 16);
+  return [n >> 16, (n >> 8) & 0xff, n & 0xff];
+}
+
+/** Sanitise a fragment (e.g. a person/org name) for use in a download
+ *  filename: strip anything outside [a-zA-Z0-9_-]. */
+function kbSafeFilename(s) {
+  return String(s || '').replace(/[^a-zA-Z0-9_\-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+}
+
+/* ── Nav menu (apps + links dropdown, shared across every app's toolbar) ─────── */
+/** Config booleans in this repo are written as yes/no (see `logo: yes|no`) — this
+ *  reads that same convention for `hide-from-navselector`, real booleans included. */
+function kbTruthy(v) {
+  if (v === true) return true;
+  if (typeof v === 'string') return /^(yes|true)$/i.test(v.trim());
+  return false;
+}
+
+/** Filter a root config's `apps:`/`links:` lists down to the entries the nav
+ *  dropdown should show (drops any with `hide-from-navselector: yes|true`). */
+function kbFilterNavItems(cfg) {
+  const visible = list => (Array.isArray(list) ? list : []).filter(item => !kbTruthy(item && item['hide-from-navselector']));
+  return { apps: visible(cfg && cfg.apps), links: visible(cfg && cfg.links) };
+}
+
+/** Fetch the root config (relative to the calling app, e.g. '../config.yml')
+ *  purely for its apps/links nav lists. Fails soft to empty lists — the nav
+ *  menu is optional chrome and must never block an app's own boot. */
+async function loadNavItems(url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return { apps: [], links: [] };
+    const cfg = jsyaml.load(await res.text());
+    if (!cfg || typeof cfg !== 'object') return { apps: [], links: [] };
+    return kbFilterNavItems(cfg);
+  } catch (e) {
+    return { apps: [], links: [] };
+  }
+}
+
+/** Build the toolbar's far-left nav dropdown from { apps, links } (see
+ *  loadNavItems). Hides itself (returns an empty, display:none wrapper) when
+ *  there is nothing to show, so callers can always append it unconditionally. */
+function makeNavMenu(navItems) {
+  const apps  = (navItems && navItems.apps)  || [];
+  const links = (navItems && navItems.links) || [];
+  const wrap = el('div', { className: 'kb-navmenu' });
+  if (!apps.length && !links.length) { wrap.style.display = 'none'; return wrap; }
+
+  const btn = el('button', {
+    type: 'button', className: 'kb-iconbtn kb-navmenu__btn',
+    'aria-haspopup': 'true', 'aria-expanded': 'false', 'aria-label': 'Apps',
+  });
+  btn.innerHTML = KB_ICON.menu;
+
+  const menu = el('div', { className: 'kb-navmenu__menu', role: 'menu' });
+  menu.hidden = true;
+
+  const addItems = (list, external) => {
+    list.forEach(item => {
+      const a = el('a', { className: 'kb-navmenu__item', role: 'menuitem', href: item.href }, item.name || item.href);
+      if (external) { a.target = '_blank'; a.rel = 'noopener'; }
+      menu.appendChild(a);
+    });
+  };
+  addItems(apps, false);
+  if (apps.length && links.length) menu.appendChild(el('div', { className: 'kb-navmenu__sep' }));
+  addItems(links, true);
+
+  function close() {
+    menu.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('click', onDocClick, true);
+    document.removeEventListener('keydown', onKey);
+  }
+  function open() {
+    menu.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+    document.addEventListener('click', onDocClick, true);
+    document.addEventListener('keydown', onKey);
+  }
+  function onDocClick(e) { if (!wrap.contains(e.target)) close(); }
+  function onKey(e) { if (e.key === 'Escape') close(); }
+  btn.addEventListener('click', () => { menu.hidden ? open() : close(); });
+
+  wrap.append(btn, menu);
+  return wrap;
+}
+
+/* ── Numbers & dates ───────────────────────────────────────────────────────── */
+/** Format a number with thousands separators and 2 decimals; returns `fallback`
+ *  for non-numeric input. */
+function formatAmount(n, { fallback = '0.00', locale = 'en-US' } = {}) {
+  if (n === '' || n == null || isNaN(+n)) return fallback;
+  return (+n).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** Parse a possibly comma-grouped numeric string to a number (0 if invalid). */
+function parseAmount(s) { return parseFloat(String(s ?? 0).replace(/,/g, '')) || 0; }
+
+const MONTHS_FULL  = ['January','February','March','April','May','June',
+                      'July','August','September','October','November','December'];
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun',
+                      'Jul','Aug','Sep','Oct','Nov','Dec'];
+
+/** Format an ISO date (YYYY-MM-DD) with a token pattern:
+ *  d/dd day · M/MM/MMM/MMMM month · YY/YYYY year. */
+function formatDate(iso, pattern = 'd MMMM YYYY', full = MONTHS_FULL, short = MONTHS_SHORT) {
+  if (!iso) return '';
+  const [yr, mo, dy] = String(iso).split('-').map(Number);
+  return pattern.replace(/YYYY|YY|MMMM|MMM|MM|M|dd|d/g, tok => {
+    switch (tok) {
+      case 'YYYY': return yr;
+      case 'YY':   return String(yr).slice(-2);
+      case 'MMMM': return full[mo - 1];
+      case 'MMM':  return short[mo - 1];
+      case 'MM':   return String(mo).padStart(2, '0');
+      case 'M':    return mo;
+      case 'dd':   return String(dy).padStart(2, '0');
+      case 'd':    return dy;
+      default:     return tok;
+    }
+  });
+}
+
+/* ── Font scale (shared text-size control) ─────────────────────────────────── */
+/* Every app drives the same --font-scale token (defined in style.css) and
+ * persists it under one key, so the A−/A+ control behaves identically. */
+const KB_SCALE_KEY = 'kb-font-scale';
+const KB_SCALE_MIN = 0.5, KB_SCALE_MAX = 1.5, KB_SCALE_STEP = 0.1;
+
+function currentScale() {
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--font-scale'));
+  return isNaN(v) ? 1 : v;
+}
+function applyScaleLabels() {
+  const pct = Math.round(currentScale() * 100) + '%';
+  $$('.kb-sz-label').forEach(l => { l.textContent = pct; });
+}
+/** Set the global font scale (clamped, 1-decimal), persist, and sync labels. */
+function setFontScale(scale) {
+  const s = Math.round(Math.max(KB_SCALE_MIN, Math.min(KB_SCALE_MAX, scale)) * 10) / 10;
+  document.documentElement.style.setProperty('--font-scale', String(s));
+  try { localStorage.setItem(KB_SCALE_KEY, String(s)); } catch (e) {}
+  applyScaleLabels();
+  return s;
+}
+function bumpFontScale(dir) { return setFontScale(currentScale() + dir * KB_SCALE_STEP); }
+/** Apply the persisted font scale + refresh labels (call once at startup).
+ *  The stored value is re-clamped so a stale/corrupt entry can't apply an
+ *  arbitrary CSS value. */
+function initFontScale() {
+  const v = parseFloat(localStorage.getItem(KB_SCALE_KEY));
+  if (!isNaN(v)) {
+    const s = Math.round(Math.max(KB_SCALE_MIN, Math.min(KB_SCALE_MAX, v)) * 10) / 10;
+    document.documentElement.style.setProperty('--font-scale', String(s));
+  }
+  applyScaleLabels();
+}
+/** Build an A− / A+ text-size segment plus its % label → { seg, label }. */
+function makeSizeControl() {
+  const seg = el('div', { className: 'kb-seg', role: 'group', 'aria-label': 'Text size' });
+  seg.append(
+    el('button', { type: 'button', 'aria-label': 'Smaller text', onClick: () => bumpFontScale(-1) }, 'A−'),
+    el('button', { type: 'button', 'aria-label': 'Larger text',  onClick: () => bumpFontScale(1)  }, 'A+')
+  );
+  const label = el('span', { className: 'kb-sz-label' }, Math.round(currentScale() * 100) + '%');
+  return { seg, label };
+}
+
+/* ── Localisation ──────────────────────────────────────────────────────────── */
+/* The apps share the same `localisation:` config shape. These helpers cover the
+ * common core; each app keeps its own data-specific mapping (invoice's
+ * product/uom/tax labels, timesheet's holiday/code rows, reimburse's about/fx). */
+
+/** From a `localisation:` block, build { table, languages, codes, defaultCode }
+ *  where table is a { key: { lang: value } } map of UI strings. */
+function buildLangTable(loc) {
+  const langs = Array.isArray(loc.languages) ? loc.languages : [];
+  const codes = langs.map(l => l.code);
+  const table = {};
+  codes.forEach(lc => {
+    const ui = (loc[lc] && loc[lc].ui) || {};
+    Object.keys(ui).forEach(k => { (table[k] = table[k] || {})[lc] = ui[k]; });
+  });
+  return { table, languages: langs, codes, defaultCode: loc['default-language'] || codes[0] || 'en' };
+}
+
+/** Look up a UI string with fallback (lang → defLang → key) and optional
+ *  {placeholder} interpolation. */
+function lookupString(table, key, lang, defLang, vars) {
+  const e = table && table[key];
+  let s = e ? (e[lang] ?? e[defLang] ?? key) : key;
+  if (vars) for (const k in vars) s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), vars[k]);
+  return s;
+}
+
+/** Resolve the PDF/output language: follow the UI when output-language is
+ *  "user-selected", otherwise use the config default. */
+function pdfOutputLang(cfg, uiLang) {
+  return cfg['output-language'] === 'user-selected' ? uiLang : (cfg['default-code'] || 'en');
+}
+
+/* ── Version marker ────────────────────────────────────────────────────────── */
+/* version.json is written to the repo root by .github/workflows/version-stamp.yml
+ * on each tag push — it doesn't exist between tags (e.g. on a fresh feature
+ * branch), so every consumer must tolerate a missing/unreadable file. */
+
+/** Fetch version.json ({version, commit, date}). path is relative to the
+ *  calling page (apps pass '../version.json', the root page 'version.json').
+ *  Returns null if the file is missing or malformed. */
+async function loadVersionInfo(path) {
+  try {
+    const res = await fetch(path, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || typeof data.version !== 'string') return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/** Build the right-aligned "vX.Y.Z • abcdef1 / D Month YYYY" footer marker.
+ *  Returns null (nothing to append) when info is null. */
+function buildVersionMarker(info) {
+  if (!info) return null;
+  return el('span', { className: 'kb-footer__version' }, [
+    el('span', { className: 'kb-footer__version-line' }, `${info.version} • ${info.commit}`),
+    el('span', { className: 'kb-footer__version-line' }, info.date),
+  ]);
+}
+
+/** Replace the {repo} / {version-line} tokens in About markdown with the
+ *  release info from version.json (or a neutral placeholder before the
+ *  first tag is ever published). */
+function applyVersionTokens(md, info) {
+  const vars = {
+    repo: 'kbenestad/bizdocs',
+    'version-line': info ? `${info.version} • ${info.commit} • ${info.date}` : 'dev build',
+  };
+  let s = md || '';
+  for (const k in vars) s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), vars[k]);
+  return s;
+}
+
+/** Build the toolbar's far-right language <select>, or null when there's
+ *  nothing to choose (0 or 1 language) — callers should skip appending it
+ *  in that case, so the control disappears for single-language apps. */
+function makeLangSelect(languages, current, onChange) {
+  const langs = Array.isArray(languages) ? languages : [];
+  if (langs.length < 2) return null;
+  const sel = el('select', { className: 'kb-select', 'aria-label': 'Language' });
+  langs.forEach(l => {
+    const code = typeof l === 'object' ? l.code : l;
+    const name = (typeof l === 'object' && l.name) || code;
+    const o = el('option', { value: code }, name);
+    if (code === current) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.addEventListener('change', () => onChange(sel.value));
+  return sel;
+}
+
+/* ── Tabs ──────────────────────────────────────────────────────────────── */
+/** Build a tab strip + panels.
+ *  items: Array<{ label: string, content: Node }>
+ *  opts.defaultIndex: number (default 0) */
+const makeTabs = (items, opts = {}) => {
+  const defaultIndex = opts.defaultIndex ?? 0;
+
+  const tabIds   = items.map(() => uid());
+  const panelIds = items.map(() => uid());
+
+  const tablist = el('div', { className: 'kb-tablist', role: 'tablist' });
+  const tabs = items.map((item, i) => {
+    const btn = el('button', {
+      type: 'button',
+      role: 'tab',
+      id: tabIds[i],
+      'aria-selected': String(i === defaultIndex),
+      'aria-controls': panelIds[i],
+      className: 'kb-tab',
+    }, item.label);
+    tablist.appendChild(btn);
+    return btn;
+  });
+
+  const panels = items.map((item, i) => {
+    const panel = el('div', {
+      role: 'tabpanel',
+      id: panelIds[i],
+      'aria-labelledby': tabIds[i],
+      className: 'kb-tab-panel' + (i === defaultIndex ? ' is-active' : ''),
+    });
+    panel.appendChild(item.content);
+    return panel;
+  });
+
+  tabs.forEach((btn, i) => {
+    btn.addEventListener('click', () => {
+      if (btn.getAttribute('aria-selected') === 'true') return;
+      tabs.forEach((t, j) => {
+        t.setAttribute('aria-selected', String(j === i));
+        panels[j].classList.toggle('is-active', j === i);
+      });
+    });
+  });
+
+  const wrapper = el('div', {});
+  wrapper.appendChild(tablist);
+  panels.forEach(p => wrapper.appendChild(p));
+  return wrapper;
+};
+
+/* ── Accordion ─────────────────────────────────────────────────────────── */
+/** Build a single-open accordion with "Open all / Close all" control.
+ *  items: Array<{ label: string, content: Node }>
+ *  opts.openAllLabel:  string (required)
+ *  opts.closeAllLabel: string (required)
+ *  opts.defaultOpen:   number | null (default null) */
+const makeAccordion = (items, opts = {}) => {
+  const openAllLabel  = opts.openAllLabel;
+  const closeAllLabel = opts.closeAllLabel;
+  let openIndex = opts.defaultOpen ?? null;
+
+  const triggerIds = items.map(() => uid());
+  const panelIds   = items.map(() => uid());
+
+  const chevronSVG = () => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('class', 'kb-accordion__chevron');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M6 9l6 6 6-6');
+    svg.appendChild(path);
+    return svg;
+  };
+
+  const openAllBtn = el('button', {
+    type: 'button',
+    className: 'kb-accordion__open-all',
+  }, openAllLabel);
+
+  const controls = el('div', { className: 'kb-accordion__controls' });
+  controls.appendChild(openAllBtn);
+
+  const isAllOpen = () => triggers.every(t => t.getAttribute('aria-expanded') === 'true');
+
+  const updateOpenAllLabel = () => {
+    openAllBtn.textContent = isAllOpen() ? closeAllLabel : openAllLabel;
+  };
+
+  const openItem = (i) => {
+    triggers[i].setAttribute('aria-expanded', 'true');
+    panelEls[i].classList.add('is-open');
+  };
+  const closeItem = (i) => {
+    triggers[i].setAttribute('aria-expanded', 'false');
+    panelEls[i].classList.remove('is-open');
+  };
+
+  const triggers = [];
+  const panelEls = [];
+  const itemEls  = items.map((item, i) => {
+    const open = i === openIndex;
+    const trigger = el('button', {
+      type: 'button',
+      className: 'kb-accordion__trigger',
+      id: triggerIds[i],
+      'aria-expanded': String(open),
+      'aria-controls': panelIds[i],
+    });
+    trigger.appendChild(document.createTextNode(item.label));
+    trigger.appendChild(chevronSVG());
+
+    const panel = el('div', {
+      className: 'kb-accordion__panel' + (open ? ' is-open' : ''),
+      id: panelIds[i],
+      'aria-labelledby': triggerIds[i],
+    });
+    panel.appendChild(item.content);
+
+    triggers.push(trigger);
+    panelEls.push(panel);
+
+    trigger.addEventListener('click', () => {
+      const expanded = trigger.getAttribute('aria-expanded') === 'true';
+      if (expanded) {
+        closeItem(i);
+        openIndex = null;
+      } else {
+        if (openIndex !== null && !isAllOpen()) closeItem(openIndex);
+        openItem(i);
+        openIndex = i;
+      }
+      updateOpenAllLabel();
+    });
+
+    const itemEl = el('div', { className: 'kb-accordion__item' });
+    itemEl.appendChild(trigger);
+    itemEl.appendChild(panel);
+    return itemEl;
+  });
+
+  openAllBtn.addEventListener('click', () => {
+    if (isAllOpen()) {
+      items.forEach((_, i) => closeItem(i));
+      openIndex = null;
+      openAllBtn.textContent = openAllLabel;
+    } else {
+      items.forEach((_, i) => openItem(i));
+      openIndex = null;
+      openAllBtn.textContent = closeAllLabel;
+    }
+  });
+
+  const accordion = el('div', { className: 'kb-accordion' });
+  accordion.appendChild(controls);
+  itemEls.forEach(itemEl => accordion.appendChild(itemEl));
+  return accordion;
+};

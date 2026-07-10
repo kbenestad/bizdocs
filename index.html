@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.bunny.net; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="format-detection" content="telephone=no">
+<title>Document Tools</title>
+
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="assets/site.webmanifest">
+<meta name="theme-color" content="#2f6fed">
+
+<!-- Restore persisted theme BEFORE first paint (avoids a flash). Keep this. -->
+<script>
+  (function(){var t=localStorage.getItem('kb-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"
+        integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
+        crossorigin="anonymous"></script>
+
+<!-- Shared design + runtime. app.js MUST load before the inline <script>. -->
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/ui.css">
+<script src="assets/app.js"></script>
+
+<style>
+.nav-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.nav-tile {
+  display: block; padding: 14px 16px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  background: var(--bg); text-decoration: none; color: inherit;
+  transition: border-color .14s, background .14s;
+}
+.nav-tile:hover { border-color: var(--accent); background: var(--accent-soft); }
+.nav-tile .t-name { font-size: var(--fs-base); font-weight: 600; color: var(--text); margin-bottom: 3px; }
+.nav-tile .t-desc { font-size: var(--fs-small); color: var(--text-muted); line-height: 1.5; }
+</style>
+</head>
+<body>
+<div id="app"><p class="kb-loading">Loading…</p></div>
+
+<script>
+(async function () {
+'use strict';
+
+let CFG;
+
+function render() {
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  const wrap = el('div', { className: 'kb-wrap' });
+
+  wrap.appendChild(buildToolbar());
+  wrap.appendChild(buildHeader());
+  if ((CFG.apps || []).length)   wrap.appendChild(buildSection('Apps',  CFG.apps,  false));
+  if ((CFG.links || []).length)  wrap.appendChild(buildSection('Links', CFG.links, true));
+  wrap.appendChild(buildFooter());
+
+  app.appendChild(wrap);
+  updateThemeIcon();
+}
+
+function buildToolbar() {
+  const toolbar = el('div', { className: 'kb-toolbar' });
+  const { seg: sizeSeg, label: szLabel } = makeSizeControl();
+  toolbar.append(makeNavMenu(kbFilterNavItems(CFG)), el('div', { className: 'spacer' }), sizeSeg, szLabel, makeThemeButton());
+  return toolbar;
+}
+
+function buildHeader() {
+  const header = el('header', { className: 'kb-header' });
+
+  const brand = el('div', { className: 'kb-brand' });
+  const tile = el('span', { className: 'logo' });
+  if (CFG.logo === 'yes' || CFG.logo === true) {
+    const img = el('img', { src: 'assets/logo.png', alt: CFG.organization || '' });
+    img.onerror = () => { img.src = 'assets/logo.jpg'; img.onerror = () => { tile.innerHTML = KB_BRAND_SVG; }; };
+    tile.appendChild(img);
+  } else { tile.innerHTML = KB_BRAND_SVG; }
+  const org = el('span', { className: 'org' });
+  org.appendChild(document.createTextNode(CFG.organization || 'kbenestad/bizdocs'));
+  if (CFG.tagline) org.appendChild(el('small', null, CFG.tagline));
+  brand.append(tile, org);
+
+  const title = el('div', { className: 'kb-doctitle' });
+  title.appendChild(el('h1', null, 'Document Tools'));
+
+  header.append(brand, title);
+  return header;
+}
+
+function buildSection(heading, items, external) {
+  const card = el('div', { className: 'kb-card' });
+  card.appendChild(el('div', { className: 'kb-card__title' }, heading));
+  const grid = el('div', { className: 'nav-grid' });
+  items.forEach(item => {
+    const attrs = { className: 'nav-tile', href: item.href };
+    if (external) { attrs.target = '_blank'; attrs.rel = 'noopener'; }
+    const a = el('a', attrs);
+    a.appendChild(el('div', { className: 't-name' }, item.name || item.href));
+    if (item.description) a.appendChild(el('div', { className: 't-desc' }, item.description));
+    grid.appendChild(a);
+  });
+  card.appendChild(grid);
+  return card;
+}
+
+function buildFooter() {
+  const sep = () => el('span', { className: 'sep' }, '·');
+  const footer = el('footer', { className: 'kb-footer' });
+  const mark = el('span', { className: 'kb-mark' }); mark.innerHTML = KB_FOOTER_MARK_SVG + 'kBenestad';
+  footer.append(
+    mark,
+    sep(), el('span', null, '© 2026 Kristian Benestad'),
+    sep(), el('a', { href: 'https://github.com/kbenestad/bizdocs', target: '_blank', rel: 'noopener' }, 'kbenestad/bizdocs')
+  );
+  const marker = buildVersionMarker(VERSION_INFO);
+  if (marker) footer.appendChild(marker);
+  return footer;
+}
+
+let VERSION_INFO = null;
+
+try {
+  CFG = await loadYamlConfig('config.yml', { requireLocalisation: false });
+  VERSION_INFO = await loadVersionInfo('version.json');
+  applyAccent(CFG);
+  initFontScale();
+  render();
+} catch (e) {
+  document.getElementById('app').innerHTML =
+    `<div class="kb-wrap"><div class="kb-note kb-note--error"><span>⚠</span>` +
+    `<div><b>Failed to load config.yml</b><br>${kbEsc(e.message)}</div></div></div>`;
+}
+})();
+</script>
+</body>
+</html>

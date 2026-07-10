@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="reimburse">
+  <rect width="48" height="48" rx="12" fill="#2f6fed"></rect>
+  <rect x="7.5" y="14" width="33" height="20" rx="3.2" fill="none" stroke="#fff" stroke-width="2.8"></rect>
+  <circle cx="24" cy="24" r="4.6" fill="none" stroke="#fff" stroke-width="2.6"></circle>
+  <path d="M12.7 21.4 V26.6 M35.3 21.4 V26.6" stroke="#fff" stroke-width="2.6" stroke-linecap="round"></path>
+</svg>
