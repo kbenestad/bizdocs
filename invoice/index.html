@@ -1424,7 +1424,7 @@ async function buildPDF() {
   fc(...ACCENT); dc(...WHITE); doc.setLineWidth(0);
   doc.rect(ML, y, CW, TH, "F");
   fb(8); tc(...WHITE);
-  tL(td("qty"),         xQ+2,     y+4.8);
+  tR(td("qty"),         xU-2,     y+4.8);
   tL(td("uom"),         xU+2,     y+4.8);
   tL(td("description"), xD+2,     y+4.8);
   tR(td("price"),       xP+CP-2,  y+4.8);
@@ -1459,7 +1459,7 @@ async function buildPDF() {
     const qStr = row.qty % 1 === 0 ? String(row.qty) : fmt(row.qty);
 
     fn(8.5); tc(...BODY);
-    tL(qStr,       xQ+2, yt);
+    tR(qStr,       xU-2, yt);
     tL(row.uomLbl, xU+2, yt);
     dLines.forEach((dline, li) => tL(dline, xD+2, yt + li*3.8));
     fn(8.5); tc(...BODY);   tR(fmt(row.price), xP+CP-2, yt);
