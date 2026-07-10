@@ -1,0 +1,52 @@
+name: Sync pages branch
+
+# Mirrors only the deployed app files from main onto the pages branch, which
+# GitHub Pages serves (Settings > Pages > Deploy from a branch > pages > /).
+# Keeps CLAUDE.md, DESIGN.md, README.md, LICENSE, docs/, _template/, and
+# .github/ out of the published site — see CLAUDE.md.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'index.html'
+      - 'config.yml'
+      - 'assets/**'
+      - 'invoice/**'
+      - 'reimburse/**'
+      - 'timesheet/**'
+      - 'contactmanager/**'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Sync app files onto pages branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin pages
+          git worktree add /tmp/pages origin/pages
+
+          # Clear everything except .git, then copy over only the app files.
+          find /tmp/pages -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          cp -r index.html config.yml assets invoice reimburse timesheet contactmanager /tmp/pages/
+
+          cd /tmp/pages
+          git add -A
+          if git diff --cached --quiet; then
+            echo "pages branch already up to date"
+            exit 0
+          fi
+          git commit -m "Sync app files from main (${GITHUB_SHA::7})"
+          git push origin HEAD:pages
