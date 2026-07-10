@@ -978,6 +978,7 @@ try {
   else {
     CFG = await loadYamlConfig();
     VERSION_INFO = await loadVersionInfo('../version.json');
+    await applySharedBranding(CFG);
     normaliseConfig();
     applyAccent(CFG);
     initFontScale();

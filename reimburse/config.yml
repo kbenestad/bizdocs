@@ -2,11 +2,24 @@
 # Reimbursement Form — Configuration
 # =============================================================================
 
-# Organization
-organization:                # leave blank to show kBenestad wordmark
-logo: no                     # yes|no — if yes, loads ../assets/logo.png (shared org logo)
-logo-maxwidth: 4             # cm — maximum logo width on PDF
-tagline:                     # subtitle shown below org name
+# ── Dependencies ───────────────────────────────────────────────────────────
+# CDN libraries loaded dynamically after this file parses — swap `url` to
+# point at a local vendored copy instead of the CDN without touching
+# index.html; drop/blank `integrity` when doing so (a local file won't match
+# the CDN's SRI hash). See ../docs/dependencies.md for the current versions/hashes.
+# Note: js-yaml itself stays hardcoded in index.html's <head> — it's needed
+# to fetch and parse this very file, so it can't be config-driven.
+dependencies:
+  pdf-lib:
+    url: "https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"
+    integrity: "sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI"
+
+# Organization — inherited from ../config.yml (root, org-wide settings) when
+# left blank here. Set a value below only to override it for this app alone.
+organization:
+logo:                         # yes|no — if yes, loads ../assets/logo.png (shared org logo)
+logo-maxwidth:                # cm — maximum logo width on PDF
+tagline:
 
 # Page setup
 page-size: A4                # A4 or letter
@@ -22,8 +35,8 @@ font-heading: Helvetica
 font-monospace: Courier
 font-size: 10                # base font size in pt for PDF
 
-# Branding
-accent-colour: "#2f6fed"
+# Branding — inherited from ../config.yml when blank; override here if needed.
+accent-colour:
 
 # Form text (appears on PDF)
 intro: ""

@@ -111,13 +111,10 @@
 
 <footer id="app-footer" class="kb-footer"></footer>
 
-<!-- js-yaml -->
+<!-- js-yaml: needed to fetch/parse config.yml, so it must stay hardcoded here
+     (see config.yml's dependencies: block for the config-driven libraries). -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"
         integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
-        crossorigin="anonymous"></script>
-<!-- jsPDF -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
-        integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk"
         crossorigin="anonymous"></script>
 <!-- Shared app runtime (DOM helpers, markdown, theme, modals) -->
 <script src="../assets/app.js"></script>
@@ -267,12 +264,16 @@ function countryOpts(sel) {
 // ── Theme toggle: currentTheme/toggleTheme/updateThemeIcon live in app.js ─────
 
 // ── Load config ───────────────────────────────────────────────────────────────
+let jspdfReady = null;
 async function loadCfg() {
   try {
     cfg = await loadYamlConfig();
     versionInfo = await loadVersionInfo('../version.json');
+    await applySharedBranding(cfg);
     normaliseI18n(cfg);
     lang = cfg["default-code"] || "en";
+    jspdfReady = loadDependency(cfg.dependencies && cfg.dependencies.jspdf);
+    jspdfReady.catch(() => {}); // surfaced when buildPDF() awaits it instead
     boot();
   } catch (err) {
     document.getElementById("loading").innerHTML =
@@ -1277,7 +1278,10 @@ function gatherData(renderLang) {
 }
 
 // ── Build PDF with jsPDF + Helvetica ─────────────────────────────────────────
-function buildPDF() {
+async function buildPDF() {
+  try {
+    await jspdfReady;
+  } catch (err) { /* fall through to the window.jspdf check below */ }
   if (!window.jspdf) { kbAlert({ title: "PDF", message: "PDF library not loaded — check your internet connection." }); return; }
 
   const { jsPDF } = window.jspdf;
