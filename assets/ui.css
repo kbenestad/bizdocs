@@ -112,7 +112,7 @@
 .kb-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
 .kb-grid.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
 .kb-grid.cols-5 { grid-template-columns: 1.6fr 1fr 1fr 1fr 1fr; }
-.kb-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.kb-field { display: flex; flex-direction: column; justify-content: flex-end; gap: 5px; min-width: 0; }
 .kb-field.grow { flex: 1; }
 .kb-label {
   font-size: var(--fs-label); font-weight: 600; letter-spacing: 0.03em;
