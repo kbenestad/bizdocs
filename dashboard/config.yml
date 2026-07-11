@@ -85,7 +85,7 @@ localisation:
       field-bank-addr1: "Bank address line 1"
       field-bank-addr2: "Bank address line 2"
       field-bank-ref: "Payment reference"
-      save-profile: "Save profile"
+      save-profile: "Save in browser"
       profile-saved: "Profile saved."
 
       toolbar-import-invoice: "Import from invoice"
@@ -179,7 +179,7 @@ localisation:
       field-bank-addr1: "Bankadresse Zeile 1"
       field-bank-addr2: "Bankadresse Zeile 2"
       field-bank-ref: "Zahlungsreferenz"
-      save-profile: "Profil speichern"
+      save-profile: "Im Browser speichern"
       profile-saved: "Profil gespeichert."
 
       toolbar-import-invoice: "Aus invoice importieren"

@@ -265,7 +265,14 @@ function buildProfileCard() {
     el('button', {
       type: 'button', className: 'kb-btn kb-btn--ghost',
       onClick: () => validateProfile(refs, bankRefs),
-    }, [iconEl(KB_ICON.dataCheck), S('toolbar-validate')])
+    }, [iconEl(KB_ICON.dataCheck), S('toolbar-validate')]),
+    el('button', {
+      type: 'button', className: 'kb-btn kb-btn--primary',
+      onClick: () => {
+        saveSharedProfile(profileFromForm(refs, bankRefs));
+        toolbarStatus.textContent = S('profile-saved');
+      },
+    }, [iconEl(KB_ICON.tabMove), S('save-profile')])
   );
   card.append(toolbar, toolbarStatus);
   const mk = (key, labelKey) => {
@@ -308,17 +315,6 @@ function buildProfileCard() {
     mkBank('bic', 'field-bank-bic'), mkBank('ref', 'field-bank-ref')
   );
   card.appendChild(bankGrid);
-
-  const status = el('div', { className: 'dash-status' });
-  const actions = el('div', { className: 'kb-actions' });
-  actions.appendChild(el('button', {
-    className: 'kb-btn kb-btn--primary',
-    onClick: () => {
-      saveSharedProfile(profileFromForm(refs, bankRefs));
-      status.textContent = S('profile-saved');
-    },
-  }, S('save-profile')));
-  card.append(actions, status);
   return card;
 }
 
