@@ -135,8 +135,8 @@ const tLines = {};
 let _loading = false;
 
 // ── i18n ──────────────────────────────────────────────────────────────────────
-function t(key) {
-  return lookupString(cfg?.translations, key, lang, cfg?.["default-code"]);
+function t(key, vars) {
+  return lookupString(cfg?.translations, key, lang, cfg?.["default-code"], vars);
 }
 
 // ── Localisation adapter ───────────────────────────────────────────────────────
@@ -660,12 +660,20 @@ function buildForm() {
   document.getElementById("paid-inp").addEventListener("input", calcTotals);
   document.getElementById("the-form").addEventListener("submit", e => { e.preventDefault(); generateInvoice(); });
   document.querySelectorAll("[data-ls]").forEach(el => el.addEventListener("change", saveStorage));
-  document.getElementById("icur").addEventListener("change", () => {
-    Object.keys(lines).forEach(k => {
-      if (document.getElementById(`frate-lbl-${k}`)) updateFxLabels(+k);
-    });
-  });
+  document.getElementById("icur").addEventListener("change", refreshFxRates);
   calcPayBy();
+}
+
+// Re-derives FX labels/rates for every FX-enabled line, e.g. after the invoice
+// currency changes.
+function refreshFxRates() {
+  Object.keys(lines).forEach(k => {
+    if (document.getElementById(`frate-lbl-${k}`)) {
+      updateFxLabels(+k);
+      applyFixedFxRate(+k);
+      calcFxFromPer(+k);
+    }
+  });
 }
 
 // ── Project-code dropdown ─────────────────────────────────────────────────────
@@ -712,7 +720,7 @@ function fillChargeTo(v) {
   updateProjectCodes(ct["project-codes"] || null);
   if (ct.currency) {
     const icurEl = document.getElementById("icur");
-    if (icurEl) { icurEl.value = ct.currency; saveStorage(); }
+    if (icurEl) { icurEl.value = ct.currency; saveStorage(); refreshFxRates(); }
   }
 }
 
@@ -901,7 +909,7 @@ function toggleFx(i) {
       <div class="kb-field">
         <span class="kb-label" id="fcur-lbl-${i}">${h(t("currency-code"))}</span>
         <select id="fcur-${i}" class="kb-select"
-                onchange="updateFxLabels(${i});calcLine(${i});saveLines()">
+                onchange="onFxCurrencyChange(${i})">
           ${currOpts(defaultFcy)}
         </select>
       </div>
@@ -925,10 +933,11 @@ function toggleFx(i) {
                oninput="calcFxFromPer(${i})">
       </div>
     </div>
-    <div class="fx-note"><span id="ftot-lbl-${i}">${h(t("total-foreign"))} ${h(defaultFcy)}</span>: <strong id="fltot-${i}">0.00</strong></div>`;
+    <div class="fx-note"><span id="ftot-lbl-${i}">${h(t("total-foreign"))} ${h(defaultFcy)}</span>: <strong id="fltot-${i}">0.00</strong></div>
+    <div class="fx-note" id="fxrate-note-${i}" style="display:none"></div>`;
   lr?.insertAdjacentElement("afterend", fxDiv);
-  calcLine(i);
-  saveLines();
+  applyFixedFxRate(i);
+  calcFxFromPer(i);
 }
 
 function calcFxFromPer(i) {
@@ -942,6 +951,53 @@ function calcFxFromPer(i) {
     : (per / rate).toFixed(6);
   calcLine(i);
   saveLines();
+}
+
+// ── Fixed FX rates from config ─────────────────────────────────────────────────
+// fixedfxrate entries read as: 1 currency1 = fxrate currency2.
+function findFixedFxRate(cur1, cur2) {
+  const list = cfg?.["fixedfxrate"] || [];
+  for (const r of list) {
+    if (r.currency1 === cur1 && r.currency2 === cur2) return { rate: +r.fxrate, date: r.fxratedate, inverted: false };
+    if (r.currency1 === cur2 && r.currency2 === cur1) return { rate: +r.fxrate, date: r.fxratedate, inverted: true };
+  }
+  return null;
+}
+
+// Refreshes the "last updated" note for a line without touching the rate fields
+// (used on load, so a previously-saved/edited rate isn't silently overwritten).
+function refreshFixedFxNote(i) {
+  const noteEl = document.getElementById(`fxrate-note-${i}`);
+  if (!noteEl) return;
+  const fcy   = document.getElementById(`fcur-${i}`)?.value || "";
+  const lcy   = document.getElementById("icur")?.value || "";
+  const found = (fcy && lcy && fcy !== lcy) ? findFixedFxRate(fcy, lcy) : null;
+  noteEl.textContent = found ? t("fixed-fx-note", { date: fmtDate(found.date) }) : "";
+  noteEl.style.display = found ? "" : "none";
+}
+
+// Auto-fills the rate for a line when its foreign/invoice currency pair matches
+// a configured fixedfxrate entry, and shows the "last updated" note.
+function applyFixedFxRate(i) {
+  const fcy   = document.getElementById(`fcur-${i}`)?.value || "";
+  const lcy   = document.getElementById("icur")?.value || "";
+  const found = (fcy && lcy && fcy !== lcy) ? findFixedFxRate(fcy, lcy) : null;
+  if (found) {
+    const rateLcyPerFcy = found.inverted ? (1 / found.rate) : found.rate;
+    const rcurEl   = document.getElementById(`rcur-${i}`);
+    const rateEl   = document.getElementById(`frate-${i}`);
+    const rotherEl = document.getElementById(`rother-${i}`);
+    if (rcurEl) rcurEl.value = lcy;
+    if (rateEl) rateEl.value = +rateLcyPerFcy.toFixed(6);
+    if (rotherEl) rotherEl.textContent = fcy;
+  }
+  refreshFixedFxNote(i);
+}
+
+function onFxCurrencyChange(i) {
+  updateFxLabels(i);
+  applyFixedFxRate(i);
+  calcFxFromPer(i);
 }
 
 // ── Calculations ──────────────────────────────────────────────────────────────
@@ -1644,6 +1700,7 @@ function loadLines() {
           }
           if (ld.frate) { const el = document.getElementById(`frate-${i}`); if (el) el.value = ld.frate; }
           if (ld.fper)  { const el = document.getElementById(`fper-${i}`);  if (el) el.value = ld.fper; }
+          refreshFixedFxNote(i);
           calcFxFromPer(i);
         }
       } else {
