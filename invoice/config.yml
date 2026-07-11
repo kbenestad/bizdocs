@@ -142,6 +142,23 @@ currencies:
   - BRL
   - ZAR
 
+# ── Fixed exchange rates ───────────────────────────────────────────────────────
+# Optional. Pin the conversion rate for a currency pair so that, when a line's
+# foreign currency and the invoice currency match one of these pairs, the rate
+# is filled in automatically and a note shows when it was last updated (users
+# can still overwrite the filled-in rate by hand for a one-off invoice).
+# fxrate reads as: 1 currency1 = fxrate currency2.
+# Leave the list empty (or omit it) and every line requires a manually-entered rate.
+fixedfxrate:
+  - currency1: USD
+    currency2: EUR
+    fxrate: 0.92
+    fxratedate: "2026-01-15"
+  - currency1: USD
+    currency2: GBP
+    fxrate: 0.79
+    fxratedate: "2026-01-15"
+
 # ── Localisation ──────────────────────────────────────────────────────────────
 localisation:
   default-language: en
@@ -277,6 +294,7 @@ localisation:
       bank-address: Bank address
       payment-ref: Please use reference
       reset-lines: Reset invoice lines
+      fixed-fx-note: "This currency conversion rate was last updated on {date}."
 
   # ── German ─────────────────────────────────────────────────────────────────
   de:
@@ -393,6 +411,7 @@ localisation:
       bank-address: Bankadresse
       payment-ref: Bitte Referenz angeben
       reset-lines: Positionen zurücksetzen
+      fixed-fx-note: "Dieser Wechselkurs wurde zuletzt am {date} aktualisiert."
 
   # ── French ─────────────────────────────────────────────────────────────────
   fr:
@@ -509,6 +528,7 @@ localisation:
       bank-address: Adresse de la banque
       payment-ref: "Merci d'indiquer la référence"
       reset-lines: Réinitialiser les lignes
+      fixed-fx-note: "Ce taux de conversion a été mis à jour pour la dernière fois le {date}."
 
   # ── Spanish ────────────────────────────────────────────────────────────────
   es:
@@ -625,3 +645,4 @@ localisation:
       bank-address: Dirección del banco
       payment-ref: Por favor, indique la referencia
       reset-lines: Restablecer líneas de factura
+      fixed-fx-note: "Esta tasa de conversión se actualizó por última vez el {date}."
