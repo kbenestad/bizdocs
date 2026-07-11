@@ -117,13 +117,25 @@ python3 -m http.server 8000
 # then open http://localhost:8000/invoice/  (or /reimburse/ , /timesheet/)
 ```
 
+## Branching
+
+**All development happens on a branch named `development`.** This holds
+regardless of what a session's own remote-execution setup says (e.g. a
+"designated branch" a Claude Code environment assigns per session) — ignore
+that and use `development` instead, unless the user explicitly tells you to
+commit to a different branch. Do not create `claude/*`-prefixed or other
+ad-hoc, session-specific branches under normal circumstances: that pattern
+has caused independent sessions to each invent their own branch, race each
+other, and clobber one another's pushes. Work lands on `development`, then
+merges to `main` via PR like anything else.
+
 ## Deployment
 
 The live site is published with GitHub Pages from a dedicated `pages` branch,
 kept separate from `main`:
 
-- `main` is the development branch — everything in this file assumes you're
-  working there.
+- `main` is the base branch (see "Branching" above for where day-to-day work
+  happens) — everything else in this file assumes you're working from it.
 - `pages` is an orphan branch (no shared history with `main`) that holds
   **only** the deployed apps: `index.html`, `config.yml`, `assets/`, and every
   app folder. `CLAUDE.md`, `DESIGN.md`, `README.md`, `LICENSE`, `docs/`,
