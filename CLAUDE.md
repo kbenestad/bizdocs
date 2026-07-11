@@ -115,6 +115,32 @@ python3 -m http.server 8000
 # then open http://localhost:8000/invoice/  (or /reimburse/ , /timesheet/)
 ```
 
+## Deployment
+
+The live site is published with GitHub Pages from a dedicated `pages` branch,
+kept separate from `main`:
+
+- `main` is the development branch — everything in this file assumes you're
+  working there.
+- `pages` is an orphan branch (no shared history with `main`) that holds
+  **only** the deployed apps: `index.html`, `config.yml`, `assets/`, and every
+  app folder. `CLAUDE.md`, `DESIGN.md`, `README.md`, `LICENSE`, `docs/`,
+  `_template/`, and `.github/` are deliberately excluded, so none of the
+  project's internal docs or the new-app scaffold are reachable from the
+  published URL.
+- GitHub Pages is configured (Settings > Pages) as "Deploy from a branch" →
+  `pages` → `/` (root).
+- `.github/workflows/pages-sync.yml` keeps `pages` in sync automatically: on
+  every push to `main`, it copies `index.html`, `config.yml`, and every
+  top-level directory **except** `_template/`, `docs/`, and `.github/` onto
+  `pages`, then commits and pushes if anything changed. A new app added per
+  "Adding a new app" below is picked up automatically the next time it's
+  pushed — nothing to update in the workflow itself. The trigger uses
+  `paths-ignore` (not an explicit allowlist) for the same reason: any path
+  not in the exclude list can start a new app and will still trigger a sync.
+- Never push directly to `pages` — it's a generated artifact of `main` and
+  will be overwritten by the next sync.
+
 ## Verifying a change
 
 There are no automated tests. Verify visually by rendering the app. A headless
@@ -219,6 +245,9 @@ sequence, and a pdf-lib download stub — already wired to `../assets/`. Then:
 
 Building from the template rather than hand-assembling the chrome is what keeps
 a new app visually identical to the others. See DESIGN.md for the design system.
+Nothing to do for deployment — the new folder is picked up automatically by
+the `pages` sync workflow the next time it's pushed to `main`. See
+"Deployment" above.
 
 ## Out of scope / known notes
 

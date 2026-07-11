@@ -1,7 +1,10 @@
 name: Sync pages branch
 
-# Mirrors only the deployed app files from main onto the pages branch, which
+# Mirrors the deployed app files from main onto the pages branch, which
 # GitHub Pages serves (Settings > Pages > Deploy from a branch > pages > /).
+# Copies index.html, config.yml, and every top-level directory EXCEPT the
+# ones below — so a new app (copied from _template/, per "Adding a new app"
+# in CLAUDE.md) is included automatically with no workflow edit needed.
 # Keeps CLAUDE.md, DESIGN.md, README.md, LICENSE, docs/, _template/, and
 # .github/ out of the published site — see CLAUDE.md.
 
@@ -9,14 +12,14 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'index.html'
-      - 'config.yml'
-      - 'assets/**'
-      - 'invoice/**'
-      - 'reimburse/**'
-      - 'timesheet/**'
-      - 'contactmanager/**'
+    paths-ignore:
+      - '_template/**'
+      - 'docs/**'
+      - '.github/**'
+      - 'CLAUDE.md'
+      - 'DESIGN.md'
+      - 'README.md'
+      - 'LICENSE'
 
 permissions:
   contents: write
@@ -38,9 +41,19 @@ jobs:
           git fetch origin pages
           git worktree add /tmp/pages origin/pages
 
-          # Clear everything except .git, then copy over only the app files.
+          # Clear everything except .git, then copy over the current app set.
           find /tmp/pages -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
-          cp -r index.html config.yml assets invoice reimburse timesheet contactmanager /tmp/pages/
+          cp index.html config.yml /tmp/pages/
+
+          EXCLUDE_DIRS=(_template docs .github)
+          for entry in */; do
+            name="${entry%/}"
+            skip=false
+            for ex in "${EXCLUDE_DIRS[@]}"; do
+              [ "$name" = "$ex" ] && skip=true && break
+            done
+            [ "$skip" = true ] || cp -r "$name" /tmp/pages/
+          done
 
           cd /tmp/pages
           git add -A
