@@ -68,7 +68,6 @@ localisation:
       cancel: "Cancel"
 
       profile-title: "Your profile"
-      profile-hint: "Saved here, this pre-fills invoice, reimburse, and timesheet wherever their own fields are still blank — it never overwrites something you've already typed there."
       field-name: "Name"
       field-addr1: "Address line 1"
       field-addr2: "Address line 2"
@@ -163,7 +162,6 @@ localisation:
       cancel: "Abbrechen"
 
       profile-title: "Ihr Profil"
-      profile-hint: "Diese Angaben füllen leere Felder in invoice, reimburse und timesheet automatisch aus — bereits eingegebene Werte werden nie überschrieben."
       field-name: "Name"
       field-addr1: "Adresszeile 1"
       field-addr2: "Adresszeile 2"

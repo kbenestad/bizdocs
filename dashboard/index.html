@@ -165,14 +165,11 @@ const PROFILE_BANK_FIELDS = ['acctHolder', 'iban', 'bic', 'addr1', 'addr2', 'ref
 // shapes without duplicating invoice's own field list.
 const INVOICE_FIELD_MAP = {
   name: 'sn', addr1: 'sa1', addr2: 'sa2', addr3: 'sa3', addr4: 'sa4',
-  phone: 'sp', email: 'se', taxId: 'stax', defaultCurrency: 'icur',
+  phone: 'sp', email: 'se', taxId: 'stax', defaultCurrency: 'icur', country: 'sc',
 };
 const INVOICE_BANK_FIELD_MAP = {
   acctHolder: 'pacct', iban: 'piban', bic: 'pbic', addr1: 'pbadr1', addr2: 'pbadr2', ref: 'pref',
 };
-// Not mapped: invoice's country field ("sc") stores a country *code* against
-// its own COUNTRIES list, while the profile stores a country *name* — there's
-// no shared lookup table to translate between them, so country is left alone.
 
 function readInvoiceData() {
   try {
@@ -251,7 +248,6 @@ function buildProfileCard() {
   const profile = loadSharedProfile();
   const card = el('div', { className: 'kb-card' });
   card.appendChild(el('div', { className: 'kb-card__title' }, S('profile-title')));
-  card.appendChild(el('div', { className: 'dash-hint' }, S('profile-hint')));
 
   const refs = {};
   const bankRefs = {};
@@ -279,13 +275,22 @@ function buildProfileCard() {
     return field(S(labelKey), input);
   };
 
+  // profile.country is stored as the same 2-letter code as invoice's country
+  // select (see KB_COUNTRIES in app.js); fall back to a by-name match for
+  // profiles saved before this field was a dropdown.
+  const countryCode = KB_COUNTRY_MAP[profile.country] ? profile.country :
+    (KB_COUNTRIES.find(([, name]) => name.toLowerCase() === String(profile.country || '').toLowerCase()) || [])[0] || '';
+  const countrySelect = el('select', { className: 'kb-select' });
+  countrySelect.innerHTML = kbCountryOpts(countryCode);
+  refs.country = countrySelect;
+
   const grid = el('div', { className: 'kb-grid cols-2' });
   grid.append(
-    mk('name', 'field-name'), mk('phone', 'field-phone'),
-    mk('email', 'field-email'), mk('taxId', 'field-tax-id'),
-    mk('addr1', 'field-addr1'), mk('addr2', 'field-addr2'),
-    mk('addr3', 'field-addr3'), mk('addr4', 'field-addr4'),
-    mk('country', 'field-country'), mk('defaultCurrency', 'field-default-currency')
+    mk('name', 'field-name'), mk('addr1', 'field-addr1'),
+    mk('phone', 'field-phone'), mk('addr2', 'field-addr2'),
+    mk('email', 'field-email'), mk('addr3', 'field-addr3'),
+    mk('taxId', 'field-tax-id'), mk('addr4', 'field-addr4'),
+    field(S('field-country'), countrySelect), mk('defaultCurrency', 'field-default-currency')
   );
   card.appendChild(grid);
 
@@ -298,9 +303,9 @@ function buildProfileCard() {
   };
   const bankGrid = el('div', { className: 'kb-grid cols-2' });
   bankGrid.append(
-    mkBank('acctHolder', 'field-bank-holder'), mkBank('iban', 'field-bank-iban'),
-    mkBank('bic', 'field-bank-bic'), mkBank('ref', 'field-bank-ref'),
-    mkBank('addr1', 'field-bank-addr1'), mkBank('addr2', 'field-bank-addr2')
+    mkBank('acctHolder', 'field-bank-holder'), mkBank('addr1', 'field-bank-addr1'),
+    mkBank('iban', 'field-bank-iban'), mkBank('addr2', 'field-bank-addr2'),
+    mkBank('bic', 'field-bank-bic'), mkBank('ref', 'field-bank-ref')
   );
   card.appendChild(bankGrid);
 
