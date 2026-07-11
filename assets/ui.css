@@ -112,7 +112,7 @@
 .kb-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
 .kb-grid.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
 .kb-grid.cols-5 { grid-template-columns: 1.6fr 1fr 1fr 1fr 1fr; }
-.kb-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.kb-field { display: flex; flex-direction: column; justify-content: flex-end; gap: 5px; min-width: 0; }
 .kb-field.grow { flex: 1; }
 .kb-label {
   font-size: var(--fs-label); font-weight: 600; letter-spacing: 0.03em;
@@ -321,6 +321,11 @@
                            spec, one non-visible axis forces the other out of
                            visible), painting a phantom vertical scrollbar even
                            though every tab already fits horizontally. */
+  padding-bottom: 1px;  /* the same -1px margin also pulls the selected tab's
+                           2px accent border 1px past this element's padding
+                           edge, which overflow-y: hidden then clips — leaving
+                           only 1px of it visible. This reclaims that 1px so
+                           the full border paints. */
 }
 
 .kb-tab {

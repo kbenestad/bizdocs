@@ -67,13 +67,12 @@
 
 /* ── Responsive ────────────────────────────────────────────────────────────── */
 @media (max-width: 700px) {
-  .kb-grid.cols-3, .kb-grid.cols-5 { grid-template-columns: 1fr 1fr; }
-  .kb-grid.cols-2 { grid-template-columns: 1fr; }
+  .kb-grid.cols-3, .kb-grid.cols-5, .kb-grid.cols-2 { grid-template-columns: 1fr; }
   .kb-header { flex-direction: column; gap: 14px; }
   .kb-doctitle { text-align: left; }
   .kb-rowhead { display: none; }
   .ts-row2 {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 8px; padding: 12px;
     background: var(--surface-2);
     border-radius: var(--radius-sm);
