@@ -321,6 +321,11 @@
                            spec, one non-visible axis forces the other out of
                            visible), painting a phantom vertical scrollbar even
                            though every tab already fits horizontally. */
+  padding-bottom: 1px;  /* the same -1px margin also pulls the selected tab's
+                           2px accent border 1px past this element's padding
+                           edge, which overflow-y: hidden then clips — leaving
+                           only 1px of it visible. This reclaims that 1px so
+                           the full border paints. */
 }
 
 .kb-tab {

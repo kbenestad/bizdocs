@@ -159,6 +159,94 @@ function field(label, input) {
 const PROFILE_FIELDS = ['name', 'addr1', 'addr2', 'addr3', 'addr4', 'country', 'phone', 'email', 'taxId', 'defaultCurrency'];
 const PROFILE_BANK_FIELDS = ['acctHolder', 'iban', 'bic', 'addr1', 'addr2', 'ref'];
 
+// invoice's own localStorage (inv_data_v1) is a flat {domId: value} map — see
+// invoice/index.html's applySharedProfileToForm(). These map the profile's
+// keys to those DOM ids so import/export can translate between the two
+// shapes without duplicating invoice's own field list.
+const INVOICE_FIELD_MAP = {
+  name: 'sn', addr1: 'sa1', addr2: 'sa2', addr3: 'sa3', addr4: 'sa4',
+  phone: 'sp', email: 'se', taxId: 'stax', defaultCurrency: 'icur',
+};
+const INVOICE_BANK_FIELD_MAP = {
+  acctHolder: 'pacct', iban: 'piban', bic: 'pbic', addr1: 'pbadr1', addr2: 'pbadr2', ref: 'pref',
+};
+// Not mapped: invoice's country field ("sc") stores a country *code* against
+// its own COUNTRIES list, while the profile stores a country *name* — there's
+// no shared lookup table to translate between them, so country is left alone.
+
+function readInvoiceData() {
+  try {
+    const raw = localStorage.getItem('inv_data_v1');
+    const d = raw ? JSON.parse(raw) : null;
+    return (d && typeof d === 'object') ? d : {};
+  } catch (e) { return {}; }
+}
+
+function profileFromForm(refs, bankRefs) {
+  const next = {};
+  PROFILE_FIELDS.forEach(k => { next[k] = refs[k].value.trim(); });
+  next.bank = {};
+  PROFILE_BANK_FIELDS.forEach(k => { next.bank[k] = bankRefs[k].value.trim(); });
+  return next;
+}
+
+function importFromInvoice(refs, bankRefs, status) {
+  const data = readInvoiceData();
+  let n = 0;
+  Object.entries(INVOICE_FIELD_MAP).forEach(([profileKey, invId]) => {
+    const v = data[invId];
+    if (v) { refs[profileKey].value = v; n++; }
+  });
+  Object.entries(INVOICE_BANK_FIELD_MAP).forEach(([profileKey, invId]) => {
+    const v = data[invId];
+    if (v) { bankRefs[profileKey].value = v; n++; }
+  });
+  status.textContent = n ? S('import-invoice-done', { n }) : S('import-invoice-none');
+}
+
+async function exportToAllApps(refs, bankRefs, status) {
+  const profile = profileFromForm(refs, bankRefs);
+  const ok = await kbConfirm({
+    title: S('toolbar-export-all'),
+    message: S('export-all-confirm'),
+    confirmLabel: S('toolbar-export-all'),
+    cancelLabel: S('cancel'),
+  });
+  if (!ok) return;
+
+  saveSharedProfile(profile);
+
+  const invData = readInvoiceData();
+  Object.entries(INVOICE_FIELD_MAP).forEach(([profileKey, invId]) => { invData[invId] = profile[profileKey] || ''; });
+  Object.entries(INVOICE_BANK_FIELD_MAP).forEach(([profileKey, invId]) => { invData[invId] = profile.bank[profileKey] || ''; });
+  localStorage.setItem('inv_data_v1', JSON.stringify(invData));
+
+  if (profile.name) {
+    localStorage.setItem('reimb-staff', profile.name);
+    localStorage.setItem('timesheet-employee', profile.name);
+  }
+
+  status.textContent = S('export-all-done');
+}
+
+function isValidEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
+function isValidIban(v) { return /^[A-Za-z0-9]{8,34}$/.test(v.replace(/\s+/g, '')); }
+
+async function validateProfile(refs, bankRefs) {
+  const profile = profileFromForm(refs, bankRefs);
+  const issues = [];
+  if (!profile.name) issues.push(S('validate-missing-name'));
+  if (!profile.email) issues.push(S('validate-missing-email'));
+  else if (!isValidEmail(profile.email)) issues.push(S('validate-invalid-email'));
+  if (profile.bank.iban && !isValidIban(profile.bank.iban)) issues.push(S('validate-invalid-iban'));
+
+  await kbAlert({
+    title: S('toolbar-validate'),
+    message: issues.length ? issues.join('\n') : S('validate-ok'),
+    icon: issues.length ? KB_ICON.warn : KB_ICON.info,
+  });
+}
+
 function buildProfileCard() {
   const profile = loadSharedProfile();
   const card = el('div', { className: 'kb-card' });
@@ -166,6 +254,24 @@ function buildProfileCard() {
   card.appendChild(el('div', { className: 'dash-hint' }, S('profile-hint')));
 
   const refs = {};
+  const bankRefs = {};
+  const toolbarStatus = el('div', { className: 'dash-status' });
+  const toolbar = el('div', { className: 'kb-actions' });
+  toolbar.append(
+    el('button', {
+      type: 'button', className: 'kb-btn kb-btn--ghost',
+      onClick: () => importFromInvoice(refs, bankRefs, toolbarStatus),
+    }, [iconEl(KB_ICON.addNotes), S('toolbar-import-invoice')]),
+    el('button', {
+      type: 'button', className: 'kb-btn kb-btn--ghost',
+      onClick: () => exportToAllApps(refs, bankRefs, toolbarStatus),
+    }, [iconEl(KB_ICON.exportNotes), S('toolbar-export-all')]),
+    el('button', {
+      type: 'button', className: 'kb-btn kb-btn--ghost',
+      onClick: () => validateProfile(refs, bankRefs),
+    }, [iconEl(KB_ICON.dataCheck), S('toolbar-validate')])
+  );
+  card.append(toolbar, toolbarStatus);
   const mk = (key, labelKey) => {
     const input = el('input', { className: 'kb-input' });
     input.value = profile[key] || '';
@@ -184,7 +290,6 @@ function buildProfileCard() {
   card.appendChild(grid);
 
   card.appendChild(el('div', { className: 'dash-subhead' }, S('bank-heading')));
-  const bankRefs = {};
   const mkBank = (key, labelKey) => {
     const input = el('input', { className: 'kb-input' });
     input.value = (profile.bank && profile.bank[key]) || '';
@@ -204,11 +309,7 @@ function buildProfileCard() {
   actions.appendChild(el('button', {
     className: 'kb-btn kb-btn--primary',
     onClick: () => {
-      const next = {};
-      PROFILE_FIELDS.forEach(k => { next[k] = refs[k].value.trim(); });
-      next.bank = {};
-      PROFILE_BANK_FIELDS.forEach(k => { next.bank[k] = bankRefs[k].value.trim(); });
-      saveSharedProfile(next);
+      saveSharedProfile(profileFromForm(refs, bankRefs));
       status.textContent = S('profile-saved');
     },
   }, S('save-profile')));
