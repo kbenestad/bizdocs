@@ -499,6 +499,8 @@ function render() {
   // ── Claimant card ─────────────────────────────────────────────────────────
   const savedStaff = localStorage.getItem('reimb-staff') || '';
   if (savedStaff && !state.staff) state.staff = savedStaff;
+  const sharedProfile = loadSharedProfile();
+  if (sharedProfile.name && !state.staff) state.staff = sharedProfile.name;
   const period = defaultPeriod();
   if (!state.periodFrom) state.periodFrom = period.from;
   if (!state.periodTo) state.periodTo = period.to;
@@ -1417,6 +1419,14 @@ async function onGenerate() {
   try {
     renderLang = outputLang();
     await generatePDF();
+    kbPushRecord('reimb-records', {
+      id: crypto.randomUUID(),
+      date: state.periodTo || state.periodFrom,
+      ref: `${state.periodFrom}–${state.periodTo}`,
+      party: state.staff,
+      amount: state._grandTotal,
+      currency: state.baseCurrency,
+    });
   } catch (e) {
     kbAlert({ title: 'PDF', message: 'Error generating PDF: ' + e.message });
     console.error(e);

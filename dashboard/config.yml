@@ -1,0 +1,196 @@
+# =============================================================================
+# Dashboard App — Configuration
+# =============================================================================
+# Holds a user's shared profile (identity/bank details that invoice, reimburse
+# and timesheet pre-fill from whenever their own field is still blank) and a
+# log of every document those three apps have generated. Both are portable via
+# this app's export/import — a downloadable/uploadable JSON file, since there
+# is no backend. organization/logo/logo-maxwidth/tagline/accent-colour are
+# blank here on purpose — they inherit from ../config.yml (root, org-wide
+# settings). Give one a value only if this app needs to override it.
+
+# Organization — inherited from ../config.yml (root, org-wide settings) when
+# left blank here. Set a value below only to override it for this app alone.
+organization:
+logo:
+logo-maxwidth:
+tagline:
+
+# Branding — inherited from ../config.yml when blank; override here if needed.
+accent-colour:
+
+# ── Localisation ──────────────────────────────────────────────────────────────
+# Every user-facing string lives here, under each language's `ui:` block, and is
+# looked up via S('key'). Use {token} placeholders for interpolation.
+localisation:
+  default-language: en
+
+  languages:
+    - code: en
+      name: English
+    - code: de
+      name: Deutsch
+
+  en:
+    about:
+      title: "About"
+      button: "Close"
+      content: |
+        ### Dashboard
+        Your business profile and a log of the documents you've generated in
+        invoice, reimburse, and timesheet.
+
+        **Profile** fills in blank fields in those three apps automatically —
+        it never overwrites something you've already typed there.
+
+        **Records** is a running log (date, reference, party, amount) of
+        every document those apps have generated — metadata only, not the
+        PDFs themselves.
+
+        **Backup** downloads one file with both, so you can move to another
+        browser or machine — everything here lives only in this browser
+        otherwise. Uploading a backup file merges its records into what's
+        already here; it never deletes anything.
+
+        **Source:** [kbenestad/bizdocs](https://github.com/kbenestad/bizdocs)
+
+        {repo}
+        {version-line}
+
+        Licensed under the Apache 2 licence. Please see LICENSE in root.
+    ui:
+      subtitle: "Profile & document dashboard"
+      doc-title: "Dashboard"
+
+      tab-profile: "Profile"
+      tab-records: "Records"
+      tab-backup: "Backup"
+      cancel: "Cancel"
+
+      profile-title: "Your profile"
+      profile-hint: "Saved here, this pre-fills invoice, reimburse, and timesheet wherever their own fields are still blank — it never overwrites something you've already typed there."
+      field-name: "Name"
+      field-addr1: "Address line 1"
+      field-addr2: "Address line 2"
+      field-addr3: "Address line 3"
+      field-addr4: "Address line 4"
+      field-country: "Country"
+      field-phone: "Phone"
+      field-email: "Email"
+      field-tax-id: "Tax / VAT ID"
+      field-default-currency: "Default currency"
+      bank-heading: "Payment details"
+      field-bank-holder: "Account holder"
+      field-bank-iban: "IBAN / account number"
+      field-bank-bic: "BIC / SWIFT"
+      field-bank-addr1: "Bank address line 1"
+      field-bank-addr2: "Bank address line 2"
+      field-bank-ref: "Payment reference"
+      save-profile: "Save profile"
+      profile-saved: "Profile saved."
+
+      records-title: "Documents you've generated"
+      records-hint: "A running log of every invoice, expense report, and timesheet you've generated — metadata only, not the PDF itself."
+      no-records: "Nothing recorded yet — generate a document in one of the apps and it'll show up here."
+      col-type: "Type"
+      col-date: "Date"
+      col-ref: "Reference"
+      col-party: "Party"
+      col-amount: "Amount"
+      col-actions: "Actions"
+      delete-record: "Delete"
+      confirm-delete-record: "Delete this record? This only removes it from your dashboard log — it does not undo the document itself."
+      type-invoice: "Invoice"
+      type-reimburse: "Expense report"
+      type-timesheet: "Timesheet"
+      hours-suffix: "{n} h"
+
+      backup-title: "Backup"
+      backup-hint: "Download one file with your profile and full document log, to move to another browser or machine. Uploading a file merges its records into what's here — it never deletes anything."
+      export-button: "Export backup file"
+      import-button: "Import backup file"
+      confirm-import: "This will replace your saved profile and merge {invoices} invoice, {reimburse} expense-report, and {timesheet} timesheet record(s) into what's already here. Continue?"
+      import-ok: "Backup imported."
+      import-failed: "Couldn't read that file — it doesn't look like a bizdocs backup."
+
+  de:
+    about:
+      title: "Über"
+      button: "Schließen"
+      content: |
+        ### Dashboard
+        Ihr Geschäftsprofil und ein Protokoll der Dokumente, die Sie mit
+        invoice, reimburse und timesheet erstellt haben.
+
+        **Profil** füllt leere Felder in diesen drei Apps automatisch aus —
+        bereits eingegebene Werte werden nie überschrieben.
+
+        **Einträge** ist ein laufendes Protokoll (Datum, Referenz, Partei,
+        Betrag) aller Dokumente, die diese Apps erzeugt haben — nur die
+        Metadaten, nicht die PDFs selbst.
+
+        **Sicherung** lädt eine Datei mit beidem herunter, damit Sie zu einem
+        anderen Browser oder Gerät wechseln können — sonst lebt alles hier nur
+        in diesem Browser. Eine hochgeladene Sicherungsdatei führt ihre
+        Einträge mit den vorhandenen zusammen; es wird nie etwas gelöscht.
+
+        **Quellcode:** [kbenestad/bizdocs](https://github.com/kbenestad/bizdocs)
+
+        {repo}
+        {version-line}
+
+        Lizenziert unter der Apache-2-Lizenz. Siehe LICENSE im Root-Verzeichnis.
+    ui:
+      subtitle: "Profil & Dokumenten-Dashboard"
+      doc-title: "Dashboard"
+
+      tab-profile: "Profil"
+      tab-records: "Einträge"
+      tab-backup: "Sicherung"
+      cancel: "Abbrechen"
+
+      profile-title: "Ihr Profil"
+      profile-hint: "Diese Angaben füllen leere Felder in invoice, reimburse und timesheet automatisch aus — bereits eingegebene Werte werden nie überschrieben."
+      field-name: "Name"
+      field-addr1: "Adresszeile 1"
+      field-addr2: "Adresszeile 2"
+      field-addr3: "Adresszeile 3"
+      field-addr4: "Adresszeile 4"
+      field-country: "Land"
+      field-phone: "Telefon"
+      field-email: "E-Mail"
+      field-tax-id: "Steuer-/USt-IdNr."
+      field-default-currency: "Standardwährung"
+      bank-heading: "Zahlungsdetails"
+      field-bank-holder: "Kontoinhaber"
+      field-bank-iban: "IBAN / Kontonummer"
+      field-bank-bic: "BIC / SWIFT"
+      field-bank-addr1: "Bankadresse Zeile 1"
+      field-bank-addr2: "Bankadresse Zeile 2"
+      field-bank-ref: "Zahlungsreferenz"
+      save-profile: "Profil speichern"
+      profile-saved: "Profil gespeichert."
+
+      records-title: "Erstellte Dokumente"
+      records-hint: "Ein laufendes Protokoll jeder Rechnung, Spesenabrechnung und Stundenliste, die Sie erstellt haben — nur die Metadaten, nicht das PDF selbst."
+      no-records: "Noch nichts erfasst — erstellen Sie ein Dokument in einer der Apps, und es erscheint hier."
+      col-type: "Typ"
+      col-date: "Datum"
+      col-ref: "Referenz"
+      col-party: "Partei"
+      col-amount: "Betrag"
+      col-actions: "Aktionen"
+      delete-record: "Löschen"
+      confirm-delete-record: "Diesen Eintrag löschen? Dies entfernt ihn nur aus Ihrem Dashboard-Protokoll — das Dokument selbst wird dadurch nicht rückgängig gemacht."
+      type-invoice: "Rechnung"
+      type-reimburse: "Spesenabrechnung"
+      type-timesheet: "Stundenliste"
+      hours-suffix: "{n} Std."
+
+      backup-title: "Sicherung"
+      backup-hint: "Laden Sie eine Datei mit Ihrem Profil und dem vollständigen Dokumentenprotokoll herunter, um zu einem anderen Browser oder Gerät zu wechseln. Das Hochladen einer Datei führt ihre Einträge mit den vorhandenen zusammen — es wird nie etwas gelöscht."
+      export-button: "Sicherungsdatei exportieren"
+      import-button: "Sicherungsdatei importieren"
+      confirm-import: "Dadurch wird Ihr gespeichertes Profil ersetzt und {invoices} Rechnung(en), {reimburse} Spesenabrechnung(en) und {timesheet} Stundenliste(n) mit den vorhandenen Einträgen zusammengeführt. Fortfahren?"
+      import-ok: "Sicherung importiert."
+      import-failed: "Diese Datei konnte nicht gelesen werden — sie sieht nicht wie eine bizdocs-Sicherung aus."

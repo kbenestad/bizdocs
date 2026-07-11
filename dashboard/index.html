@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.bunny.net; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="format-detection" content="telephone=no">
+<title>Dashboard</title>
+
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="assets/site.webmanifest">
+<meta name="theme-color" content="#2f6fed">
+
+<!-- Restore persisted theme BEFORE first paint (avoids a flash). -->
+<script>
+  (function(){var t=localStorage.getItem('kb-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
+</script>
+
+<!-- js-yaml: needed to fetch/parse config.yml, so it must stay hardcoded here. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"
+        integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
+        crossorigin="anonymous"></script>
+
+<!-- Shared design + runtime. app.js MUST load before this app's inline <script>. -->
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/ui.css">
+<script src="../assets/app.js"></script>
+
+<style>
+.dash-hint { color: var(--text-muted); font-size: var(--fs-small); margin: -4px 0 14px; }
+.dash-subhead { font-weight: 700; margin: 18px 0 10px; }
+.dash-status { margin-top: 12px; }
+
+.dash-record-row {
+  display: grid;
+  grid-template-columns: 130px 96px 1fr 1fr 120px 90px;
+  gap: 10px; align-items: center;
+  padding: 8px 4px; border-bottom: 1px solid var(--border);
+}
+.dash-record-row:last-child { border-bottom: 0; }
+.dash-record-row.head {
+  font-size: var(--fs-label); font-weight: 600; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--text-muted);
+}
+.dash-amount { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+@media (max-width: 720px) {
+  .dash-record-row { grid-template-columns: 1fr 1fr; }
+  .dash-record-row.head { display: none; }
+  .dash-amount { text-align: left; }
+}
+</style>
+</head>
+<body>
+<div id="app"><p class="kb-loading">Loading configuration…</p></div>
+
+<script>
+(async function () {
+'use strict';
+
+let CFG;
+let NAV = { apps: [], links: [] };
+let lang = 'en';
+let VERSION_INFO = null;
+let activeTab = 0;
+
+// ── i18n ─────────────────────────────────────────────────────────────────
+function S(key, vars) {
+  return lookupString(CFG['ui-strings'], key, lang, CFG['default-code'], vars);
+}
+function normaliseConfig() {
+  const loc = CFG && CFG.localisation;
+  if (!loc) return;
+  const { table, languages, defaultCode } = buildLangTable(loc);
+  CFG['default-code'] = defaultCode;
+  CFG.languages = CFG.languages || languages;
+  CFG['ui-strings'] = table;
+}
+function applyLang(lc) {
+  lang = lc;
+  const loc = CFG.localisation || {};
+  const a = (loc[lc] && loc[lc].about) || (loc[CFG['default-code']] && loc[CFG['default-code']].about) || {};
+  CFG['about-title']   = a.title   || 'About';
+  CFG['about-content'] = a.content || '';
+  CFG['about-button']  = a.button  || 'Close';
+}
+function showAboutModal() {
+  return kbAbout({
+    title: CFG['about-title'],
+    contentMD: applyVersionTokens(CFG['about-content'], VERSION_INFO),
+    closeLabel: CFG['about-button'],
+  });
+}
+
+// ── Chrome (toolbar / header / footer) — same shell as every other app ─────
+function buildToolbar() {
+  const toolbar = el('div', { className: 'kb-toolbar' });
+  const { seg: sizeSeg, label: szLabel } = makeSizeControl();
+  toolbar.append(
+    makeNavMenu(NAV),
+    el('div', { className: 'spacer' }),
+    sizeSeg, szLabel,
+    makeThemeButton(),
+    makeAboutButton(showAboutModal)
+  );
+  const langSel = makeLangSelect(CFG.languages, lang, value => {
+    applyLang(value);
+    localStorage.setItem('dashboard-lang', value);
+    render();
+  });
+  if (langSel) toolbar.appendChild(langSel);
+  return toolbar;
+}
+
+function buildHeader() {
+  const header = el('header', { className: 'kb-header' });
+  const brand = el('div', { className: 'kb-brand' });
+  const tile = el('span', { className: 'logo' });
+  if (CFG.logo === 'yes' || CFG.logo === true) {
+    const img = el('img', { src: '../assets/logo.png', alt: CFG.organization || '' });
+    img.onerror = () => { img.src = '../assets/logo.jpg'; img.onerror = () => { tile.innerHTML = KB_BRAND_SVG; }; };
+    tile.appendChild(img);
+  } else { tile.innerHTML = KB_BRAND_SVG; }
+  const org = el('span', { className: 'org' });
+  org.appendChild(document.createTextNode(CFG.organization || 'kbenestad/dashboard'));
+  const small = el('small'); small.textContent = CFG.tagline || S('subtitle');
+  org.appendChild(small);
+  brand.append(tile, org);
+
+  const title = el('div', { className: 'kb-doctitle' });
+  title.appendChild(el('h1', null, S('doc-title')));
+  header.append(brand, title);
+  return header;
+}
+
+function buildFooter() {
+  const sep = () => el('span', { className: 'sep' }, '·');
+  const footer = el('footer', { className: 'kb-footer' });
+  const mark = el('span', { className: 'kb-mark' }); mark.innerHTML = KB_FOOTER_MARK_SVG + 'kBenestad';
+  footer.append(
+    mark,
+    sep(), el('span', null, '© 2026 Kristian Benestad'),
+    sep(), el('a', { href: 'https://github.com/kbenestad/bizdocs', target: '_blank', rel: 'noopener' }, 'kbenestad/bizdocs'),
+    sep(), el('button', { type: 'button', onClick: showAboutModal }, CFG['about-title'] || 'About')
+  );
+  const marker = buildVersionMarker(VERSION_INFO);
+  if (marker) footer.appendChild(marker);
+  return footer;
+}
+
+function field(label, input) {
+  const f = el('div', { className: 'kb-field' });
+  f.append(el('span', { className: 'kb-label' }, label), input);
+  return f;
+}
+
+// ── Profile tab ─────────────────────────────────────────────────────────────
+// Fields mirror invoice's sender + payment blocks (see CLAUDE.md / DESIGN.md) —
+// this is the superset every app can pull identity fields from.
+const PROFILE_FIELDS = ['name', 'addr1', 'addr2', 'addr3', 'addr4', 'country', 'phone', 'email', 'taxId', 'defaultCurrency'];
+const PROFILE_BANK_FIELDS = ['acctHolder', 'iban', 'bic', 'addr1', 'addr2', 'ref'];
+
+function buildProfileCard() {
+  const profile = loadSharedProfile();
+  const card = el('div', { className: 'kb-card' });
+  card.appendChild(el('div', { className: 'kb-card__title' }, S('profile-title')));
+  card.appendChild(el('div', { className: 'dash-hint' }, S('profile-hint')));
+
+  const refs = {};
+  const mk = (key, labelKey) => {
+    const input = el('input', { className: 'kb-input' });
+    input.value = profile[key] || '';
+    refs[key] = input;
+    return field(S(labelKey), input);
+  };
+
+  const grid = el('div', { className: 'kb-grid cols-2' });
+  grid.append(
+    mk('name', 'field-name'), mk('phone', 'field-phone'),
+    mk('email', 'field-email'), mk('taxId', 'field-tax-id'),
+    mk('addr1', 'field-addr1'), mk('addr2', 'field-addr2'),
+    mk('addr3', 'field-addr3'), mk('addr4', 'field-addr4'),
+    mk('country', 'field-country'), mk('defaultCurrency', 'field-default-currency')
+  );
+  card.appendChild(grid);
+
+  card.appendChild(el('div', { className: 'dash-subhead' }, S('bank-heading')));
+  const bankRefs = {};
+  const mkBank = (key, labelKey) => {
+    const input = el('input', { className: 'kb-input' });
+    input.value = (profile.bank && profile.bank[key]) || '';
+    bankRefs[key] = input;
+    return field(S(labelKey), input);
+  };
+  const bankGrid = el('div', { className: 'kb-grid cols-2' });
+  bankGrid.append(
+    mkBank('acctHolder', 'field-bank-holder'), mkBank('iban', 'field-bank-iban'),
+    mkBank('bic', 'field-bank-bic'), mkBank('ref', 'field-bank-ref'),
+    mkBank('addr1', 'field-bank-addr1'), mkBank('addr2', 'field-bank-addr2')
+  );
+  card.appendChild(bankGrid);
+
+  const status = el('div', { className: 'dash-status' });
+  const actions = el('div', { className: 'kb-actions' });
+  actions.appendChild(el('button', {
+    className: 'kb-btn kb-btn--primary',
+    onClick: () => {
+      const next = {};
+      PROFILE_FIELDS.forEach(k => { next[k] = refs[k].value.trim(); });
+      next.bank = {};
+      PROFILE_BANK_FIELDS.forEach(k => { next.bank[k] = bankRefs[k].value.trim(); });
+      saveSharedProfile(next);
+      status.textContent = S('profile-saved');
+    },
+  }, S('save-profile')));
+  card.append(actions, status);
+  return card;
+}
+
+// ── Records tab ──────────────────────────────────────────────────────────────
+// One row shape unions all three apps' localStorage record arrays (see
+// CLAUDE.md's localStorage-keys list). Read directly — same-origin apps
+// already share one localStorage.
+const RECORD_SOURCES = [
+  { app: 'invoice',   key: 'inv_records_v1', typeKey: 'type-invoice' },
+  { app: 'reimburse', key: 'reimb-records',   typeKey: 'type-reimburse' },
+  { app: 'timesheet', key: 'ts-records',      typeKey: 'type-timesheet' },
+];
+
+function readRecords(key) {
+  try {
+    const list = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(list) ? list : [];
+  } catch (e) { return []; }
+}
+
+function allRecords() {
+  const rows = [];
+  RECORD_SOURCES.forEach(src => {
+    readRecords(src.key).forEach(r => rows.push(Object.assign({ _app: src.app, _key: src.key, _typeKey: src.typeKey }, r)));
+  });
+  return rows.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+}
+
+function deleteRecord(row) {
+  const list = readRecords(row._key).filter(r => r.id !== row.id);
+  localStorage.setItem(row._key, JSON.stringify(list));
+}
+
+function formatRecordAmount(row) {
+  if (row.currency == null && row.hours != null) return S('hours-suffix', { n: row.hours });
+  return formatAmount(row.amount) + (row.currency ? ' ' + row.currency : '');
+}
+
+function buildRecordsCard() {
+  const card = el('div', { className: 'kb-card' });
+  card.appendChild(el('div', { className: 'kb-card__title' }, S('records-title')));
+  card.appendChild(el('div', { className: 'dash-hint' }, S('records-hint')));
+
+  const rows = allRecords();
+  if (!rows.length) {
+    const note = el('div', { className: 'kb-note kb-note--info' });
+    const iconWrap = el('span'); iconWrap.innerHTML = KB_ICON.info;
+    note.append(iconWrap.firstElementChild || iconWrap, el('div', null, S('no-records')));
+    card.appendChild(note);
+    return card;
+  }
+
+  const list = el('div', {});
+  list.appendChild(el('div', { className: 'dash-record-row head' }, [
+    el('span', null, S('col-type')), el('span', null, S('col-date')),
+    el('span', null, S('col-ref')), el('span', null, S('col-party')),
+    el('span', null, S('col-amount')), el('span', null, S('col-actions')),
+  ]));
+  rows.forEach(row => {
+    list.appendChild(el('div', { className: 'dash-record-row' }, [
+      el('span', null, S(row._typeKey)),
+      el('span', null, row.date || ''),
+      el('span', null, row.ref || ''),
+      el('span', null, row.party || ''),
+      el('span', { className: 'dash-amount' }, formatRecordAmount(row)),
+      el('button', {
+        className: 'kb-btn kb-btn--danger kb-btn--sm',
+        onClick: async () => {
+          const ok = await kbConfirm({ title: S('delete-record'), message: S('confirm-delete-record'), confirmLabel: S('delete-record'), cancelLabel: S('cancel') });
+          if (!ok) return;
+          deleteRecord(row);
+          render();
+        },
+      }, S('delete-record')),
+    ]));
+  });
+  card.appendChild(list);
+  return card;
+}
+
+// ── Backup tab (export / import) ────────────────────────────────────────────
+const KB_BACKUP_VERSION = 1;
+
+function buildBackupPayload() {
+  return {
+    'kb-backup-version': KB_BACKUP_VERSION,
+    'exported-at': new Date().toISOString(),
+    profile: loadSharedProfile(),
+    records: {
+      invoice: readRecords('inv_records_v1'),
+      reimburse: readRecords('reimb-records'),
+      timesheet: readRecords('ts-records'),
+    },
+  };
+}
+
+function mergeById(existing, incoming) {
+  const map = new Map();
+  existing.forEach(r => map.set(r.id, r));
+  incoming.forEach(r => map.set(r.id, r));   // imported wins on id collision
+  return Array.from(map.values());
+}
+
+async function importBackupFile() {
+  const text = await kbReadFileAsText('.json,application/json');
+  if (text == null) return;
+
+  let data;
+  try {
+    data = JSON.parse(text);
+    if (!data || typeof data !== 'object' || typeof data.records !== 'object' || data.records === null) {
+      throw new Error('not a bizdocs backup file');
+    }
+  } catch (e) {
+    await kbAlert({ title: S('backup-title'), message: S('import-failed') });
+    return;
+  }
+
+  const incoming = {
+    invoice: Array.isArray(data.records.invoice) ? data.records.invoice : [],
+    reimburse: Array.isArray(data.records.reimburse) ? data.records.reimburse : [],
+    timesheet: Array.isArray(data.records.timesheet) ? data.records.timesheet : [],
+  };
+  const ok = await kbConfirm({
+    title: S('backup-title'),
+    message: S('confirm-import', { invoices: incoming.invoice.length, reimburse: incoming.reimburse.length, timesheet: incoming.timesheet.length }),
+    confirmLabel: S('import-button'),
+  });
+  if (!ok) return;
+
+  saveSharedProfile(data.profile && typeof data.profile === 'object' ? data.profile : {});
+  localStorage.setItem('inv_records_v1', JSON.stringify(mergeById(readRecords('inv_records_v1'), incoming.invoice)));
+  localStorage.setItem('reimb-records', JSON.stringify(mergeById(readRecords('reimb-records'), incoming.reimburse)));
+  localStorage.setItem('ts-records', JSON.stringify(mergeById(readRecords('ts-records'), incoming.timesheet)));
+
+  await kbAlert({ title: S('backup-title'), message: S('import-ok') });
+  render();
+}
+
+function buildBackupCard() {
+  const card = el('div', { className: 'kb-card' });
+  card.appendChild(el('div', { className: 'kb-card__title' }, S('backup-title')));
+  card.appendChild(el('div', { className: 'dash-hint' }, S('backup-hint')));
+  const actions = el('div', { className: 'kb-actions' });
+  actions.append(
+    el('button', {
+      className: 'kb-btn kb-btn--primary',
+      onClick: () => {
+        const payload = buildBackupPayload();
+        const date = new Date().toISOString().slice(0, 10);
+        kbDownloadFile(JSON.stringify(payload, null, 2), `bizdocs-backup-${date}.json`, 'application/json');
+      },
+    }, S('export-button')),
+    el('button', { className: 'kb-btn kb-btn--ghost', onClick: importBackupFile }, S('import-button'))
+  );
+  card.appendChild(actions);
+  return card;
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
+function currentTabIndex() {
+  const tabs = $$('.kb-tab');
+  const i = tabs.findIndex(t => t.getAttribute('aria-selected') === 'true');
+  return i >= 0 ? i : 0;
+}
+
+function render() {
+  activeTab = currentTabIndex();
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  const wrap = el('div', { className: 'kb-wrap' });
+
+  wrap.appendChild(buildToolbar());
+  wrap.appendChild(buildHeader());
+  wrap.appendChild(makeTabs([
+    { label: S('tab-profile'), content: buildProfileCard() },
+    { label: S('tab-records'), content: buildRecordsCard() },
+    { label: S('tab-backup'), content: buildBackupCard() },
+  ], { defaultIndex: activeTab }));
+  wrap.appendChild(buildFooter());
+
+  app.appendChild(wrap);
+  updateThemeIcon();
+}
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+try {
+  CFG = await loadYamlConfig();
+  VERSION_INFO = await loadVersionInfo('../version.json');
+  await applySharedBranding(CFG);
+  NAV = await loadNavItems('../config.yml');
+  normaliseConfig();
+  applyAccent(CFG);
+  initFontScale();
+  lang = localStorage.getItem('dashboard-lang') || CFG['default-code'] || 'en';
+  applyLang(lang);
+  render();
+} catch (e) {
+  document.getElementById('app').innerHTML =
+    `<div class="kb-wrap"><div class="kb-note kb-note--error"><span>⚠</span>` +
+    `<div><b>Failed to load config.yml</b><br>${kbEsc(e.message)}</div></div></div>`;
+}
+})();
+</script>
+</body>
+</html>

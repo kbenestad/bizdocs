@@ -1582,6 +1582,14 @@ async function onGenerate() {
   try {
     renderLang = outputLang();
     await generatePDF();
+    kbPushRecord('ts-records', {
+      id: crypto.randomUUID(),
+      date: state.periodTo || state.periodFrom,
+      ref: `${state.periodFrom}–${state.periodTo}`,
+      party: state.employee,
+      hours: Math.round((computeTotals().grandMins / 60) * 100) / 100,
+      currency: null,
+    });
   } catch(e) {
     kbAlert({ title: 'PDF', message: 'Error generating PDF: ' + e.message });
     console.error(e);
@@ -1607,6 +1615,8 @@ async function init() {
     state.lang = savedLang || CFG['default-code'] || 'en';
     applyLang(state.lang);
     if (savedEmp)  state.employee = savedEmp;
+    const sharedProfile = loadSharedProfile();
+    if (sharedProfile.name && !state.employee) state.employee = sharedProfile.name;
     const validTypes = (CFG['employee-types'] || []).map(t => t.code);
     if (savedType && validTypes.includes(savedType)) state.empType = savedType;
     else if (validTypes.length) state.empType = validTypes[0];

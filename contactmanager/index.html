@@ -76,6 +76,8 @@
 .cm-name-row .kb-field { flex: 1; min-width: 0; }
 .cm-name-sync { flex: 0 0 auto; }
 .cm-field--address .kb-textarea { min-height: 96px; }
+.cm-private-field { display: flex; flex-direction: row; align-items: center; gap: 8px; cursor: pointer; }
+.cm-private-field input { width: 15px; height: 15px; margin: 0; cursor: pointer; }
 .cm-phones { display: flex; flex-direction: column; gap: 8px; }
 .cm-phone-row { display: flex; gap: 8px; align-items: center; }
 .cm-phone-row .kb-select { flex: 0 0 120px; }
@@ -263,8 +265,9 @@ function buildContactsCard() {
       );
       row.append(main);
       const cats = contactCategories(c);
-      if (cats.length) {
+      if (cats.length || c.private) {
         const chips = el('span', { className: 'cm-row__chips' });
+        if (c.private) chips.appendChild(el('span', { className: 'kb-chip kb-chip--private' }, S('private-pill')));
         cats.forEach(cat => chips.appendChild(el('span', { className: 'kb-chip' }, cat)));
         row.append(chips);
       }
@@ -438,6 +441,13 @@ async function openContactForm(existing) {
   FIELDS.slice(3).forEach(spec => grid.appendChild(makeField(spec)));      // email…notes
   body.appendChild(grid);
 
+  // Private: kept out of the shared contact book (buildViewerHTML) entirely —
+  // it only ever lives in this browser's own working copy.
+  const privateInput = el('input', { type: 'checkbox' });
+  privateInput.checked = !!data.private;
+  refs.private = privateInput;
+  body.appendChild(el('label', { className: 'cm-private-field' }, [privateInput, S('field-private')]));
+
   // Organisation is freetext, but suggests organisations already on file (a
   // native datalist) and — since contacts at the same organisation share a
   // postal address — offers that organisation's known address. We only fill the
@@ -484,6 +494,7 @@ async function openContactForm(existing) {
   TEXT_KEYS.forEach(key => { next[key] = refs[key].value.trim(); });
   Object.assign(next, nameSection._collect());
   next.phones = phonesSection._collect();
+  next.private = privateInput.checked;
   if (!next.given && !next.family) {
     await kbAlert({ title: S('add-contact'), message: S('name-required'), okLabel: S('cancel') });
     next.id = existing && existing.id;
@@ -537,7 +548,12 @@ async function pickFileToImport() {
     reader.onload = () => {
       try {
         const imported = isCSV ? csvToContacts(String(reader.result)) : extractContacts(String(reader.result));
-        contacts = imported;
+        // A shared contactbook.html (or a roster CSV) never carries a private
+        // contact — buildViewerHTML strips them before export — so if the
+        // imported file has none, keep our own; but a personal CSV backup
+        // (contactsToCSV also exports private ones) is already complete on
+        // its own, so don't double them up in that case.
+        contacts = imported.some(c => c.private) ? imported : imported.concat(contacts.filter(c => c.private));
         saveDraft();
         statusKey = 'imported-n'; statusVars = { n: imported.length };
       } catch (e) {
@@ -565,8 +581,10 @@ function extractContacts(htmlText) {
 // ── CSV import / export ───────────────────────────────────────────────────────
 // One column per standard phone type (rather than a nested structure) so the
 // file opens cleanly in a spreadsheet. Multiple numbers of the same type are
-// joined with "; " on export and split back apart on import.
-const CSV_HEADERS = ['Given name', 'Family name', 'Nickname', 'Organisation', 'Role', 'Mobile', 'Office', 'Home', 'Fax', 'Other', 'Email', 'Address', 'Category', 'Notes'];
+// joined with "; " on export and split back apart on import. Private is a
+// personal-backup-only column — this is the sole CSV path that keeps private
+// contacts at all (the viewer/server exports never see them, see buildViewerHTML).
+const CSV_HEADERS = ['Given name', 'Family name', 'Nickname', 'Organisation', 'Role', 'Mobile', 'Office', 'Home', 'Fax', 'Other', 'Email', 'Address', 'Category', 'Notes', 'Private'];
 
 function csvEscape(v) {
   const s = String(v == null ? '' : v);
@@ -584,7 +602,7 @@ function contactsToCSV(list) {
     rows.push([
       c.given, c.family, c.nickname, c.organisation, c.role,
       byType.mobile, byType.office, byType.home, byType.fax, byType.other,
-      c.email, c.address, c.category, c.notes,
+      c.email, c.address, c.category, c.notes, c.private ? 'yes' : '',
     ]);
   });
   return rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
@@ -621,7 +639,8 @@ function csvToContacts(text) {
   const iGiven = col('given name'), iFamily = col('family name'), iLegacyName = col('name'),
     iNick = col('nickname'), iOrg = col('organisation'), iRole = col('role'),
     iMobile = col('mobile'), iOffice = col('office'), iHome = col('home'), iFax = col('fax'), iOther = col('other'),
-    iEmail = col('email'), iAddress = col('address'), iCategory = col('category'), iNotes = col('notes');
+    iEmail = col('email'), iAddress = col('address'), iCategory = col('category'), iNotes = col('notes'),
+    iPrivate = col('private');
   const get = (r, i) => (i >= 0 && r[i] != null) ? r[i].trim() : '';
   return rows.slice(1).filter(r => r.some(v => (v || '').trim())).map(r => {
     const phones = [];
@@ -637,6 +656,7 @@ function csvToContacts(text) {
       id: uid(),
       given, family, nickname: get(r, iNick), organisation: get(r, iOrg), role: get(r, iRole),
       phones, email: get(r, iEmail), address: get(r, iAddress), category: get(r, iCategory), notes: get(r, iNotes),
+      private: /^(yes|true|1)$/i.test(get(r, iPrivate)),
     };
   });
 }
@@ -705,7 +725,7 @@ headAssets + '\n' +
 '<body>\n' +
 '<div id="app"><p class="kb-loading">Loading…</p></div>\n' +
 '<scr' + 'ipt id="cb-config" type="application/json">' + jsonForScript(cfgObj) + '</scr' + 'ipt>\n' +
-'<scr' + 'ipt id="cb-contacts" type="application/json">' + jsonForScript(contacts) + '</scr' + 'ipt>\n' +
+'<scr' + 'ipt id="cb-contacts" type="application/json">' + jsonForScript(contacts.filter(c => !c.private)) + '</scr' + 'ipt>\n' +
 '<scr' + 'ipt>\n(' + viewerRuntime.toString() + ')();\n</scr' + 'ipt>\n' +
 '</body>\n</html>\n';
 }
