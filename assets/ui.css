@@ -205,6 +205,7 @@
   color: var(--chip-text, var(--text-soft));
 }
 .kb-chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--chip-border, var(--text-muted)); flex-shrink: 0; }
+.kb-chip--private { --chip-bg: var(--info-soft); --chip-border: var(--info-border); --chip-text: var(--info); }
 
 /* ── Totals panel ──────────────────────────────────────────────────────────── */
 .kb-totals { width: 100%; }

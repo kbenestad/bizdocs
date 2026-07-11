@@ -33,6 +33,9 @@ apps:
   - name: Contactmanager
     href: contactmanager/
     description: Maintain a contact directory and publish a staff contact book
+  - name: Dashboard
+    href: dashboard/
+    description: Shared profile and a log of documents generated across the suite
 
 # External links (open in a new tab)
 links:

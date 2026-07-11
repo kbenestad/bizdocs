@@ -76,6 +76,8 @@ localisation:
       ph-given: "Given name"
       ph-family: "Family name"
       swap-name-order: "Swap name order"
+      field-private: "Private — keep this contact out of the shared contact book"
+      private-pill: "Private"
       ph-nickname: "What they go by"
       ph-category: "Comma-separated, e.g. Legal, Partner"
       add-phone: "Add phone"
