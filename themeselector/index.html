@@ -35,7 +35,7 @@
 
 <style>
 .ts-frame-wrap {
-  border: 1px solid var(--border-strong); border-radius: var(--radius);
+  border-radius: var(--radius);
   overflow: hidden; background: var(--surface);
 }
 .ts-frame-wrap iframe { display: block; width: 100%; border: 0; min-height: 500px; }
@@ -71,6 +71,7 @@ let currentThemeObj = null;       // parsed YAML of the selected theme, or null
 let categoriesCache = null;       // [{name, path}], fetched once
 const filesCache = new Map();     // category path -> [{name, path, download_url}]
 let frameResizeObserver = null;
+let frameThemeObserver = null;
 
 function S(key, vars) {
   return lookupString(CFG['ui-strings'], key, lang, CFG['default-code'], vars);
@@ -223,8 +224,20 @@ function buildThemeCss(theme) {
   const semLight = theme['colours-semantic'] || null;
   const semDark = theme['colours-semantic-dark'] || semLight;
   let css = '';
-  if (light) css += `:root[data-theme="light"] { ${paletteModeVars('light', light, semLight)}; }\n`;
-  if (dark)  css += `:root[data-theme="dark"]  { ${paletteModeVars('dark',  dark,  semDark)}; }\n`;
+  // Mirrors style.css's own cascade, where light is the UNCONDITIONED base
+  // (plain :root {}) and dark applies via prefers-color-scheme OR an
+  // explicit data-theme="dark". A plain :root[data-theme="light"] rule never
+  // matches until the user has manually toggled the theme button at least
+  // once (that's the only thing that ever sets the attribute) — on a first
+  // visit, in either light or dark OS mode, that attribute is simply absent,
+  // so an override scoped only to [data-theme="light"]/[data-theme="dark"]
+  // silently never applies.
+  if (light) css += `:root { ${paletteModeVars('light', light, semLight)}; }\n`;
+  if (dark) {
+    const darkVars = paletteModeVars('dark', dark, semDark);
+    css += `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${darkVars}; } }\n`;
+    css += `:root[data-theme="dark"] { ${darkVars}; }\n`;
+  }
   const bodyFont = parseFontName(theme['font-body']);
   const headingFont = parseFontName(theme['font-heading']) || bodyFont;
   if (bodyFont) css += `body { font-family: "${bodyFont}", var(--font-sans); }\n`;
@@ -238,6 +251,34 @@ function buildThemeCss(theme) {
 .kb-brand .logo svg { --accent: var(--header-accent); }
 `;
   return css;
+}
+
+// Every app's boot calls app.js's applyAccent(), which sets --accent via
+// INLINE style on <html> (document.documentElement.style.setProperty). An
+// inline style always wins over any stylesheet rule regardless of source
+// order or selector specificity, so a plain <style> override — however it's
+// scoped — can never change --accent itself, even though every *derived*
+// token (accent-hover/soft/border, computed as literal hex below) works
+// fine. Fix: write --accent the same way the app itself does, so ours is
+// simply the more-recent write to the same inline declaration. Captured
+// once per iframe document so reverting to "bizdocs default" restores the
+// app's own configured accent-colour instead of erasing it.
+let frameOriginalAccent = null;
+
+function frameCurrentMode(doc) {
+  const attr = doc.documentElement.getAttribute('data-theme');
+  if (attr === 'dark' || attr === 'light') return attr;
+  try { return doc.defaultView.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; }
+  catch (e) { return 'light'; }
+}
+
+function syncFrameAccent(doc) {
+  if (frameOriginalAccent === null) frameOriginalAccent = doc.documentElement.style.getPropertyValue('--accent') || '';
+  const palette = currentThemeObj && currentThemeObj.palette;
+  const m = palette && palette[frameCurrentMode(doc)];
+  if (m && m.primary) { doc.documentElement.style.setProperty('--accent', m.primary); return; }
+  if (frameOriginalAccent) doc.documentElement.style.setProperty('--accent', frameOriginalAccent);
+  else doc.documentElement.style.removeProperty('--accent');
 }
 
 // contentDocument can transiently be unready right after a src change/reload
@@ -258,6 +299,7 @@ function applyThemeToFrame(retriesLeft) {
   let styleEl = doc.getElementById('mdcms-theme-override');
   if (!styleEl) { styleEl = doc.createElement('style'); styleEl.id = 'mdcms-theme-override'; doc.head.appendChild(styleEl); }
   styleEl.textContent = buildThemeCss(currentThemeObj);
+  syncFrameAccent(doc);
   clearError();
 }
 
@@ -272,6 +314,21 @@ function setupFrameResize() {
   frameResizeObserver = new ResizeObserver(resize);
   frameResizeObserver.observe(docEl);
   resize();
+}
+
+// Keeps --accent in sync when the user toggles light/dark INSIDE the
+// preview (the iframe's own theme button) — that only flips data-theme, it
+// doesn't re-run our accent sync, so without this the accent would keep
+// showing whichever mode was active when a theme was first picked.
+function setupFrameThemeWatch() {
+  const frame = $('#tsFrame');
+  if (!frame) return;
+  let docEl;
+  try { docEl = frame.contentDocument && frame.contentDocument.documentElement; } catch (e) { return; }
+  if (!docEl) return;
+  if (frameThemeObserver) frameThemeObserver.disconnect();
+  frameThemeObserver = new MutationObserver(() => syncFrameAccent(docEl.ownerDocument));
+  frameThemeObserver.observe(docEl, { attributes: true, attributeFilter: ['data-theme'] });
 }
 
 /* ── mdcms GitHub data source ────────────────────────────────────────────── */
@@ -479,7 +536,7 @@ function buildPreviewCard() {
 function buildFrame() {
   const wrap = el('div', { className: 'ts-frame-wrap' });
   const frame = el('iframe', { id: 'tsFrame', src: appPath(state.app), title: 'bizdocs app preview' });
-  frame.addEventListener('load', () => { applyThemeToFrame(); setupFrameResize(); });
+  frame.addEventListener('load', () => { frameOriginalAccent = null; applyThemeToFrame(); setupFrameResize(); setupFrameThemeWatch(); });
   wrap.appendChild(frame);
   return wrap;
 }
