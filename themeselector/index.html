@@ -137,24 +137,50 @@ function colorsClash(a, b) {
   return Math.abs(ra[0] - rb[0]) + Math.abs(ra[1] - rb[1]) + Math.abs(ra[2] - rb[2]) < 20;
 }
 // Some mdcms themes set on-surface-* to var(--font-colour)/var(--nav-link-
-// colour) etc. instead of a literal colour — a shorthand meaningful only
-// inside mdcms's own renderer, which defines those custom properties itself.
-// We don't define them anywhere, so passing that string straight through (as
-// this used to) makes it fail at computed-value time — inheriting the
-// wordmark's parent <svg fill="none">, i.e. invisible, indistinguishable
-// from "matches the surface colour". Treat any var() reference as if the
-// theme hadn't supplied a value at all.
-function isUsableColor(v) {
-  return !!v && !/^var\(/i.test(String(v).trim());
+// colour) etc. instead of a literal colour — mdcms's own shorthand for
+// "whatever that other palette field resolves to" (its renderer defines
+// these itself; see app/index.html's applyThemeYml()). We don't define them
+// anywhere, so passing the string straight through made it fail at
+// computed-value time — inheriting the wordmark's parent <svg fill="none">,
+// i.e. invisible. But the reference IS meaningful: resolve it back through
+// the same palette object mdcms itself would've pulled it from (chasing
+// further var()s too — on-surface-title: var(--nav-link-colour) with
+// on-surface: var(--font-colour) is a real two-level chain in the wild),
+// rather than discarding the theme author's intent for a generic guess.
+const MDCMS_VAR_TO_PALETTE_FIELD = {
+  '--accent': 'primary',
+  '--bg-main': 'page',
+  '--bg-nav': 'surface',
+  '--font-colour': 'ink',
+  '--font-colour-muted': 'ink-muted',
+  '--heading-colour': 'heading',
+  '--nav-link-colour': 'on-surface',
+  '--nav-link-active-colour': 'on-surface-active',
+  '--nav-section-heading-colour': 'on-surface-heading',
+  '--nav-sitename-colour': 'on-surface-title',
+  '--nav-description-colour': 'on-surface-note',
+  '--nav-toggle-colour': 'on-surface-icon',
+  '--divider': 'divider',
+};
+function resolveMdcmsVar(value, m, depth) {
+  if (depth === undefined) depth = 0;
+  if (!value || depth > 5) return null;
+  const match = /^var\(\s*(--[\w-]+)\s*\)$/i.exec(String(value).trim());
+  if (!match) return value;
+  const field = MDCMS_VAR_TO_PALETTE_FIELD[match[1]];
+  if (!field || !m[field]) return null;
+  return resolveMdcmsVar(m[field], m, depth + 1);
 }
 
 // Falls back to an auto-contrast colour (not the raw fallback) whenever a
-// theme's key colour matches its surface colour with no usable on-surface-*
-// override — many mdcms themes deliberately set primary == surface ("a single
-// bold colour drives both the nav and the accent"), which is safe in mdcms
-// itself but can make an accent-coloured mark drawn on --bg disappear here.
-function headerToken(themeVal, keyColor, surfaceColor, fallbackHex) {
-  if (isUsableColor(themeVal)) return themeVal;
+// theme's key colour matches its surface colour with no resolvable
+// on-surface-* override — many mdcms themes deliberately set primary ==
+// surface ("a single bold colour drives both the nav and the accent"),
+// which is safe in mdcms itself but can make an accent-coloured mark drawn
+// on --bg disappear here.
+function headerToken(themeVal, keyColor, surfaceColor, fallbackHex, m) {
+  const resolved = resolveMdcmsVar(themeVal, m);
+  if (resolved) return resolved;
   if (keyColor && surfaceColor && colorsClash(keyColor, surfaceColor)) return onColorFor(surfaceColor);
   return fallbackHex;
 }
@@ -209,11 +235,11 @@ function paletteModeVars(mode, m, sem) {
     `--placeholder:${mixHex(inkMuted, 60, surface)}`,
     // Header/toolbar chrome sits directly on --bg, not on a card — needs its
     // own contrast pair (mdcms's on-surface-* group is exactly this).
-    `--header-text:${headerToken(m['on-surface-title'], ink, bg, ink)}`,
-    `--header-muted:${headerToken(m['on-surface-note'], inkMuted, bg, inkMuted)}`,
-    `--header-link:${headerToken(m['on-surface'], ink, bg, ink)}`,
-    `--header-accent:${headerToken(m['on-surface-active'], m.primary, bg, m.primary)}`,
-    `--header-icon:${headerToken(m['on-surface-icon'], inkMuted, bg, inkMuted)}`,
+    `--header-text:${headerToken(m['on-surface-title'], ink, bg, ink, m)}`,
+    `--header-muted:${headerToken(m['on-surface-note'], inkMuted, bg, inkMuted, m)}`,
+    `--header-link:${headerToken(m['on-surface'], ink, bg, ink, m)}`,
+    `--header-accent:${headerToken(m['on-surface-active'], m.primary, bg, m.primary, m)}`,
+    `--header-icon:${headerToken(m['on-surface-icon'], inkMuted, bg, inkMuted, m)}`,
   ];
   if (sem) {
     [['danger', 'error'], ['warning', 'warning'], ['success', 'success'], ['info', 'info']].forEach(([tok, key]) => {
