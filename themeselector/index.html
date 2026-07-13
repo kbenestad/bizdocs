@@ -136,13 +136,25 @@ function colorsClash(a, b) {
   if (!ra || !rb) return false;
   return Math.abs(ra[0] - rb[0]) + Math.abs(ra[1] - rb[1]) + Math.abs(ra[2] - rb[2]) < 20;
 }
+// Some mdcms themes set on-surface-* to var(--font-colour)/var(--nav-link-
+// colour) etc. instead of a literal colour — a shorthand meaningful only
+// inside mdcms's own renderer, which defines those custom properties itself.
+// We don't define them anywhere, so passing that string straight through (as
+// this used to) makes it fail at computed-value time — inheriting the
+// wordmark's parent <svg fill="none">, i.e. invisible, indistinguishable
+// from "matches the surface colour". Treat any var() reference as if the
+// theme hadn't supplied a value at all.
+function isUsableColor(v) {
+  return !!v && !/^var\(/i.test(String(v).trim());
+}
+
 // Falls back to an auto-contrast colour (not the raw fallback) whenever a
-// theme's key colour matches its surface colour with no explicit on-surface-*
+// theme's key colour matches its surface colour with no usable on-surface-*
 // override — many mdcms themes deliberately set primary == surface ("a single
 // bold colour drives both the nav and the accent"), which is safe in mdcms
 // itself but can make an accent-coloured mark drawn on --bg disappear here.
 function headerToken(themeVal, keyColor, surfaceColor, fallbackHex) {
-  if (themeVal) return themeVal;
+  if (isUsableColor(themeVal)) return themeVal;
   if (keyColor && surfaceColor && colorsClash(keyColor, surfaceColor)) return onColorFor(surfaceColor);
   return fallbackHex;
 }
