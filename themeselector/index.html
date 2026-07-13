@@ -128,15 +128,30 @@ function colorsClash(a, b) {
   if (!ra || !rb) return false;
   return Math.abs(ra[0] - rb[0]) + Math.abs(ra[1] - rb[1]) + Math.abs(ra[2] - rb[2]) < 20;
 }
-// Falls back to an auto-contrast colour (not the raw fallback var) whenever a
+// Falls back to an auto-contrast colour (not the raw fallback) whenever a
 // theme's key colour matches its surface colour with no explicit on-surface-*
 // override — many mdcms themes deliberately set primary == surface ("a single
 // bold colour drives both the nav and the accent"), which is safe in mdcms
 // itself but can make an accent-coloured mark drawn on --bg disappear here.
-function headerToken(themeVal, keyColor, surfaceColor, fallbackVar) {
+function headerToken(themeVal, keyColor, surfaceColor, fallbackHex) {
   if (themeVal) return themeVal;
   if (keyColor && surfaceColor && colorsClash(keyColor, surfaceColor)) return onColorFor(surfaceColor);
-  return fallbackVar;
+  return fallbackHex;
+}
+
+// Computed in JS, not via CSS color-mix() — color-mix() only shipped in
+// browsers around 2023, and some mobile/WebView browsers that otherwise
+// support fetch()/async fine still don't have it. Matches color-mix(in srgb,
+// hexA pct%, hexB) exactly: color-mix's default "in srgb" interpolates raw
+// (gamma-encoded) channel values, which is exactly a per-channel weighted
+// average — no colour-space conversion needed.
+function mixHex(hexA, pct, hexB) {
+  const a = kbHexRgb(hexA), b = kbHexRgb(hexB);
+  if (!a) return hexB || hexA;
+  if (!b) return hexA;
+  const t = pct / 100;
+  const ch = i => Math.round(a[i] * t + b[i] * (1 - t)).toString(16).padStart(2, '0');
+  return `#${ch(0)}${ch(1)}${ch(2)}`;
 }
 
 /* ── mdcms palette -> bizdocs CSS vars ──────────────────────────────────────
@@ -149,42 +164,43 @@ function paletteModeVars(mode, m, sem) {
   if (!m || !m.primary) return '';
   const rgb = (kbHexRgb(m.primary) || [0, 0, 0]).join(',');
   const ink = m.ink, inkMuted = m['ink-muted'];
-  const hoverMix = mode === 'dark' ? 'white' : 'black';
+  const surface = m.page, bg = m.surface;
+  const hoverBase = mode === 'dark' ? '#FFFFFF' : '#000000';
   const lines = [
     `--accent:${m.primary}`,
     `--accent-rgb:${rgb}`,
     `--on-accent:${onColorFor(m.primary)}`,
-    `--accent-hover:color-mix(in srgb, var(--accent) 85%, ${hoverMix})`,
-    `--accent-soft:color-mix(in srgb, var(--accent) 12%, var(--surface))`,
-    `--accent-border:color-mix(in srgb, var(--accent) 35%, var(--surface))`,
-    `--bg:${m.surface}`,
-    `--surface:${m.page}`,
-    // Mixed toward --text (ink), NOT --bg: these tint disabled/readonly form
-    // fields and sit inside a white/page-toned card. Deriving them from --bg
-    // instead would drag in the nav colour's boldness even where it has
-    // nothing to do with how a text field should read.
-    `--surface-2:color-mix(in srgb, var(--surface) 97%, var(--text))`,
-    `--surface-3:color-mix(in srgb, var(--surface) 92%, var(--text))`,
-    `--border:color-mix(in srgb, var(--surface) 88%, var(--text))`,
-    `--border-strong:color-mix(in srgb, var(--surface) 75%, var(--text))`,
+    `--accent-hover:${mixHex(m.primary, 85, hoverBase)}`,
+    `--accent-soft:${mixHex(m.primary, 12, surface)}`,
+    `--accent-border:${mixHex(m.primary, 35, surface)}`,
+    `--bg:${bg}`,
+    `--surface:${surface}`,
+    // Mixed toward ink, NOT bg: these tint disabled/readonly form fields and
+    // sit inside a white/page-toned card. Deriving them from bg instead
+    // would drag in the nav colour's boldness even where it has nothing to
+    // do with how a text field should read.
+    `--surface-2:${mixHex(surface, 97, ink)}`,
+    `--surface-3:${mixHex(surface, 92, ink)}`,
+    `--border:${mixHex(surface, 88, ink)}`,
+    `--border-strong:${mixHex(surface, 75, ink)}`,
     `--text:${ink}`,
-    `--text-soft:color-mix(in srgb, var(--text) 55%, var(--text-muted))`,
+    `--text-soft:${mixHex(ink, 55, inkMuted)}`,
     `--text-muted:${inkMuted}`,
-    `--placeholder:color-mix(in srgb, var(--text-muted) 60%, var(--surface))`,
+    `--placeholder:${mixHex(inkMuted, 60, surface)}`,
     // Header/toolbar chrome sits directly on --bg, not on a card — needs its
     // own contrast pair (mdcms's on-surface-* group is exactly this).
-    `--header-text:${headerToken(m['on-surface-title'], ink, m.surface, 'var(--text)')}`,
-    `--header-muted:${headerToken(m['on-surface-note'], inkMuted, m.surface, 'var(--text-muted)')}`,
-    `--header-link:${headerToken(m['on-surface'], ink, m.surface, 'var(--text)')}`,
-    `--header-accent:${headerToken(m['on-surface-active'], m.primary, m.surface, 'var(--accent)')}`,
-    `--header-icon:${headerToken(m['on-surface-icon'], inkMuted, m.surface, 'var(--text-muted)')}`,
+    `--header-text:${headerToken(m['on-surface-title'], ink, bg, ink)}`,
+    `--header-muted:${headerToken(m['on-surface-note'], inkMuted, bg, inkMuted)}`,
+    `--header-link:${headerToken(m['on-surface'], ink, bg, ink)}`,
+    `--header-accent:${headerToken(m['on-surface-active'], m.primary, bg, m.primary)}`,
+    `--header-icon:${headerToken(m['on-surface-icon'], inkMuted, bg, inkMuted)}`,
   ];
   if (sem) {
     [['danger', 'error'], ['warning', 'warning'], ['success', 'success'], ['info', 'info']].forEach(([tok, key]) => {
       if (!sem[key]) return;
       lines.push(`--${tok}:${sem[key]}`);
-      lines.push(`--${tok}-soft:color-mix(in srgb, var(--${tok}) 12%, var(--surface))`);
-      lines.push(`--${tok}-border:color-mix(in srgb, var(--${tok}) 35%, var(--surface))`);
+      lines.push(`--${tok}-soft:${mixHex(sem[key], 12, surface)}`);
+      lines.push(`--${tok}-border:${mixHex(sem[key], 35, surface)}`);
     });
   }
   return lines.join('; ');
@@ -224,15 +240,25 @@ function buildThemeCss(theme) {
   return css;
 }
 
-function applyThemeToFrame() {
+// contentDocument can transiently be unready right after a src change/reload
+// (more common on slower mobile connections) — retry briefly instead of
+// silently no-op'ing, and surface a note if it never becomes available so a
+// real failure is visible instead of looking like nothing happened.
+function applyThemeToFrame(retriesLeft) {
+  if (retriesLeft === undefined) retriesLeft = 10;
   const frame = $('#tsFrame');
   if (!frame) return;
   let doc;
-  try { doc = frame.contentDocument; } catch (e) { return; }
-  if (!doc || !doc.head) return;
+  try { doc = frame.contentDocument; } catch (e) { doc = null; }
+  if (!doc || !doc.head) {
+    if (retriesLeft > 0) { setTimeout(() => applyThemeToFrame(retriesLeft - 1), 150); return; }
+    showError('err-frame-access');
+    return;
+  }
   let styleEl = doc.getElementById('mdcms-theme-override');
   if (!styleEl) { styleEl = doc.createElement('style'); styleEl.id = 'mdcms-theme-override'; doc.head.appendChild(styleEl); }
   styleEl.textContent = buildThemeCss(currentThemeObj);
+  clearError();
 }
 
 function setupFrameResize() {
@@ -240,7 +266,7 @@ function setupFrameResize() {
   if (!frame) return;
   let docEl;
   try { docEl = frame.contentDocument && frame.contentDocument.documentElement; } catch (e) { return; }
-  if (!docEl) return;
+  if (!docEl || typeof ResizeObserver === 'undefined') return;
   if (frameResizeObserver) frameResizeObserver.disconnect();
   const resize = () => { frame.style.height = docEl.scrollHeight + 'px'; };
   frameResizeObserver = new ResizeObserver(resize);
