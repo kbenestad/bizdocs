@@ -291,12 +291,16 @@ worth spelling out:
   `api.github.com` and `raw.githubusercontent.com` — see docs/dependencies.md.
 - **No `dependencies:` block** — it has no PDF output, so it needs neither
   jspdf nor pdf-lib.
-- **Fonts are name-only.** A theme's `font-body`/`font-heading` only apply if
-  that font happens to already be installed locally — no `@font-face`/webfont
-  is fetched. mdcms loads fonts via Bunny's CSS API (a `<link>` to an external
-  stylesheet), which every app's `style-src 'self' 'unsafe-inline'` CSP
-  deliberately doesn't allow, and loosening it for one more host felt like the
-  wrong tradeoff for a cosmetic detail.
+- **Fonts are fetched as text, not linked as a stylesheet.** A theme's
+  `font-body`/`font-heading` are loaded from Bunny Fonts or Google Fonts (the
+  same two providers mdcms itself supports) by `fetch()`-ing the provider's
+  CSS API response as plain text and injecting it into the preview iframe as
+  an inline `<style>`. That deliberately avoids ever pointing `style-src` at
+  an external host — the CSS is 'unsafe-inline' like everything else this app
+  injects; only the actual font *files* that CSS references are fetched
+  cross-origin, which `font-src` already allows. `connect-src` additionally
+  allows `fonts.bunny.net`/`fonts.googleapis.com` for this — see
+  docs/dependencies.md. `system-ui` fonts need no fetch at all.
 - **The mapping is colour/font only**, not layout: mdcms's `main-width`/
   `nav-width`/`scanlines` aren't applied — bizdocs has no nav/content split
   for the former two to mean anything, and no CRT-overlay effect for the

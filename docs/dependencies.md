@@ -63,12 +63,15 @@ libraries, so they aren't wired through `config.yml`'s `dependencies:` block.
 | ------------------------------------ | ---------------- | ----- |
 | GitHub Contents API (`api.github.com`) | `themeselector/` | Lists `kbenestad/mdcms`'s `themes/` category folders and theme files, fetched at runtime — nothing is vendored. |
 | Raw file content (`raw.githubusercontent.com`) | `themeselector/` | Fetches the chosen theme's YAML text (via the Contents API's `download_url`), parsed with the same `js-yaml` every app loads. |
+| Bunny Fonts CSS API (`fonts.bunny.net`) | `themeselector/` | Fetched as CSS text (not linked) for a theme's `font-body`/`font-heading` when declared with the `bunny:` provider (or no provider — bunny is the implicit default), then injected into the preview iframe as an inline `<style>`. |
+| Google Fonts CSS API (`fonts.googleapis.com`) | `themeselector/` | Same, for fonts declared with the `google:` provider. Its CSS response points at `fonts.gstatic.com` for the actual woff2 files — allowed via `font-src`, not fetched by this app directly. |
 
-Not a versioned CDN script like the libraries above — no SRI hash applies to
-a live API response. `themeselector/index.html`'s CSP `connect-src`
-additionally allows both hosts for this reason; no other app's CSP is
-affected. See CLAUDE.md's "Theme Selector" section for the full rationale
-(including why theme fonts are name-only, not fetched).
+None of these four are versioned CDN scripts like the libraries above — no
+SRI hash applies to a live API response. `themeselector/index.html`'s CSP
+`connect-src` additionally allows all four hosts for this reason (plus
+`font-src` for `fonts.gstatic.com`); no other app's CSP is affected. See
+CLAUDE.md's "Theme Selector" section for the full rationale, including why
+fonts are fetched as inline CSS text rather than linked as a stylesheet.
 
 ## Updating a dependency
 
