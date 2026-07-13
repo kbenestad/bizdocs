@@ -1078,6 +1078,7 @@ try {
     NAV = await loadNavItems('../config.yml');   // root config's apps/links, for the nav dropdown
     normaliseConfig();
     applyAccent(CFG);
+    await applyMdcmsTheme(CFG, '../');
     initFontScale();
     lang = localStorage.getItem('contactmanager-lang') || CFG['default-code'] || 'en';
     applyLang(lang);

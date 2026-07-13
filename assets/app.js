@@ -338,7 +338,7 @@ async function loadYamlConfig(url = 'config.yml', { requireLocalisation = true }
  *  to every app, so an office admin sets them once instead of in every app's
  *  config.yml. An app overrides a key by giving it a non-blank value in its
  *  own config.yml. */
-const KB_SHARED_CONFIG_KEYS = ['organization', 'logo', 'logo-maxwidth', 'tagline', 'accent-colour'];
+const KB_SHARED_CONFIG_KEYS = ['organization', 'logo', 'logo-maxwidth', 'tagline', 'accent-colour', 'theme'];
 
 let _kbSharedConfigPromise = null;
 /** Fetch the root config.yml once and cache it. Tolerant of failure — an app
@@ -390,6 +390,256 @@ function loadDependency(dep) {
 function applyAccent(cfg) {
   if (cfg && cfg['accent-colour']) {
     document.documentElement.style.setProperty('--accent', cfg['accent-colour']);
+  }
+}
+
+/* ── mdcms theme application ─────────────────────────────────────────────
+ * Suite-wide theming: config.yml's `theme:` key (cascades from the root
+ * config.yml the same way accent-colour/organization/logo do) names a
+ * vendored mdcms theme file — e.g. `theme: assets/themes/nord.yaml` — a
+ * copy dropped by hand into the shared assets/themes/ folder (see
+ * CLAUDE.md's "Suite-wide theming"). Same-origin, so this needs no CSP
+ * change anywhere: it's fetched and parsed with the same js-yaml every app
+ * already loads, exactly like config.yml itself. Missing/broken theme
+ * files degrade silently to the plain default look — a theme is cosmetic,
+ * never something that should be able to break an app.
+ *
+ * This is the same mdcms-palette → bizdocs-CSS-vars mapping themeselector
+ * uses to preview a theme in an iframe (see themeselector/index.html's
+ * comments for the full rationale of each design choice below), factored
+ * out here so both a real theme application (this) and a preview (an
+ * iframe's document) share one implementation instead of drifting apart.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/** Hex or rgb()/rgba() → [r,g,b] (0–255), or null. Themes routinely give
+ *  ink / on-surface-* as rgba() (that's the whole point of a semi-transparent
+ *  on-surface tint) — kbHexRgb alone only understands hex. */
+function kbParseColorRgb(v) {
+  if (!v) return null;
+  const hex = kbHexRgb(v);
+  if (hex) return hex;
+  const m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*[\d.]+\s*)?\)$/i.exec(String(v).trim());
+  return m ? [Math.round(+m[1]), Math.round(+m[2]), Math.round(+m[3])] : null;
+}
+function kbRelLuminance(hex) {
+  const rgb = kbParseColorRgb(hex);
+  if (!rgb) return 1;
+  const [r, g, b] = rgb.map(c => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function kbOnColorFor(hex) { return kbRelLuminance(hex) > 0.45 ? '#14181E' : '#FFFFFF'; }
+function kbColorsClash(a, b) {
+  const ra = kbParseColorRgb(a), rb = kbParseColorRgb(b);
+  if (!ra || !rb) return false;
+  return Math.abs(ra[0] - rb[0]) + Math.abs(ra[1] - rb[1]) + Math.abs(ra[2] - rb[2]) < 20;
+}
+// Computed in JS, not CSS color-mix() (only ~2023+ browser support; matches
+// color-mix(in srgb, hexA pct%, hexB) exactly — its default "in srgb" is
+// just a per-channel weighted average of the raw gamma-encoded values).
+function kbMixHex(hexA, pct, hexB) {
+  const a = kbParseColorRgb(hexA), b = kbParseColorRgb(hexB);
+  if (!a) return hexB || hexA;
+  if (!b) return hexA;
+  const t = pct / 100;
+  const ch = i => Math.round(a[i] * t + b[i] * (1 - t)).toString(16).padStart(2, '0');
+  return `#${ch(0)}${ch(1)}${ch(2)}`;
+}
+
+// Some mdcms themes set on-surface-* to var(--font-colour)/var(--nav-link-
+// colour) etc. instead of a literal colour — mdcms's own shorthand for
+// "whatever that other palette field resolves to" (its renderer defines
+// these itself). Resolve the reference back through the same palette
+// object mdcms would've pulled it from, chasing further var()s too
+// (on-surface-title: var(--nav-link-colour) with on-surface: var(--font-
+// colour) is a real two-level chain in the wild).
+const KB_MDCMS_VAR_TO_PALETTE_FIELD = {
+  '--accent': 'primary', '--bg-main': 'page', '--bg-nav': 'surface',
+  '--font-colour': 'ink', '--font-colour-muted': 'ink-muted', '--heading-colour': 'heading',
+  '--nav-link-colour': 'on-surface', '--nav-link-active-colour': 'on-surface-active',
+  '--nav-section-heading-colour': 'on-surface-heading', '--nav-sitename-colour': 'on-surface-title',
+  '--nav-description-colour': 'on-surface-note', '--nav-toggle-colour': 'on-surface-icon',
+  '--divider': 'divider',
+};
+function kbResolveMdcmsVar(value, m, depth) {
+  if (depth === undefined) depth = 0;
+  if (!value || depth > 5) return null;
+  const match = /^var\(\s*(--[\w-]+)\s*\)$/i.exec(String(value).trim());
+  if (!match) return value;
+  const field = KB_MDCMS_VAR_TO_PALETTE_FIELD[match[1]];
+  if (!field || !m[field]) return null;
+  return kbResolveMdcmsVar(m[field], m, depth + 1);
+}
+// Falls back to an auto-contrast colour (not the raw fallback) whenever a
+// theme's key colour matches its surface colour with no resolvable
+// on-surface-* override — many mdcms themes deliberately set primary ==
+// surface ("a single bold colour drives both the nav and the accent"),
+// which can make an accent-coloured mark/text drawn on --bg disappear.
+function kbHeaderToken(themeVal, keyColor, surfaceColor, fallbackHex, m) {
+  const resolved = kbResolveMdcmsVar(themeVal, m);
+  if (resolved) return resolved;
+  if (keyColor && surfaceColor && kbColorsClash(keyColor, surfaceColor)) return kbOnColorFor(surfaceColor);
+  return fallbackHex;
+}
+
+// mdcms `page` (content bg, usually white)   -> bizdocs --surface (cards/inputs)
+// mdcms `surface` (nav bg, sometimes bold)    -> bizdocs --bg (page backdrop)
+// bizdocs has no separate nav-surface concept, so a bold mdcms nav colour
+// becomes the whole app's backdrop behind white cards.
+function kbPaletteModeVars(mode, m, sem) {
+  if (!m || !m.primary) return '';
+  const rgb = (kbParseColorRgb(m.primary) || [0, 0, 0]).join(',');
+  const ink = m.ink, inkMuted = m['ink-muted'];
+  const surface = m.page, bg = m.surface;
+  const hoverBase = mode === 'dark' ? '#FFFFFF' : '#000000';
+  const lines = [
+    `--accent:${m.primary}`,
+    `--accent-rgb:${rgb}`,
+    `--on-accent:${kbOnColorFor(m.primary)}`,
+    `--accent-hover:${kbMixHex(m.primary, 85, hoverBase)}`,
+    `--accent-soft:${kbMixHex(m.primary, 12, surface)}`,
+    `--accent-border:${kbMixHex(m.primary, 35, surface)}`,
+    `--bg:${bg}`,
+    `--surface:${surface}`,
+    // Mixed toward ink, NOT bg: these tint disabled/readonly form fields and
+    // sit inside a white/page-toned card. Deriving them from bg instead
+    // would drag in the nav colour's boldness even where it has nothing to
+    // do with how a text field should read.
+    `--surface-2:${kbMixHex(surface, 97, ink)}`,
+    `--surface-3:${kbMixHex(surface, 92, ink)}`,
+    `--border:${kbMixHex(surface, 88, ink)}`,
+    `--border-strong:${kbMixHex(surface, 75, ink)}`,
+    `--text:${ink}`,
+    `--text-soft:${kbMixHex(ink, 55, inkMuted)}`,
+    `--text-muted:${inkMuted}`,
+    `--placeholder:${kbMixHex(inkMuted, 60, surface)}`,
+    // Header/toolbar/footer chrome sits directly on --bg, not on a card —
+    // needs its own contrast pair (mdcms's on-surface-* group is exactly
+    // this). The language select and size/theme/about icon buttons do NOT
+    // use these — they have their own var(--surface) box (see kbBuildThemeCss).
+    `--header-text:${kbHeaderToken(m['on-surface-title'], ink, bg, ink, m)}`,
+    `--header-muted:${kbHeaderToken(m['on-surface-note'], inkMuted, bg, inkMuted, m)}`,
+    `--header-link:${kbHeaderToken(m['on-surface'], ink, bg, ink, m)}`,
+    `--header-accent:${kbHeaderToken(m['on-surface-active'], m.primary, bg, m.primary, m)}`,
+    `--header-icon:${kbHeaderToken(m['on-surface-icon'], inkMuted, bg, inkMuted, m)}`,
+  ];
+  if (sem) {
+    [['danger', 'error'], ['warning', 'warning'], ['success', 'success'], ['info', 'info']].forEach(([tok, key]) => {
+      if (!sem[key]) return;
+      lines.push(`--${tok}:${sem[key]}`);
+      lines.push(`--${tok}-soft:${kbMixHex(sem[key], 12, surface)}`);
+      lines.push(`--${tok}-border:${kbMixHex(sem[key], 35, surface)}`);
+    });
+  }
+  return lines.join('; ');
+}
+
+// "provider:Font Name:weight", "Font Name:weight" (bunny implied), or
+// "system-ui:weight" — a real theme application only ever tries the family
+// by name (no @font-face is fetched, unlike themeselector's preview, to
+// keep this feature at zero new CSP/network dependency for every app) —
+// shows correctly if that font happens to already be installed locally,
+// otherwise gracefully falls back to var(--font-sans).
+function kbParseFontName(spec) {
+  if (!spec) return null;
+  const parts = String(spec).split(':');
+  if (parts.length >= 3) return parts[1].trim();
+  if (parts.length === 2) return parts[0].trim() === 'system-ui' ? null : parts[0].trim();
+  return null;
+}
+
+function kbBuildThemeCss(theme) {
+  if (!theme || !theme.palette) return '';
+  const light = theme.palette.light, dark = theme.palette.dark;
+  const semLight = theme['colours-semantic'] || null;
+  const semDark = theme['colours-semantic-dark'] || semLight;
+  let css = '';
+  // Mirrors style.css's own cascade, where light is the UNCONDITIONED base
+  // (plain :root {}) and dark applies via prefers-color-scheme OR an
+  // explicit data-theme="dark". A rule scoped only to
+  // [data-theme="light"]/[data-theme="dark"] never matches until the user
+  // has manually toggled the theme button at least once (that's the only
+  // thing that ever sets the attribute) — on a first visit, in either OS
+  // mode, that attribute is simply absent.
+  if (light) css += `:root { ${kbPaletteModeVars('light', light, semLight)}; }\n`;
+  if (dark) {
+    const darkVars = kbPaletteModeVars('dark', dark, semDark);
+    css += `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${darkVars}; } }\n`;
+    css += `:root[data-theme="dark"] { ${darkVars}; }\n`;
+  }
+  const bodyFont = kbParseFontName(theme['font-body']);
+  const headingFont = kbParseFontName(theme['font-heading']) || bodyFont;
+  if (bodyFont) css += `body { font-family: "${bodyFont}", var(--font-sans); }\n`;
+  if (headingFont) css += `.kb-doctitle h1, .kb-card__title, .kb-brand .org, .kb-modal__hdr { font-family: "${headingFont}", var(--font-sans); }\n`;
+  css += `.kb-brand .org { color: var(--header-text); }
+.kb-brand .org small { color: var(--header-muted); }
+.kb-doctitle h1 { color: var(--header-text); }
+.kb-doctitle .meta { color: var(--header-muted); }
+.kb-brand .logo svg { --accent: var(--header-accent); }
+.kb-sz-label, .kb-footer, .kb-footer a, .kb-footer button, .kb-mark { color: var(--header-muted); }
+.kb-footer .kb-mark svg { --accent: var(--header-accent); }
+.kb-btn--primary { border-color: var(--on-accent); }
+`;
+  return css;
+}
+
+function kbFrameCurrentMode(doc) {
+  const attr = doc.documentElement.getAttribute('data-theme');
+  if (attr === 'dark' || attr === 'light') return attr;
+  try { return doc.defaultView.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; }
+  catch (e) { return 'light'; }
+}
+
+// Every app's boot calls applyAccent(), which sets --accent via INLINE
+// style on <html> — that always wins over any stylesheet rule regardless
+// of source order or specificity, so a plain <style> override can never
+// change --accent itself. Write it the same way applyAccent() does, so
+// ours is simply the more-recent write to the same inline declaration.
+// Keyed per-document (a WeakMap) so themeselector's preview iframe — whose
+// document object changes every time the previewed app is switched — can
+// share this without any manual "reset on navigate" bookkeeping.
+const _kbThemeOriginalAccent = new WeakMap();
+function kbSyncThemeAccent(theme, doc) {
+  if (!_kbThemeOriginalAccent.has(doc)) {
+    _kbThemeOriginalAccent.set(doc, doc.documentElement.style.getPropertyValue('--accent') || '');
+  }
+  const palette = theme && theme.palette;
+  const m = palette && palette[kbFrameCurrentMode(doc)];
+  if (m && m.primary) { doc.documentElement.style.setProperty('--accent', m.primary); return; }
+  const original = _kbThemeOriginalAccent.get(doc);
+  if (original) doc.documentElement.style.setProperty('--accent', original);
+  else doc.documentElement.style.removeProperty('--accent');
+}
+
+/** Inject `theme`'s computed CSS into `doc` (a <style id="mdcms-theme-
+ *  override"> in its <head>) and sync --accent to match. Called for a real,
+ *  persistent theme application (doc = document) and by themeselector for
+ *  its preview iframe (doc = the iframe's contentDocument) alike. */
+function kbApplyThemeToDoc(theme, doc) {
+  let styleEl = doc.getElementById('mdcms-theme-override');
+  if (!styleEl) { styleEl = doc.createElement('style'); styleEl.id = 'mdcms-theme-override'; doc.head.appendChild(styleEl); }
+  styleEl.textContent = kbBuildThemeCss(theme);
+  kbSyncThemeAccent(theme, doc);
+}
+
+/** Fetch+apply a config's `theme:` key (a vendored mdcms theme file path,
+ *  e.g. "assets/themes/nord.yaml") to the current document. pathPrefix is
+ *  '' for the root landing page, '../' for every app in a subfolder —
+ *  matching how ../assets/style.css is referenced (theme.yml lives in the
+ *  same shared assets/ folder). No-op if unset; tolerant of a missing/
+ *  broken file — a theme is cosmetic and must never be able to break an
+ *  app's actual function. */
+async function applyMdcmsTheme(cfg, pathPrefix) {
+  if (!cfg || !cfg.theme) return;
+  try {
+    const res = await fetch((pathPrefix || '') + cfg.theme);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const theme = jsyaml.load(await res.text());
+    kbApplyThemeToDoc(theme, document);
+  } catch (e) {
+    console.error('applyMdcmsTheme: failed to load theme from config.yml', e);
   }
 }
 

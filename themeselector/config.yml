@@ -19,6 +19,7 @@ tagline:
 
 # Branding — inherited from ../config.yml when blank; override here if needed.
 accent-colour:
+theme:
 
 # ── Localisation ──────────────────────────────────────────────────────────────
 localisation:
