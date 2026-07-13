@@ -120,9 +120,26 @@ function loadState() {
   } catch (e) {}
 }
 
-/* ── colour helpers (kbHexRgb comes from app.js) ────────────────────────── */
+/* ── colour helpers ───────────────────────────────────────────────────────
+ * kbHexRgb (app.js) only parses hex — mdcms themes routinely give ink/
+ * on-surface-* as rgba() (semi-transparent whites/blacks are the whole
+ * point of an on-surface tint), and at least one theme (OS Adwaita) gives
+ * even the core `ink` token as rgba(). Every function below that used to
+ * call kbHexRgb directly on a theme-supplied value would silently fail
+ * (returning null) on any of those, and mixHex's null-input fallback
+ * returns the OTHER colour completely unmixed — e.g. mixHex(surface, 88,
+ * ink) with an unparseable ink returns surface verbatim, making
+ * --border-strong exactly equal --surface, i.e. an invisible border on any
+ * element whose background is also --surface (every input field). */
+function parseColorRgb(v) {
+  if (!v) return null;
+  const hex = kbHexRgb(v);
+  if (hex) return hex;
+  const m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*[\d.]+\s*)?\)$/i.exec(String(v).trim());
+  return m ? [Math.round(+m[1]), Math.round(+m[2]), Math.round(+m[3])] : null;
+}
 function relLuminance(hex) {
-  const rgb = kbHexRgb(hex);
+  const rgb = parseColorRgb(hex);
   if (!rgb) return 1;
   const [r, g, b] = rgb.map(c => {
     const s = c / 255;
@@ -132,7 +149,7 @@ function relLuminance(hex) {
 }
 function onColorFor(hex) { return relLuminance(hex) > 0.45 ? '#14181E' : '#FFFFFF'; }
 function colorsClash(a, b) {
-  const ra = kbHexRgb(a), rb = kbHexRgb(b);
+  const ra = parseColorRgb(a), rb = parseColorRgb(b);
   if (!ra || !rb) return false;
   return Math.abs(ra[0] - rb[0]) + Math.abs(ra[1] - rb[1]) + Math.abs(ra[2] - rb[2]) < 20;
 }
@@ -192,7 +209,7 @@ function headerToken(themeVal, keyColor, surfaceColor, fallbackHex, m) {
 // (gamma-encoded) channel values, which is exactly a per-channel weighted
 // average — no colour-space conversion needed.
 function mixHex(hexA, pct, hexB) {
-  const a = kbHexRgb(hexA), b = kbHexRgb(hexB);
+  const a = parseColorRgb(hexA), b = parseColorRgb(hexB);
   if (!a) return hexB || hexA;
   if (!b) return hexA;
   const t = pct / 100;
@@ -208,7 +225,7 @@ function mixHex(hexA, pct, hexB) {
  * ────────────────────────────────────────────────────────────────────────── */
 function paletteModeVars(mode, m, sem) {
   if (!m || !m.primary) return '';
-  const rgb = (kbHexRgb(m.primary) || [0, 0, 0]).join(',');
+  const rgb = (parseColorRgb(m.primary) || [0, 0, 0]).join(',');
   const ink = m.ink, inkMuted = m['ink-muted'];
   const surface = m.page, bg = m.surface;
   const hoverBase = mode === 'dark' ? '#FFFFFF' : '#000000';
@@ -356,6 +373,17 @@ function buildThemeCss(theme) {
    var(--text-muted) can be nearly as dark as --bg itself. */
 .kb-sz-label, .kb-footer, .kb-footer a, .kb-footer button, .kb-mark { color: var(--header-muted); }
 .kb-footer .kb-mark svg { --accent: var(--header-accent); }
+/* Action rows (Download/Generate/Save buttons) sit directly on --bg, same
+   as the header — most bizdocs apps put their primary CTA in a bare row
+   below the last card, not inside one. On themes where primary == surface
+   ("a single bold colour drives both the nav and the accent"), the button's
+   --accent fill then exactly matches the --bg it sits on, and with the
+   base .kb-btn's border:1px solid transparent, there's nothing to outline
+   its shape — it disappears into the page. --on-accent is guaranteed to
+   contrast with --accent (it's what the button's own label uses), so a
+   border in that colour stays visible against the fill regardless of what
+   it sits on, and is a no-op visually wherever accent and bg already differ. */
+.kb-btn--primary { border-color: var(--on-accent); }
 `;
   return css;
 }
