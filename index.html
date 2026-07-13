@@ -133,6 +133,7 @@ try {
   CFG = await loadYamlConfig('config.yml', { requireLocalisation: false });
   VERSION_INFO = await loadVersionInfo('version.json');
   applyAccent(CFG);
+  await applyMdcmsTheme(CFG, '');
   initFontScale();
   render();
 } catch (e) {

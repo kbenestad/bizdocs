@@ -197,6 +197,7 @@ async function loadConfig() {
   await applySharedBranding(CFG);
   normaliseConfig();
   applyAccent(CFG);
+  await applyMdcmsTheme(CFG, '../');
   const marker = buildVersionMarker(VERSION_INFO);
   if (marker) document.querySelector('footer.kb-footer').appendChild(marker);
   pdfLibReady = loadDependency(CFG.dependencies && CFG.dependencies['pdf-lib']);

@@ -19,6 +19,7 @@ footer-mark: "CAP"           # short wordmark shown in the generated viewer foot
 
 # Branding — confirm CAP's actual accent colour; this is the template default.
 accent-colour: "#2f6fed"
+theme:
 
 # ── Localisation: contactmanager's OWN editor UI ────────────────────────────
 # Used directly via S() inside contactmanager's index.html.

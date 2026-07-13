@@ -204,8 +204,9 @@ async function loadCfg() {
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-function boot() {
+async function boot() {
   applyAccent(cfg);
+  await applyMdcmsTheme(cfg, '../');
   document.getElementById("nav-menu-slot").appendChild(makeNavMenu(NAV));
   buildLangBar();
   buildHeader();

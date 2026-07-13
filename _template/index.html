@@ -235,6 +235,7 @@ try {
   NAV = await loadNavItems('../config.yml');   // root config's apps/links, for the nav dropdown
   normaliseConfig();
   applyAccent(CFG);               // apply config accent-colour to --accent
+  await applyMdcmsTheme(CFG, '../'); // apply config theme (overrides accent-colour + more)
   pdfLibReady = loadDependency(CFG.dependencies && CFG.dependencies['pdf-lib']);
   pdfLibReady.catch(() => {});    // surfaced when onDownload() awaits it instead
   initFontScale();                // restore persisted text size

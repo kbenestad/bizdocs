@@ -66,10 +66,13 @@ Each app links the shared files in its `<head>`:
 3. `../assets/app.js` loads and defines the shared globals.
 4. The app's inline `<script>` runs: `loadYamlConfig()` fetches, parses **and
    validates** `config.yml` (see below); `applySharedBranding(cfg)` then fills
-   in `organization`/`logo`/`logo-maxwidth`/`tagline`/`accent-colour` from the
-   root `config.yml` wherever this app's own config left them blank (see "Org-
-   wide branding" below); an adapter normalises the `localisation:` block; and
-   the UI is built from config. State persists to `localStorage`.
+   in `organization`/`logo`/`logo-maxwidth`/`tagline`/`accent-colour`/`theme`
+   from the root `config.yml` wherever this app's own config left them blank
+   (see "Org-wide branding" below); `applyAccent(cfg)` and then
+   `applyMdcmsTheme(cfg, '../')` apply those to the page (the theme, if set,
+   overrides accent-colour — see "Suite-wide theming" below); an adapter
+   normalises the `localisation:` block; and the UI is built from config.
+   State persists to `localStorage`.
 5. Any other CDN library the app needs (`jspdf` for invoice, `pdf-lib` for the
    rest) is declared in that app's `config.yml` under a `dependencies:` block
    (`{ url, integrity }` per key) and loaded via `loadDependency()` (in
@@ -108,6 +111,62 @@ instead of editing five `config.yml` files.
   values instead of inheriting.
 - `_template/config.yml` ships with these keys blank — new apps inherit suite
   branding automatically unless you give one a value.
+
+## Suite-wide theming
+
+Beyond the single `accent-colour`, the whole suite can be themed from
+[mdcms](https://github.com/kbenestad/mdcms)'s theme library. This is a real,
+persistent application — not a preview; for previewing a theme before
+committing to it, see "Theme Selector" below, which uses the exact same
+underlying logic.
+
+- **`theme:`** (root `config.yml`, cascades like every other branding key —
+  see "Org-wide branding" above) names a **vendored** theme file, e.g.
+  `theme: assets/themes/nord.yaml`. It's a plain copy of a file from mdcms's
+  `themes/` folder, dropped into `assets/themes/` by hand — see
+  `assets/themes/README.md`. Leave blank (the default) for bizdocs's own
+  look.
+- **Same-origin, so zero new CSP or network dependency for any app.** Unlike
+  `themeselector`'s live preview (which fetches from GitHub), a configured
+  theme is fetched via a plain relative `fetch()` — governed by `connect-src
+  'self'`, already present in every app's CSP. This was a deliberate
+  design choice: applying a real, persistent theme should never add a
+  live external dependency to invoice/reimburse/timesheet/contactmanager/
+  dashboard, and should keep working fully offline.
+- **Application**: `applyMdcmsTheme(cfg, pathPrefix)` (`app.js`) fetches the
+  file, parses it with the same `js-yaml` every app already loads, and hands
+  it to `kbApplyThemeToDoc()` — the same function `themeselector` calls for
+  its preview iframe, just targeting the real `document` instead. Called
+  right after `applyAccent(cfg)` in every app's boot (see "How an app boots"
+  above); `pathPrefix` is `'../'` for every app in a subfolder, `''` for the
+  root landing page (matching how `../assets/style.css` is referenced —
+  theme files live in the same shared `assets/` folder).
+- **Missing/broken theme file degrades silently** to bizdocs's own default
+  look (console-logged, never thrown) — a theme is cosmetic and must never
+  be able to break an app's actual function, the same tolerance
+  `loadSharedConfig()` already gives a missing root `config.yml`.
+- **Mapping**: mdcms's `palette.primary/surface/page/ink/ink-muted` (plus the
+  optional `on-surface-*` group) map onto bizdocs's `--accent/--bg/--surface/
+  --text/--text-muted` design tokens; softer variants (hover/soft/border
+  tints, muted surfaces) are derived from them, computed in JS rather than
+  via CSS `color-mix()` (some browsers that otherwise run the suite fine
+  still lack it). `on-surface-*` values that are themselves `var(--font-
+  colour)`-style references into mdcms's own renderer are resolved back
+  through the theme's palette rather than discarded. Header/toolbar/footer
+  chrome and the primary-button border get their own contrast-safe
+  treatment, since they sit directly on `--bg` (or, for the button, can have
+  a fill identical to `--bg` on themes where `primary == surface`) rather
+  than on a white card. See `kbBuildThemeCss()` and the functions above it
+  in `app.js` for the full mapping and the reasoning behind each choice —
+  every non-obvious decision there has a comment explaining a real bug it
+  fixes.
+- **Fonts are name-only** for a real application — `font-body`/`font-heading`
+  only show if that font happens to be installed locally already; no
+  `@font-face`/webfont is fetched (that's a `themeselector`-only nicety, see
+  below, deliberately not extended to real apps to keep this feature at zero
+  new dependencies).
+- **Colour/font only, not layout** — mdcms's `main-width`/`nav-width`/
+  `scanlines` aren't applied, same scope `themeselector` uses.
 
 ## Running / previewing locally
 
@@ -275,8 +334,15 @@ the `pages` sync workflow the next time it's pushed to `main`. See
 
 ## Theme Selector (`themeselector/`)
 
-Deliberately breaks a couple of the conventions above, so its rationale is
-worth spelling out:
+A live preview tool for trying an mdcms theme before committing to it via
+`config.yml`'s `theme:` key — see "Suite-wide theming" above, which this
+shares its core colour/palette-mapping logic with (`kbBuildThemeCss()` and
+friends, in `app.js`); only font *loading* (fetching real webfont files, not
+just the family name) is `themeselector`-specific, kept out of the shared
+path deliberately to keep a real theme application at zero new dependencies.
+
+It also deliberately breaks a couple of the conventions above, so its
+rationale is worth spelling out:
 
 - **The previewed app is a live iframe, not a copy.** Its "App" dropdown
   points the iframe at `../invoice/`, `../reimburse/`, etc. — the same files
