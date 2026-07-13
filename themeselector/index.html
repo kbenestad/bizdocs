@@ -2,10 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<!-- connect-src additionally allows api.github.com + raw.githubusercontent.com:
-     this app fetches mdcms's themes/ folder listing and theme YAML files live
-     from GitHub rather than shipping a copy — see docs/dependencies.md. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.bunny.net; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://raw.githubusercontent.com; object-src 'none'; base-uri 'self'">
+<!-- connect-src additionally allows:
+     - api.github.com + raw.githubusercontent.com: this app fetches mdcms's
+       themes/ folder listing and theme YAML files live rather than shipping
+       a copy — see docs/dependencies.md.
+     - fonts.bunny.net + fonts.googleapis.com: a theme's font-body/
+       font-heading is fetched as CSS *text* (not linked as a stylesheet —
+       style-src stays 'self'/'unsafe-inline' only) and injected into the
+       preview iframe as an inline <style>. font-src additionally allows
+       fonts.gstatic.com for the woff2 files that Google-provided CSS points
+       at (Bunny-provided CSS points at fonts.bunny.net, already allowed). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.bunny.net https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://raw.githubusercontent.com https://fonts.bunny.net https://fonts.googleapis.com; object-src 'none'; base-uri 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="format-detection" content="telephone=no">
 <title>Theme Selector</title>
@@ -207,15 +214,65 @@ function paletteModeVars(mode, m, sem) {
   return lines.join('; ');
 }
 
-// "provider:Font Name:weight", "Font Name:weight" (bunny implied), or
-// "system-ui:weight" — we only ever want the family name, and only if it's
-// not the system-ui keyword (no @font-face is loaded — see About).
-function parseFontName(spec) {
+// "provider:Font Name:weight" (provider: bunny | google), "Font Name:weight"
+// (bunny implied), or "system-ui:weight" (no font to load — it's already on
+// the system).
+function parseFontSpec(spec) {
   if (!spec) return null;
   const parts = String(spec).split(':');
-  if (parts.length >= 3) return parts[1].trim();
-  if (parts.length === 2) return parts[0].trim() === 'system-ui' ? null : parts[0].trim();
-  return null;
+  let provider = 'bunny', name, weight;
+  if (parts.length >= 3) { provider = parts[0].trim(); name = parts[1].trim(); weight = parts[2].trim(); }
+  else if (parts.length === 2) { name = parts[0].trim(); weight = parts[1].trim(); }
+  else return null;
+  if (name === 'system-ui') return { provider: 'system', name, weight };
+  return { provider, name, weight };
+}
+
+function fontCssUrl(spec) {
+  const familyPlus = spec.name.replace(/ /g, '+');
+  return spec.provider === 'google'
+    ? `https://fonts.googleapis.com/css2?family=${familyPlus}:wght@${spec.weight}&display=swap`
+    : `https://fonts.bunny.net/css?family=${familyPlus}:${spec.weight}`;
+}
+
+// Fetched as CSS *text* via fetch() (connect-src), not linked as a
+// stylesheet (which style-src's 'self'/'unsafe-inline' wouldn't allow for an
+// external host) — the response is @font-face rules whose own font-file
+// url()s are governed by font-src instead, already allowing both hosts.
+// Cached by URL so body+heading sharing a family only fetches once, and
+// switching between two already-seen themes doesn't refetch either.
+const fontCssCache = new Map();
+function loadFontCss(url) {
+  if (!fontCssCache.has(url)) {
+    fontCssCache.set(url, fetch(url).then(res => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.text();
+    }));
+  }
+  return fontCssCache.get(url);
+}
+
+// Async and fire-and-forget from applyThemeToFrame(): the coloured theme
+// applies immediately; fonts swap in a moment later once fetched (standard
+// webfont FOUC), same as any font-loading approach. Failure (offline, an
+// unrecognised family, ...) degrades to the plain name in buildThemeCss's
+// font-family list, which itself falls back to var(--font-sans).
+async function applyThemeFonts(doc, theme) {
+  const styleId = 'mdcms-theme-fonts';
+  let styleEl = doc.getElementById(styleId);
+  const specs = [parseFontSpec(theme && theme['font-body']), parseFontSpec(theme && theme['font-heading'])]
+    .filter(s => s && s.provider !== 'system');
+  if (!specs.length) { if (styleEl) styleEl.textContent = ''; return; }
+  if (!styleEl) { styleEl = doc.createElement('style'); styleEl.id = styleId; doc.head.appendChild(styleEl); }
+  try {
+    const urls = [...new Set(specs.map(fontCssUrl))];
+    const cssTexts = await Promise.all(urls.map(loadFontCss));
+    // doc may belong to a since-replaced iframe document by the time this
+    // resolves (theme/app switched again mid-fetch) — re-check before writing.
+    if (doc.getElementById(styleId) === styleEl) styleEl.textContent = cssTexts.join('\n');
+  } catch (e) {
+    styleEl.textContent = '';
+  }
 }
 
 function buildThemeCss(theme) {
@@ -238,8 +295,10 @@ function buildThemeCss(theme) {
     css += `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${darkVars}; } }\n`;
     css += `:root[data-theme="dark"] { ${darkVars}; }\n`;
   }
-  const bodyFont = parseFontName(theme['font-body']);
-  const headingFont = parseFontName(theme['font-heading']) || bodyFont;
+  const bodySpec = parseFontSpec(theme['font-body']);
+  const headingSpec = parseFontSpec(theme['font-heading']) || bodySpec;
+  const bodyFont = bodySpec && bodySpec.name;
+  const headingFont = headingSpec && headingSpec.name;
   if (bodyFont) css += `body { font-family: "${bodyFont}", var(--font-sans); }\n`;
   if (headingFont) css += `.kb-doctitle h1, .kb-card__title, .kb-brand .org, .kb-modal__hdr { font-family: "${headingFont}", var(--font-sans); }\n`;
   css += `.kb-brand .org { color: var(--header-text); }
@@ -300,6 +359,7 @@ function applyThemeToFrame(retriesLeft) {
   if (!styleEl) { styleEl = doc.createElement('style'); styleEl.id = 'mdcms-theme-override'; doc.head.appendChild(styleEl); }
   styleEl.textContent = buildThemeCss(currentThemeObj);
   syncFrameAccent(doc);
+  applyThemeFonts(doc, currentThemeObj);
   clearError();
 }
 

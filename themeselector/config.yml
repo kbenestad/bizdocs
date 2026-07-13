@@ -49,9 +49,10 @@ localisation:
         optional `on-surface-*` group) map onto bizdocs's `--accent/--bg/
         --surface/--text/--text-muted` design tokens, with the softer
         variants (hover/soft/border tints, muted surfaces) derived from them
-        rather than copied. Fonts are tried by name only — no font files are
-        fetched, so a theme's font only shows if it happens to already be
-        installed locally.
+        rather than copied. A theme's `font-body`/`font-heading` are loaded
+        from Bunny Fonts or Google Fonts (whichever the theme declares) the
+        same way mdcms itself loads them — a `system-ui` font uses whatever's
+        already installed instead.
 
         **Source:** [kbenestad/bizdocs](https://github.com/kbenestad/bizdocs)
         Themes from [kbenestad/mdcms](https://github.com/kbenestad/mdcms).
@@ -101,9 +102,11 @@ localisation:
         ink-muted` (plus die optionale `on-surface-*`-Gruppe) werden auf
         bizdocs' Design-Tokens `--accent/--bg/--surface/--text/--text-muted`
         abgebildet; weichere Varianten (Hover-/Soft-/Rahmenfarben, gedämpfte
-        Flächen) werden daraus abgeleitet statt kopiert. Schriften werden nur
-        über den Namen versucht — es werden keine Schriftdateien geladen,
-        eine Theme-Schrift erscheint also nur, wenn sie lokal installiert ist.
+        Flächen) werden daraus abgeleitet statt kopiert. `font-body`/
+        `font-heading` eines Themes werden von Bunny Fonts oder Google Fonts
+        geladen (je nachdem, was das Theme angibt) — genau wie mdcms selbst
+        sie lädt; `system-ui` verwendet stattdessen die bereits installierte
+        Systemschrift.
 
         **Quellcode:** [kbenestad/bizdocs](https://github.com/kbenestad/bizdocs)
         Themes von [kbenestad/mdcms](https://github.com/kbenestad/mdcms).
