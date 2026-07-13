@@ -37,6 +37,7 @@ font-size: 10                # base font size in pt for PDF
 
 # Branding — inherited from ../config.yml when blank; override here if needed.
 accent-colour:
+theme:
 
 # ── Payment info visibility ───────────────────────────────────────────────────
 # Set to true to hide the payment info panel entirely (useful if payment info

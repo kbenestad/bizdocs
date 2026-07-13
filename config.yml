@@ -1,11 +1,11 @@
 # =============================================================================
 # Root config — org-wide settings and navigation
 # =============================================================================
-# organization/logo/logo-maxwidth/tagline/accent-colour also cascade down to
-# every app's own config.yml (invoice, reimburse, timesheet, contactmanager,
-# and any app built from _template) — set them here ONCE and every app picks
-# them up automatically. An app overrides a key only if it sets a non-blank
-# value in its own config.yml.
+# organization/logo/logo-maxwidth/tagline/accent-colour/theme also cascade
+# down to every app's own config.yml (invoice, reimburse, timesheet,
+# contactmanager, and any app built from _template) — set them here ONCE and
+# every app picks them up automatically. An app overrides a key only if it
+# sets a non-blank value in its own config.yml.
 
 # Organisation (shown in the page header)
 organization:              # leave blank to show kBenestad wordmark
@@ -15,6 +15,14 @@ tagline:                   # subtitle shown below org name
 
 # Branding
 accent-colour: "#2f6fed"
+
+# Suite-wide theme (optional) — path to a vendored mdcms theme file, relative
+# to this folder (mdcms theme files live at github.com/kbenestad/mdcms's
+# themes/ folder; copy one you like into assets/themes/ and reference it
+# here). Overrides accent-colour and every other design token with the
+# theme's own palette. Leave blank to use bizdocs's own default look. See
+# CLAUDE.md's "Suite-wide theming" section.
+theme:                     # e.g. assets/themes/nord.yaml
 
 # Apps — paths relative to this folder
 # Each app/link entry may set `hide-from-navselector: yes` (or `true`) to leave it

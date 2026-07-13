@@ -18,6 +18,7 @@ tagline:
 
 # Branding — inherited from ../config.yml when blank; override here if needed.
 accent-colour:
+theme:
 
 # ── Localisation ──────────────────────────────────────────────────────────────
 # Every user-facing string lives here, under each language's `ui:` block, and is

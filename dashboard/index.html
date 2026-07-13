@@ -508,6 +508,7 @@ try {
   NAV = await loadNavItems('../config.yml');
   normaliseConfig();
   applyAccent(CFG);
+  await applyMdcmsTheme(CFG, '../');
   initFontScale();
   lang = localStorage.getItem('dashboard-lang') || CFG['default-code'] || 'en';
   applyLang(lang);
