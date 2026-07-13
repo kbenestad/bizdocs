@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="invoice">
+  <rect width="48" height="48" rx="12" fill="#2f6fed"></rect>
+  <path d="M14 9 H29 L34 14 V39 H14 Z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"></path>
+  <path d="M29 9 V14 H34" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"></path>
+  <path d="M18.5 20 H27" stroke="#fff" stroke-width="2.6" stroke-linecap="round"></path>
+  <path d="M18.5 25 H29.5" stroke="#fff" stroke-width="2.6" stroke-linecap="round" opacity=".55"></path>
+  <path d="M18.5 33 H29.5" stroke="#fff" stroke-width="3.2" stroke-linecap="round"></path>
+</svg>
