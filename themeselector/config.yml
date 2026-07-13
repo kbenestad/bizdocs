@@ -1,0 +1,132 @@
+# =============================================================================
+# Theme Selector — Configuration
+# =============================================================================
+# organization/logo/logo-maxwidth/tagline/accent-colour are blank here on
+# purpose — they inherit from ../config.yml (root, org-wide settings). Give
+# one a value only if this app needs to override it.
+#
+# This app has no `dependencies:` block — it doesn't generate a PDF, so it
+# never needs pdf-lib/jspdf. Its one external data source (mdcms's theme
+# folder on GitHub) is fetched via plain `fetch()`, not a loaded <script>, so
+# it isn't declared here the way pdf-lib/jspdf are — see index.html's CSP
+# `connect-src` and docs/dependencies.md for where that's documented instead.
+
+# Organization — inherited from ../config.yml when left blank here.
+organization:
+logo:
+logo-maxwidth:
+tagline:
+
+# Branding — inherited from ../config.yml when blank; override here if needed.
+accent-colour:
+
+# ── Localisation ──────────────────────────────────────────────────────────────
+localisation:
+  default-language: en
+
+  languages:
+    - code: en
+      name: English
+    - code: de
+      name: Deutsch
+
+  en:
+    about:
+      title: "About"
+      button: "Close"
+      content: |
+        ### Theme Selector
+        Previews any theme from [mdcms](https://github.com/kbenestad/mdcms)'s
+        `themes/` folder mapped onto a live bizdocs app. The app shown in the
+        frame below is the real, currently-deployed app — it's an iframe, not
+        a copy, so it always reflects whatever is on `main`. The category and
+        theme lists are fetched live from mdcms's GitHub repository too —
+        nothing about a theme is copied into bizdocs, so new mdcms themes
+        appear here automatically.
+
+        The mapping is a colour-and-font approximation, not a pixel-exact
+        port: mdcms's `palette.primary/surface/page/ink/ink-muted` (plus the
+        optional `on-surface-*` group) map onto bizdocs's `--accent/--bg/
+        --surface/--text/--text-muted` design tokens, with the softer
+        variants (hover/soft/border tints, muted surfaces) derived from them
+        rather than copied. Fonts are tried by name only — no font files are
+        fetched, so a theme's font only shows if it happens to already be
+        installed locally.
+
+        **Source:** [kbenestad/bizdocs](https://github.com/kbenestad/bizdocs)
+        Themes from [kbenestad/mdcms](https://github.com/kbenestad/mdcms).
+
+        {repo}
+        {version-line}
+
+        Licensed under the Apache 2 licence. Please see LICENSE in root.
+    ui:
+      subtitle: "mdcms theme preview"
+      section-title: "Preview"
+      field-app: "App"
+      field-category: "Theme category"
+      field-theme: "Theme"
+      opt-select-app: "— Select app —"
+      opt-select-category: "— bizdocs default (no theme) —"
+      opt-select-theme: "— Select theme —"
+      opt-loading: "Loading…"
+      note-live: "Categories and themes are fetched live from kbenestad/mdcms's themes/ folder on GitHub — nothing is copied into bizdocs."
+      err-categories: "Couldn't load theme categories from GitHub: {message}"
+      err-themes: "Couldn't load themes for this category: {message}"
+      err-theme-file: "Couldn't load or parse this theme file: {message}"
+      app-invoice: "Invoice"
+      app-reimburse: "Reimburse"
+      app-timesheet: "Timesheet"
+      app-contactmanager: "Contact manager"
+      app-dashboard: "Dashboard"
+
+  de:
+    about:
+      title: "Über"
+      button: "Schließen"
+      content: |
+        ### Theme-Auswahl
+        Zeigt jedes Theme aus dem `themes/`-Ordner von
+        [mdcms](https://github.com/kbenestad/mdcms) angewendet auf eine echte
+        bizdocs-App. Die App im Rahmen unten ist die echte, aktuell
+        veröffentlichte App — ein iframe, keine Kopie — sie zeigt also immer
+        den Stand von `main`. Auch die Kategorie- und Theme-Listen werden live
+        aus dem GitHub-Repository von mdcms geladen — nichts an einem Theme
+        wird nach bizdocs kopiert, neue mdcms-Themes erscheinen also
+        automatisch hier.
+
+        Die Zuordnung ist eine Farb- und Schriftannäherung, keine
+        pixelgenaue Portierung: mdcms' `palette.primary/surface/page/ink/
+        ink-muted` (plus die optionale `on-surface-*`-Gruppe) werden auf
+        bizdocs' Design-Tokens `--accent/--bg/--surface/--text/--text-muted`
+        abgebildet; weichere Varianten (Hover-/Soft-/Rahmenfarben, gedämpfte
+        Flächen) werden daraus abgeleitet statt kopiert. Schriften werden nur
+        über den Namen versucht — es werden keine Schriftdateien geladen,
+        eine Theme-Schrift erscheint also nur, wenn sie lokal installiert ist.
+
+        **Quellcode:** [kbenestad/bizdocs](https://github.com/kbenestad/bizdocs)
+        Themes von [kbenestad/mdcms](https://github.com/kbenestad/mdcms).
+
+        {repo}
+        {version-line}
+
+        Lizenziert unter der Apache-2-Lizenz. Siehe LICENSE im Root-Verzeichnis.
+    ui:
+      subtitle: "mdcms-Theme-Vorschau"
+      section-title: "Vorschau"
+      field-app: "App"
+      field-category: "Theme-Kategorie"
+      field-theme: "Theme"
+      opt-select-app: "— App wählen —"
+      opt-select-category: "— bizdocs-Standard (kein Theme) —"
+      opt-select-theme: "— Theme wählen —"
+      opt-loading: "Lädt…"
+      note-live: "Kategorien und Themes werden live aus dem themes/-Ordner von kbenestad/mdcms auf GitHub geladen — nichts wird nach bizdocs kopiert."
+      err-categories: "Theme-Kategorien konnten nicht von GitHub geladen werden: {message}"
+      err-themes: "Themes für diese Kategorie konnten nicht geladen werden: {message}"
+      err-theme-file: "Diese Theme-Datei konnte nicht geladen oder verarbeitet werden: {message}"
+      app-invoice: "Rechnung"
+      app-reimburse: "Spesen"
+      app-timesheet: "Stundenzettel"
+      app-contactmanager: "Kontaktverwaltung"
+      app-dashboard: "Dashboard"
