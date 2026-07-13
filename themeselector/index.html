@@ -343,9 +343,19 @@ function buildThemeCss(theme) {
 .kb-brand .org small { color: var(--header-muted); }
 .kb-doctitle h1 { color: var(--header-text); }
 .kb-doctitle .meta { color: var(--header-muted); }
-.kb-toolbar .kb-select { color: var(--header-muted); }
-.kb-toolbar .kb-select:hover { color: var(--header-text); }
 .kb-brand .logo svg { --accent: var(--header-accent); }
+/* The language select, size-control buttons, and theme/about icon buttons
+   all have their OWN white/page-toned box (ui.css gives .kb-select and
+   .kb-iconbtn/.kb-seg a var(--surface) background), so their default
+   var(--text-muted)/var(--text) styling is already correct — it was a
+   mistake to previously route .kb-toolbar .kb-select through
+   var(--header-muted)/var(--header-text) here, which is for bare text with
+   nothing behind it but --bg. --sz-label and the footer, however, ARE bare
+   text sitting directly on --bg with no box of their own, and never got the
+   header-safe treatment at all — on a bold/dark theme, plain ink-derived
+   var(--text-muted) can be nearly as dark as --bg itself. */
+.kb-sz-label, .kb-footer, .kb-footer a, .kb-footer button, .kb-mark { color: var(--header-muted); }
+.kb-footer .kb-mark svg { --accent: var(--header-accent); }
 `;
   return css;
 }
