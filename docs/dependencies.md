@@ -57,6 +57,19 @@ These are CSS `@font-face` sources shared across every app, not per-app CDN
 libraries, so they aren't wired through `config.yml`'s `dependencies:` block.
 `font-src` in each app's CSP `<meta>` allows `fonts.bunny.net` for these.
 
+## Live data sources (not a loaded library)
+
+| Source                              | Used by         | Notes |
+| ------------------------------------ | ---------------- | ----- |
+| GitHub Contents API (`api.github.com`) | `themeselector/` | Lists `kbenestad/mdcms`'s `themes/` category folders and theme files, fetched at runtime — nothing is vendored. |
+| Raw file content (`raw.githubusercontent.com`) | `themeselector/` | Fetches the chosen theme's YAML text (via the Contents API's `download_url`), parsed with the same `js-yaml` every app loads. |
+
+Not a versioned CDN script like the libraries above — no SRI hash applies to
+a live API response. `themeselector/index.html`'s CSP `connect-src`
+additionally allows both hosts for this reason; no other app's CSP is
+affected. See CLAUDE.md's "Theme Selector" section for the full rationale
+(including why theme fonts are name-only, not fetched).
+
 ## Updating a dependency
 
 1. Bump the version and recompute the sha384 hash for the new file.

@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- connect-src additionally allows api.github.com + raw.githubusercontent.com:
+     this app fetches mdcms's themes/ folder listing and theme YAML files live
+     from GitHub rather than shipping a copy — see docs/dependencies.md. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.bunny.net; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://raw.githubusercontent.com; object-src 'none'; base-uri 'self'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="format-detection" content="telephone=no">
+<title>Theme Selector</title>
+
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon.ico" sizes="32x32">
+<link rel="icon" href="assets/favicon-48.png" sizes="48x48" type="image/png">
+<link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="assets/favicon-16.png" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="assets/site.webmanifest">
+<meta name="theme-color" content="#2f6fed">
+
+<!-- Restore persisted theme BEFORE first paint (avoids a flash). Keep this. -->
+<script>
+  (function(){var t=localStorage.getItem('kb-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"
+        integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
+        crossorigin="anonymous"></script>
+
+<!-- Shared design + runtime. app.js MUST load before this app's inline <script>. -->
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/ui.css">
+<script src="../assets/app.js"></script>
+
+<style>
+.ts-frame-wrap {
+  border: 1px solid var(--border-strong); border-radius: var(--radius);
+  overflow: hidden; background: var(--surface);
+}
+.ts-frame-wrap iframe { display: block; width: 100%; border: 0; min-height: 500px; }
+.ts-errors:empty { display: none; }
+</style>
+</head>
+<body>
+<div id="app"><p class="kb-loading">Loading configuration…</p></div>
+
+<script>
+(async function () {
+'use strict';
+/* IIFE-wrapped — top-level functions here are NOT globals, so they can't
+ * collide with app.js. Helpers from app.js ($, el, kbHexRgb, makeSizeControl,
+ * kbAbout, lookupString, …) are visible in here. */
+
+let CFG;
+let NAV = { apps: [], links: [] };
+let lang = 'en';
+let VERSION_INFO = null;
+
+const MDCMS_REPO = 'kbenestad/mdcms';
+const APP_OPTIONS = [
+  ['invoice', '../invoice/'],
+  ['reimburse', '../reimburse/'],
+  ['timesheet', '../timesheet/'],
+  ['contactmanager', '../contactmanager/'],
+  ['dashboard', '../dashboard/'],
+];
+const STATE_KEY = 'themeselector-state';
+let state = { app: 'invoice', category: '', theme: '' };
+let currentThemeObj = null;       // parsed YAML of the selected theme, or null
+let categoriesCache = null;       // [{name, path}], fetched once
+const filesCache = new Map();     // category path -> [{name, path, download_url}]
+let frameResizeObserver = null;
+
+function S(key, vars) {
+  return lookupString(CFG['ui-strings'], key, lang, CFG['default-code'], vars);
+}
+
+function normaliseConfig() {
+  const loc = CFG && CFG.localisation;
+  if (!loc) return;
+  const { table, languages, defaultCode } = buildLangTable(loc);
+  CFG['default-code'] = defaultCode;
+  CFG.languages = CFG.languages || languages;
+  CFG['ui-strings'] = table;
+}
+
+function applyLang(lc) {
+  lang = lc;
+  const loc = CFG.localisation || {};
+  const a = (loc[lc] && loc[lc].about) || (loc[CFG['default-code']] && loc[CFG['default-code']].about) || {};
+  CFG['about-title']   = a.title   || 'About';
+  CFG['about-content'] = a.content || '';
+  CFG['about-button']  = a.button  || 'Close';
+}
+
+function showAboutModal() {
+  return kbAbout({
+    title: CFG['about-title'],
+    contentMD: applyVersionTokens(CFG['about-content'], VERSION_INFO),
+    closeLabel: CFG['about-button'],
+  });
+}
+
+function saveState() {
+  try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+function loadState() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STATE_KEY));
+    if (raw && typeof raw === 'object') state = Object.assign(state, raw);
+  } catch (e) {}
+}
+
+/* ── colour helpers (kbHexRgb comes from app.js) ────────────────────────── */
+function relLuminance(hex) {
+  const rgb = kbHexRgb(hex);
+  if (!rgb) return 1;
+  const [r, g, b] = rgb.map(c => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function onColorFor(hex) { return relLuminance(hex) > 0.45 ? '#14181E' : '#FFFFFF'; }
+function colorsClash(a, b) {
+  const ra = kbHexRgb(a), rb = kbHexRgb(b);
+  if (!ra || !rb) return false;
+  return Math.abs(ra[0] - rb[0]) + Math.abs(ra[1] - rb[1]) + Math.abs(ra[2] - rb[2]) < 20;
+}
+// Falls back to an auto-contrast colour (not the raw fallback var) whenever a
+// theme's key colour matches its surface colour with no explicit on-surface-*
+// override — many mdcms themes deliberately set primary == surface ("a single
+// bold colour drives both the nav and the accent"), which is safe in mdcms
+// itself but can make an accent-coloured mark drawn on --bg disappear here.
+function headerToken(themeVal, keyColor, surfaceColor, fallbackVar) {
+  if (themeVal) return themeVal;
+  if (keyColor && surfaceColor && colorsClash(keyColor, surfaceColor)) return onColorFor(surfaceColor);
+  return fallbackVar;
+}
+
+/* ── mdcms palette -> bizdocs CSS vars ──────────────────────────────────────
+ * mdcms `page` (content bg, usually white)   -> bizdocs --surface (cards/inputs)
+ * mdcms `surface` (nav bg, sometimes bold)    -> bizdocs --bg (page backdrop)
+ * bizdocs has no separate nav-surface concept, so a bold mdcms nav colour
+ * becomes the whole app's backdrop behind white cards.
+ * ────────────────────────────────────────────────────────────────────────── */
+function paletteModeVars(mode, m, sem) {
+  if (!m || !m.primary) return '';
+  const rgb = (kbHexRgb(m.primary) || [0, 0, 0]).join(',');
+  const ink = m.ink, inkMuted = m['ink-muted'];
+  const hoverMix = mode === 'dark' ? 'white' : 'black';
+  const lines = [
+    `--accent:${m.primary}`,
+    `--accent-rgb:${rgb}`,
+    `--on-accent:${onColorFor(m.primary)}`,
+    `--accent-hover:color-mix(in srgb, var(--accent) 85%, ${hoverMix})`,
+    `--accent-soft:color-mix(in srgb, var(--accent) 12%, var(--surface))`,
+    `--accent-border:color-mix(in srgb, var(--accent) 35%, var(--surface))`,
+    `--bg:${m.surface}`,
+    `--surface:${m.page}`,
+    // Mixed toward --text (ink), NOT --bg: these tint disabled/readonly form
+    // fields and sit inside a white/page-toned card. Deriving them from --bg
+    // instead would drag in the nav colour's boldness even where it has
+    // nothing to do with how a text field should read.
+    `--surface-2:color-mix(in srgb, var(--surface) 97%, var(--text))`,
+    `--surface-3:color-mix(in srgb, var(--surface) 92%, var(--text))`,
+    `--border:color-mix(in srgb, var(--surface) 88%, var(--text))`,
+    `--border-strong:color-mix(in srgb, var(--surface) 75%, var(--text))`,
+    `--text:${ink}`,
+    `--text-soft:color-mix(in srgb, var(--text) 55%, var(--text-muted))`,
+    `--text-muted:${inkMuted}`,
+    `--placeholder:color-mix(in srgb, var(--text-muted) 60%, var(--surface))`,
+    // Header/toolbar chrome sits directly on --bg, not on a card — needs its
+    // own contrast pair (mdcms's on-surface-* group is exactly this).
+    `--header-text:${headerToken(m['on-surface-title'], ink, m.surface, 'var(--text)')}`,
+    `--header-muted:${headerToken(m['on-surface-note'], inkMuted, m.surface, 'var(--text-muted)')}`,
+    `--header-link:${headerToken(m['on-surface'], ink, m.surface, 'var(--text)')}`,
+    `--header-accent:${headerToken(m['on-surface-active'], m.primary, m.surface, 'var(--accent)')}`,
+    `--header-icon:${headerToken(m['on-surface-icon'], inkMuted, m.surface, 'var(--text-muted)')}`,
+  ];
+  if (sem) {
+    [['danger', 'error'], ['warning', 'warning'], ['success', 'success'], ['info', 'info']].forEach(([tok, key]) => {
+      if (!sem[key]) return;
+      lines.push(`--${tok}:${sem[key]}`);
+      lines.push(`--${tok}-soft:color-mix(in srgb, var(--${tok}) 12%, var(--surface))`);
+      lines.push(`--${tok}-border:color-mix(in srgb, var(--${tok}) 35%, var(--surface))`);
+    });
+  }
+  return lines.join('; ');
+}
+
+// "provider:Font Name:weight", "Font Name:weight" (bunny implied), or
+// "system-ui:weight" — we only ever want the family name, and only if it's
+// not the system-ui keyword (no @font-face is loaded — see About).
+function parseFontName(spec) {
+  if (!spec) return null;
+  const parts = String(spec).split(':');
+  if (parts.length >= 3) return parts[1].trim();
+  if (parts.length === 2) return parts[0].trim() === 'system-ui' ? null : parts[0].trim();
+  return null;
+}
+
+function buildThemeCss(theme) {
+  if (!theme || !theme.palette) return '';
+  const light = theme.palette.light, dark = theme.palette.dark;
+  const semLight = theme['colours-semantic'] || null;
+  const semDark = theme['colours-semantic-dark'] || semLight;
+  let css = '';
+  if (light) css += `:root[data-theme="light"] { ${paletteModeVars('light', light, semLight)}; }\n`;
+  if (dark)  css += `:root[data-theme="dark"]  { ${paletteModeVars('dark',  dark,  semDark)}; }\n`;
+  const bodyFont = parseFontName(theme['font-body']);
+  const headingFont = parseFontName(theme['font-heading']) || bodyFont;
+  if (bodyFont) css += `body { font-family: "${bodyFont}", var(--font-sans); }\n`;
+  if (headingFont) css += `.kb-doctitle h1, .kb-card__title, .kb-brand .org, .kb-modal__hdr { font-family: "${headingFont}", var(--font-sans); }\n`;
+  css += `.kb-brand .org { color: var(--header-text); }
+.kb-brand .org small { color: var(--header-muted); }
+.kb-doctitle h1 { color: var(--header-text); }
+.kb-doctitle .meta { color: var(--header-muted); }
+.kb-toolbar .kb-select { color: var(--header-muted); }
+.kb-toolbar .kb-select:hover { color: var(--header-text); }
+.kb-brand .logo svg { --accent: var(--header-accent); }
+`;
+  return css;
+}
+
+function applyThemeToFrame() {
+  const frame = $('#tsFrame');
+  if (!frame) return;
+  let doc;
+  try { doc = frame.contentDocument; } catch (e) { return; }
+  if (!doc || !doc.head) return;
+  let styleEl = doc.getElementById('mdcms-theme-override');
+  if (!styleEl) { styleEl = doc.createElement('style'); styleEl.id = 'mdcms-theme-override'; doc.head.appendChild(styleEl); }
+  styleEl.textContent = buildThemeCss(currentThemeObj);
+}
+
+function setupFrameResize() {
+  const frame = $('#tsFrame');
+  if (!frame) return;
+  let docEl;
+  try { docEl = frame.contentDocument && frame.contentDocument.documentElement; } catch (e) { return; }
+  if (!docEl) return;
+  if (frameResizeObserver) frameResizeObserver.disconnect();
+  const resize = () => { frame.style.height = docEl.scrollHeight + 'px'; };
+  frameResizeObserver = new ResizeObserver(resize);
+  frameResizeObserver.observe(docEl);
+  resize();
+}
+
+/* ── mdcms GitHub data source ────────────────────────────────────────────── */
+async function ghListDir(path) {
+  const res = await fetch(`https://api.github.com/repos/${MDCMS_REPO}/contents/${path.split('/').map(encodeURIComponent).join('/')}`,
+    { headers: { Accept: 'application/vnd.github+json' } });
+  if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+  return res.json();
+}
+
+async function loadCategories() {
+  if (categoriesCache) return categoriesCache;
+  const entries = await ghListDir('themes');
+  categoriesCache = entries.filter(e => e.type === 'dir').sort((a, b) => a.name.localeCompare(b.name));
+  return categoriesCache;
+}
+
+async function loadThemeFiles(categoryPath) {
+  if (filesCache.has(categoryPath)) return filesCache.get(categoryPath);
+  const entries = await ghListDir(categoryPath);
+  const files = entries.filter(e => e.type === 'file' && /\.ya?ml$/i.test(e.name))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  filesCache.set(categoryPath, files);
+  return files;
+}
+
+function appPath(key) {
+  const entry = APP_OPTIONS.find(([k]) => k === key);
+  return entry ? entry[1] : APP_OPTIONS[0][1];
+}
+
+function prettyThemeName(filename) {
+  return filename.replace(/\.ya?ml$/i, '').split(/[-_]/)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+/* ── UI wiring ──────────────────────────────────────────────────────────── */
+function showError(key, message) {
+  const box = $('#tsErrors');
+  if (!box) return;
+  box.innerHTML = '';
+  box.appendChild(el('div', { className: 'kb-note kb-note--error' },
+    el('div', null, S(key, { message }))));
+}
+function clearError() {
+  const box = $('#tsErrors');
+  if (box) box.innerHTML = '';
+}
+
+async function populateCategorySelect(select) {
+  select.innerHTML = '';
+  select.appendChild(el('option', { value: '' }, S('opt-select-category')));
+  select.appendChild(el('option', { value: '__loading', disabled: true }, S('opt-loading')));
+  select.value = '__loading';
+  try {
+    const cats = await loadCategories();
+    select.innerHTML = '';
+    select.appendChild(el('option', { value: '' }, S('opt-select-category')));
+    cats.forEach(c => select.appendChild(el('option', { value: c.path }, c.name)));
+    select.value = state.category && cats.some(c => c.path === state.category) ? state.category : '';
+    clearError();
+  } catch (e) {
+    select.innerHTML = '';
+    select.appendChild(el('option', { value: '' }, S('opt-select-category')));
+    showError('err-categories', e.message);
+  }
+}
+
+async function populateThemeSelect(select, categoryPath) {
+  select.innerHTML = '';
+  if (!categoryPath) {
+    select.disabled = true;
+    select.appendChild(el('option', { value: '' }, S('opt-select-theme')));
+    return;
+  }
+  select.disabled = false;
+  select.appendChild(el('option', { value: '' }, S('opt-select-theme')));
+  select.appendChild(el('option', { value: '__loading', disabled: true }, S('opt-loading')));
+  select.value = '__loading';
+  try {
+    const files = await loadThemeFiles(categoryPath);
+    select.innerHTML = '';
+    select.appendChild(el('option', { value: '' }, S('opt-select-theme')));
+    files.forEach(f => select.appendChild(el('option', { value: f.path }, prettyThemeName(f.name))));
+    select.value = state.theme && files.some(f => f.path === state.theme) ? state.theme : '';
+    clearError();
+  } catch (e) {
+    select.innerHTML = '';
+    select.appendChild(el('option', { value: '' }, S('opt-select-theme')));
+    showError('err-themes', e.message);
+  }
+}
+
+async function selectTheme(categoryPath, themePath) {
+  if (!themePath) { currentThemeObj = null; applyThemeToFrame(); return; }
+  try {
+    const files = filesCache.get(categoryPath) || [];
+    const file = files.find(f => f.path === themePath);
+    if (!file) return;
+    const res = await fetch(file.download_url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    currentThemeObj = jsyaml.load(text);
+    applyThemeToFrame();
+    clearError();
+  } catch (e) {
+    showError('err-theme-file', e.message);
+  }
+}
+
+function render() {
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  const wrap = el('div', { className: 'kb-wrap' });
+
+  wrap.appendChild(buildToolbar());
+  wrap.appendChild(buildHeader());
+  wrap.appendChild(buildPreviewCard());
+  wrap.appendChild(buildFrame());
+  wrap.appendChild(buildFooter());
+
+  app.appendChild(wrap);
+  updateThemeIcon();
+  wireControls();
+}
+
+function buildToolbar() {
+  const toolbar = el('div', { className: 'kb-toolbar' });
+  const { seg: sizeSeg, label: szLabel } = makeSizeControl();
+  toolbar.append(
+    makeNavMenu(NAV),
+    el('div', { className: 'spacer' }),
+    sizeSeg, szLabel,
+    makeThemeButton(),
+    makeAboutButton(showAboutModal)
+  );
+  const langSel = makeLangSelect(CFG.languages, lang, value => {
+    applyLang(value);
+    localStorage.setItem('themeselector-lang', value);
+    render();
+  });
+  if (langSel) toolbar.appendChild(langSel);
+  return toolbar;
+}
+
+function buildHeader() {
+  const header = el('header', { className: 'kb-header' });
+  const brand = el('div', { className: 'kb-brand' });
+  const tile = el('span', { className: 'logo' });
+  if (CFG.logo === 'yes' || CFG.logo === true) {
+    const img = el('img', { src: '../assets/logo.png', alt: CFG.organization || '' });
+    img.onerror = () => { img.src = '../assets/logo.jpg'; img.onerror = () => { tile.innerHTML = KB_BRAND_SVG; }; };
+    tile.appendChild(img);
+  } else { tile.innerHTML = KB_BRAND_SVG; }
+  const org = el('span', { className: 'org' });
+  org.appendChild(document.createTextNode(CFG.organization || 'kbenestad/themeselector'));
+  const small = el('small'); small.textContent = CFG.tagline || S('subtitle');
+  org.appendChild(small);
+  brand.append(tile, org);
+
+  const title = el('div', { className: 'kb-doctitle' });
+  title.appendChild(el('h1', null, 'Theme Selector'));
+
+  header.append(brand, title);
+  return header;
+}
+
+function field(label, node) {
+  const f = el('div', { className: 'kb-field' });
+  f.append(el('span', { className: 'kb-label' }, label), node);
+  return f;
+}
+
+function buildPreviewCard() {
+  const card = el('div', { className: 'kb-card' });
+  card.appendChild(el('div', { className: 'kb-card__title' }, S('section-title')));
+
+  const appSelect = el('select', { className: 'kb-select', id: 'tsApp' });
+  APP_OPTIONS.forEach(([key]) => appSelect.appendChild(el('option', { value: key }, S('app-' + key))));
+  appSelect.value = state.app;
+
+  const categorySelect = el('select', { className: 'kb-select', id: 'tsCategory' });
+  const themeSelect = el('select', { className: 'kb-select', id: 'tsTheme', disabled: true });
+
+  const grid = el('div', { className: 'kb-grid cols-3' });
+  grid.append(
+    field(S('field-app'), appSelect),
+    field(S('field-category'), categorySelect),
+    field(S('field-theme'), themeSelect)
+  );
+  card.appendChild(grid);
+
+  const note = el('div', { className: 'kb-note kb-note--info' });
+  note.appendChild(el('div', null, S('note-live')));
+  card.appendChild(note);
+
+  card.appendChild(el('div', { className: 'ts-errors', id: 'tsErrors' }));
+
+  populateCategorySelect(categorySelect);
+  populateThemeSelect(themeSelect, state.category);
+
+  return card;
+}
+
+function buildFrame() {
+  const wrap = el('div', { className: 'ts-frame-wrap' });
+  const frame = el('iframe', { id: 'tsFrame', src: appPath(state.app), title: 'bizdocs app preview' });
+  frame.addEventListener('load', () => { applyThemeToFrame(); setupFrameResize(); });
+  wrap.appendChild(frame);
+  return wrap;
+}
+
+function wireControls() {
+  const appSelect = $('#tsApp'), categorySelect = $('#tsCategory'), themeSelect = $('#tsTheme');
+
+  appSelect.addEventListener('change', () => {
+    state.app = appSelect.value;
+    saveState();
+    $('#tsFrame').src = appPath(state.app);
+  });
+
+  categorySelect.addEventListener('change', () => {
+    state.category = categorySelect.value;
+    state.theme = '';
+    saveState();
+    populateThemeSelect(themeSelect, state.category);
+    currentThemeObj = null;
+    applyThemeToFrame();
+  });
+
+  themeSelect.addEventListener('change', () => {
+    state.theme = themeSelect.value;
+    saveState();
+    selectTheme(state.category, state.theme);
+  });
+}
+
+function buildFooter() {
+  const sep = () => el('span', { className: 'sep' }, '·');
+  const footer = el('footer', { className: 'kb-footer' });
+  const mark = el('span', { className: 'kb-mark' }); mark.innerHTML = KB_FOOTER_MARK_SVG + 'kBenestad';
+  footer.append(
+    mark,
+    sep(), el('span', null, '© 2026 Kristian Benestad'),
+    sep(), el('a', { href: 'https://github.com/kbenestad/bizdocs', target: '_blank', rel: 'noopener' }, 'kbenestad/bizdocs'),
+    sep(), el('button', { type: 'button', onClick: showAboutModal }, CFG['about-title'] || 'About')
+  );
+  const marker = buildVersionMarker(VERSION_INFO);
+  if (marker) footer.appendChild(marker);
+  return footer;
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+try {
+  CFG = await loadYamlConfig();
+  VERSION_INFO = await loadVersionInfo('../version.json');
+  await applySharedBranding(CFG);
+  NAV = await loadNavItems('../config.yml');
+  normaliseConfig();
+  applyAccent(CFG);
+  initFontScale();
+  loadState();
+  lang = localStorage.getItem('themeselector-lang') || CFG['default-code'] || 'en';
+  applyLang(lang);
+  render();
+} catch (e) {
+  document.getElementById('app').innerHTML =
+    `<div class="kb-wrap"><div class="kb-note kb-note--error"><span>⚠</span>` +
+    `<div><b>Failed to load config.yml</b><br>${kbEsc(e.message)}</div></div></div>`;
+}
+})();
+</script>
+</body>
+</html>

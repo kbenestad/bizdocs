@@ -36,6 +36,10 @@ apps:
   - name: Dashboard
     href: dashboard/
     description: Shared profile and a log of documents generated across the suite
+  - name: Theme Selector
+    href: themeselector/
+    description: Preview any mdcms theme mapped onto a live bizdocs app
+    hide-from-navselector: yes
 
 # External links (open in a new tab)
 links:
