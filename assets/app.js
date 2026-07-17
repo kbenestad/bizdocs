@@ -750,14 +750,23 @@ function kbFilterNavItems(cfg) {
 
 /** Fetch the root config (relative to the calling app, e.g. '../config.yml')
  *  purely for its apps/links nav lists. Fails soft to empty lists — the nav
- *  menu is optional chrome and must never block an app's own boot. */
+ *  menu is optional chrome and must never block an app's own boot.
+ *
+ *  `apps:` hrefs in the root config (e.g. `invoice/`) are written relative to
+ *  the site root, not to the calling app's own directory — so they're rebased
+ *  onto the directory portion of `url` (e.g. '../') before being handed to
+ *  makeNavMenu, otherwise an anchor built from them resolves relative to the
+ *  current app page and doubles up (e.g. `/invoice/invoice/`). `links:` are
+ *  external absolute URLs and are left untouched. */
 async function loadNavItems(url) {
   try {
     const res = await fetch(url);
     if (!res.ok) return { apps: [], links: [] };
     const cfg = jsyaml.load(await res.text());
     if (!cfg || typeof cfg !== 'object') return { apps: [], links: [] };
-    return kbFilterNavItems(cfg);
+    const { apps, links } = kbFilterNavItems(cfg);
+    const base = url.replace(/[^/]*$/, '');
+    return { apps: apps.map(item => ({ ...item, href: base + item.href })), links };
   } catch (e) {
     return { apps: [], links: [] };
   }
