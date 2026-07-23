@@ -267,7 +267,10 @@ the About modal, and a non-English language.
   `reimb-records` (+ IndexedDB `reimb-db` for receipts); timesheet
   `ts-state` / `ts-signature` / `timesheet-lang` / `timesheet-employee` /
   `timesheet-type` / `ts-records`; contactmanager `contactmanager-lang` /
-  `contactmanager-contacts`; template `template-lang`; dashboard
+  `contactmanager-contacts` (+ `contactmanager-viewer-email-format`, written by
+  the generated viewer/contactbook.html, not the editor — remembers the
+  comma-vs-semicolon choice for the selected-contacts email-copy bar);
+  template `template-lang`; dashboard
   `dashboard-lang`; themeselector `themeselector-lang` / `themeselector-state`.
   Two more are shared across every app, written/read via
   `loadSharedProfile()`/`saveSharedProfile()`/`kbPushRecord()` (app.js) and

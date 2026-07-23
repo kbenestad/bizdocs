@@ -741,16 +741,25 @@ const VIEWER_CSS = [
 '.cb-toolbar-row .kb-field.grow-2 { flex: 2 1 240px; }',
 '.cb-count { font-size: var(--fs-small); color: var(--text-muted); margin: 10px 2px 4px; }',
 '.cb-list { display:flex; flex-direction:column; gap:0; }',
-'.cb-row { display:flex; align-items:center; gap:14px; padding:12px 6px; border-bottom:1px solid var(--border); cursor:pointer; text-align:left; background:none; border-left:0; border-right:0; border-top:0; width:100%; font:inherit; color:inherit; }',
+'.cb-row { display:flex; flex-direction:row; align-items:flex-start; gap:10px; padding:12px 6px; border-bottom:1px solid var(--border); cursor:pointer; text-align:left; background:none; border-left:0; border-right:0; border-top:0; width:100%; font:inherit; color:inherit; }',
 '.cb-row:last-child { border-bottom:0; }',
-'.cb-row:hover { background: var(--surface-2); }',
-'.cb-row__main { flex:1; min-width:0; }',
+'.cb-row:hover, .cb-row--selected { background: var(--surface-2); }',
+'.cb-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }',
+'.cb-row__select { flex:0 0 auto; padding-top:2px; }',
+'.cb-row__select input { width:16px; height:16px; margin:0; cursor:pointer; }',
+'.cb-row__body { flex:1; min-width:0; display:flex; flex-direction:column; gap:6px; }',
+'.cb-row__chips-top { display:flex; flex-wrap:wrap; gap:4px; }',
+'.cb-row__main { min-width:0; }',
 '.cb-row__name { font-weight:700; color:var(--text); font-size:var(--fs-base); }',
 '.cb-row__sub { font-size:var(--fs-small); color:var(--text-muted); margin-top:2px; }',
 '.cb-row__sub span + span::before { content:"\\00b7"; margin:0 6px; color:var(--border-strong); }',
-'.cb-row__chip { flex-shrink:0; }',
 '.cb-chips { display:flex; flex-wrap:wrap; gap:4px; }',
-'.cb-row__chip.cb-chips { justify-content:flex-end; max-width:45%; }',
+'.cb-row__contact { display:flex; flex-wrap:wrap; gap:4px 14px; }',
+'.cb-row__contactlink { font-size:var(--fs-small); }',
+'.cb-row__linktext-short { display:none; }',
+'.cb-emailbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px; margin-bottom:10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface-2); }',
+'.cb-emailbar__field { flex:1 1 240px; min-width:140px; }',
+'.cb-emailbar__format { flex:0 0 auto; }',
 '.cb-empty { padding:40px 10px; text-align:center; color:var(--text-muted); font-size:var(--fs-small); }',
 '.cb-detail__name { font-size: calc(19px * var(--font-scale)); font-weight:700; color:var(--text); }',
 '.cb-detail__sub { font-size: var(--fs-small); color: var(--text-muted); margin-top:2px; }',
@@ -764,7 +773,7 @@ const VIEWER_CSS = [
 '.cb-detail__phones { display:flex; flex-direction:column; gap:4px; }',
 '.cb-detail__phone { display:flex; gap:10px; align-items:baseline; }',
 '.cb-phone-type { font-size:var(--fs-small); color:var(--text-muted); min-width:56px; flex-shrink:0; }',
-'@media (max-width: 480px) { .kb-header { flex-direction:column; align-items:flex-start; gap:12px; } .kb-doctitle { text-align:left; } }',
+'@media (max-width: 480px) { .kb-header { flex-direction:column; align-items:flex-start; gap:12px; } .kb-doctitle { text-align:left; } .cb-row__linktext-full { display:none; } .cb-row__linktext-short { display:inline; } }',
 ].join('\n');
 
 // ── Viewer runtime (serialised into every generated file via toString()) ─────
@@ -774,7 +783,16 @@ const VIEWER_CSS = [
 function viewerRuntime() {
   'use strict';
   let CFG, CONTACTS = [], lang = 'en';
-  const state = { view: 'list', q: '', cat: '', org: '', id: null };
+  const state = { view: 'list', q: '', cat: '', org: '', id: null, selected: new Set() };
+
+  // Multi-address format for the "copy selected emails" bar — different mail
+  // clients expect a different separator when a list is pasted straight into
+  // a To:/Cc: field (Gmail/Apple Mail take commas; classic Outlook wants
+  // semicolons). Remembered per browser, same pattern as kb-theme/kb-lang.
+  const EMAIL_FORMAT_KEY = 'contactmanager-viewer-email-format';
+  function emailDelimiter() {
+    return localStorage.getItem(EMAIL_FORMAT_KEY) === 'semicolon' ? '; ' : ', ';
+  }
 
   // Phones: [{type, value}], tolerating the legacy single `phone` string.
   const VCF_TEL = { mobile: 'CELL', office: 'WORK', home: 'HOME', fax: 'FAX', other: 'VOICE' };
@@ -944,15 +962,76 @@ function viewerRuntime() {
     function renderResults() { renderResultsInto(document.getElementById('cb-list-card')); }
     return container;
   }
+  // The "copy selected emails" bar: only rendered once at least one contact
+  // is checked, rebuilt (added/removed/updated) on every checkbox toggle and
+  // every format-dropdown change, since both go through the same
+  // renderResultsInto(listCard) re-render as everything else in this list.
+  function buildEmailBar(listCard) {
+    if (!state.selected.size) return null;
+    const emails = CONTACTS.filter(c => state.selected.has(c.id) && (c.email || '').trim()).map(c => c.email.trim());
+    const bar = el('div', { className: 'cb-emailbar' });
+    const input = el('input', {
+      className: 'kb-input cb-emailbar__field', readonly: true,
+      'aria-label': S('email-list-label', { n: emails.length }), value: emails.join(emailDelimiter()),
+    });
+    input.addEventListener('focus', () => input.select());
+    const fmtSel = el('select', { className: 'kb-select cb-emailbar__format', 'aria-label': S('email-format-label') });
+    const currentFormat = localStorage.getItem(EMAIL_FORMAT_KEY) === 'semicolon' ? 'semicolon' : 'comma';
+    [['comma', S('email-format-comma')], ['semicolon', S('email-format-semicolon')]].forEach(([value, label]) => {
+      const o = el('option', { value }, label);
+      if (value === currentFormat) o.selected = true;
+      fmtSel.appendChild(o);
+    });
+    fmtSel.addEventListener('change', () => { localStorage.setItem(EMAIL_FORMAT_KEY, fmtSel.value); renderResultsInto(listCard); });
+    const copyBtn = el('button', {
+      type: 'button', className: 'kb-btn kb-btn--ghost kb-btn--sm cb-emailbar__copy',
+      onClick: () => {
+        navigator.clipboard.writeText(input.value).then(() => {
+          const original = copyBtn.textContent;
+          copyBtn.textContent = S('copied');
+          setTimeout(() => { copyBtn.textContent = original; }, 1500);
+        });
+      },
+    }, S('copy-emails'));
+    bar.append(input, fmtSel, copyBtn);
+    return bar;
+  }
   function renderResultsInto(listCard) {
     if (!listCard) return;
     listCard.innerHTML = '';
     const results = filteredContacts();
     listCard.appendChild(el('div', { className: 'cb-count' }, S('count-n', { n: results.length })));
+    const emailBar = buildEmailBar(listCard);
+    if (emailBar) listCard.appendChild(emailBar);
     if (!results.length) { listCard.appendChild(el('div', { className: 'cb-empty' }, S('empty'))); return; }
     const list = el('div', { className: 'cb-list' });
     results.forEach(c => {
-      const row = el('button', { type: 'button', className: 'cb-row', onClick: () => { state.view = 'detail'; state.id = c.id; render(); } });
+      const openDetail = () => { state.view = 'detail'; state.id = c.id; render(); };
+      const toggleSelected = checked => { if (checked) state.selected.add(c.id); else state.selected.delete(c.id); renderResultsInto(listCard); };
+      // A row-level checkbox/link (below) can't nest inside a <button> per the
+      // HTML content model, and its bubbled click would also fire the row's
+      // own open-detail handler — so the row is a div acting as a button
+      // (role + tabindex + Enter/Space), and each control inside it stops
+      // propagation to keep "select" / "tap to call" from also opening detail.
+      const row = el('div', {
+        className: 'cb-row' + (state.selected.has(c.id) ? ' cb-row--selected' : ''), role: 'button', tabindex: '0',
+        onClick: openDetail,
+        onKeydown: e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDetail(); } },
+      });
+      const checkbox = el('input', {
+        type: 'checkbox', 'aria-label': S('select-contact', { name: displayName(c) || '-' }),
+        onClick: e => e.stopPropagation(),
+        onChange: e => toggleSelected(e.target.checked),
+      });
+      checkbox.checked = state.selected.has(c.id);
+      row.append(el('div', { className: 'cb-row__select' }, checkbox));
+      const body = el('div', { className: 'cb-row__body' });
+      const cats = contactCategories(c);
+      if (cats.length) {
+        const chips = el('div', { className: 'cb-row__chips-top cb-chips' });
+        cats.forEach(cat => chips.appendChild(el('span', { className: 'kb-chip' }, cat)));
+        body.append(chips);
+      }
       const main = el('div', { className: 'cb-row__main' });
       const nameNode = el('div', { className: 'cb-row__name' });
       nameNode.appendChild(document.createTextNode(displayName(c) || '-'));
@@ -964,13 +1043,18 @@ function viewerRuntime() {
           c.role ? el('span', null, c.role) : null,
         ].filter(Boolean))
       );
-      row.append(main);
-      const cats = contactCategories(c);
-      if (cats.length) {
-        const chips = el('span', { className: 'cb-row__chip cb-chips' });
-        cats.forEach(cat => chips.appendChild(el('span', { className: 'kb-chip' }, cat)));
-        row.append(chips);
+      body.append(main);
+      const phone = contactPhones(c)[0];
+      if (phone || c.email) {
+        const contactLink = (href, full, shortLabel) => el('a', {
+          className: 'cb-link cb-row__contactlink', href, onClick: e => e.stopPropagation(),
+        }, [el('span', { className: 'cb-row__linktext-full' }, full), el('span', { className: 'cb-row__linktext-short' }, shortLabel)]);
+        const contactLine = el('div', { className: 'cb-row__contact' });
+        if (phone) contactLine.appendChild(contactLink(telHref(phone.value), phone.value, S('f-phone')));
+        if (c.email) contactLine.appendChild(contactLink('mailto:' + c.email, c.email, S('f-email')));
+        body.append(contactLine);
       }
+      row.append(body);
       list.appendChild(row);
     });
     listCard.appendChild(list);
