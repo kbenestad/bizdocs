@@ -186,6 +186,77 @@ function iconEl(svgMarkup) {
   return wrap.firstElementChild || wrap;
 }
 
+/**
+ * Build the document header's brand block (`.kb-brand`) — the logo/mark plus the
+ * organisation name — via one shared rendering path so every app, and any new
+ * app scaffolded from `_template/`, shows a configured logo identically. This is
+ * the invoice header logic lifted into the shared layer; see docs/logo.md.
+ *
+ * Three cases, in priority order:
+ *   1. No `organization` set        → generic bizdocs mark + `defaultOrg` /
+ *      `defaultTagline` (a placeholder identity for an unconfigured deploy).
+ *   2. `organization` + `logo: yes` → the real logo image (`assets/logo.png` →
+ *      `.jpg` → bizdocs mark), shown at its natural aspect ratio (≤52px tall,
+ *      optional `logo-maxwidth` in cm). The header gains a white-card backdrop
+ *      so a logo with white/transparent edges reads against the tinted page.
+ *   3. `organization`, no logo      → the app's own `appIcon` + org name/tagline.
+ *
+ * opts:
+ *   cfg            – parsed config (reads organization / tagline / logo / logo-maxwidth)
+ *   headerEl       – the `.kb-header` element; gets the white-card style in case 2
+ *   appIcon        – SVG markup for this app's brand icon (case 3); defaults to
+ *                    the generic bizdocs mark, which is what the template-style
+ *                    apps (dashboard/contactmanager/themeselector/landing) use
+ *   defaultOrg     – label shown when `organization` is blank (case 1)
+ *   defaultTagline – tagline shown when `organization` is blank (case 1)
+ *   pathPrefix     – '' for the root landing page, '../' for apps in a subfolder
+ *                    (matches how each app references `../assets/…`)
+ */
+function kbBuildBrand(opts) {
+  opts = opts || {};
+  const cfg     = opts.cfg || {};
+  const org     = cfg.organization || '';
+  const tagline = cfg.tagline != null ? cfg.tagline : '';
+  const prefix  = opts.pathPrefix || '';
+  const appIcon = opts.appIcon || KB_BRAND_SVG;
+  const brand   = el('div', { className: 'kb-brand' });
+
+  if (!org) {
+    const tile = el('span', { className: 'logo' });
+    tile.innerHTML = KB_BRAND_SVG;
+    const orgEl = el('span', { className: 'org' });
+    orgEl.appendChild(document.createTextNode(opts.defaultOrg || ''));
+    if (opts.defaultTagline) orgEl.appendChild(el('small', null, opts.defaultTagline));
+    brand.append(tile, orgEl);
+  } else if (kbTruthy(cfg.logo)) {
+    // Real logo image: appended directly to .kb-brand (not inside the fixed 46px
+    // `.logo` box) so it keeps its natural width, capped by max-height/maxWidth.
+    const img = el('img', { alt: org });
+    img.src = prefix + 'assets/logo.png';
+    img.style.cssText = 'max-height:52px;width:auto;display:block;';
+    if (cfg['logo-maxwidth']) img.style.maxWidth = cfg['logo-maxwidth'] + 'cm';
+    img.onerror = function () {
+      this.src = prefix + 'assets/logo.jpg';
+      this.onerror = function () {
+        const s = el('span', { className: 'logo' });
+        s.innerHTML = KB_BRAND_SVG;
+        this.replaceWith(s);
+      };
+    };
+    brand.appendChild(img);
+    if (opts.headerEl) opts.headerEl.style.cssText =
+      'background:#ffffff;border:1px solid var(--border);border-radius:8px;padding:16px 20px;';
+  } else {
+    const tile = el('span', { className: 'logo' });
+    tile.innerHTML = appIcon;
+    const orgEl = el('span', { className: 'org' });
+    orgEl.appendChild(document.createTextNode(org));
+    if (tagline) orgEl.appendChild(el('small', null, tagline));
+    brand.append(tile, orgEl);
+  }
+  return brand;
+}
+
 /* ── Theme (light/dark) ────────────────────────────────────────────────────── */
 /* The pre-paint inline snippet in each app reads this same key before first
  * paint; here we read/write it on toggle. */

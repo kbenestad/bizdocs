@@ -153,18 +153,15 @@ function buildToolbar() {
 function buildHeader() {
   const header = el('header', { className: 'kb-header' });
 
-  const brand = el('div', { className: 'kb-brand' });
-  const tile = el('span', { className: 'logo' });
-  if (CFG.logo === 'yes' || CFG.logo === true) {
-    const img = el('img', { src: '../assets/logo.png', alt: CFG.organization || '' });
-    img.onerror = () => { img.src = '../assets/logo.jpg'; img.onerror = () => { tile.innerHTML = KB_BRAND_SVG; }; };
-    tile.appendChild(img);
-  } else { tile.innerHTML = KB_BRAND_SVG; }
-  const org = el('span', { className: 'org' });
-  org.appendChild(document.createTextNode(CFG.organization || 'kbenestad/template'));
-  const small = el('small'); small.textContent = CFG.tagline || S('subtitle');
-  org.appendChild(small);
-  brand.append(tile, org);
+  // Brand block (logo/mark + org name) is built by the shared helper so every
+  // app — and every app copied from this template — renders a configured logo
+  // identically. Pass `appIcon:` an SVG-markup string if your app has its own
+  // mark (see invoice/timesheet/reimburse); it shows when an org is set with no
+  // logo image. See docs/logo.md.
+  const brand = kbBuildBrand({
+    cfg: CFG, headerEl: header, pathPrefix: '../',
+    defaultOrg: 'kbenestad/template', defaultTagline: S('subtitle'),
+  });
 
   const title = el('div', { className: 'kb-doctitle' });
   title.appendChild(el('h1', null, 'template'));   // ← your app name (add an icon SVG if you like)

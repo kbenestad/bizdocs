@@ -113,18 +113,12 @@ function buildToolbar() {
 
 function buildHeader() {
   const header = el('header', { className: 'kb-header' });
-  const brand = el('div', { className: 'kb-brand' });
-  const tile = el('span', { className: 'logo' });
-  if (CFG.logo === 'yes' || CFG.logo === true) {
-    const img = el('img', { src: '../assets/logo.png', alt: CFG.organization || '' });
-    img.onerror = () => { img.src = '../assets/logo.jpg'; img.onerror = () => { tile.innerHTML = KB_BRAND_SVG; }; };
-    tile.appendChild(img);
-  } else { tile.innerHTML = KB_BRAND_SVG; }
-  const org = el('span', { className: 'org' });
-  org.appendChild(document.createTextNode(CFG.organization || 'kbenestad/dashboard'));
-  const small = el('small'); small.textContent = CFG.tagline || S('subtitle');
-  org.appendChild(small);
-  brand.append(tile, org);
+  // Brand block built by the shared helper (app.js) so a configured logo
+  // renders identically across the suite. See docs/logo.md.
+  const brand = kbBuildBrand({
+    cfg: CFG, headerEl: header, pathPrefix: '../',
+    defaultOrg: 'kbenestad/dashboard', defaultTagline: S('subtitle'),
+  });
 
   const title = el('div', { className: 'kb-doctitle' });
   title.appendChild(el('h1', null, S('doc-title')));

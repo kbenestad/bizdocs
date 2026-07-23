@@ -694,32 +694,13 @@ function render() {
 
   // ── Document header
   const hdr = el('div', {className:'kb-header'});
-  const brand = el('div', {className:'kb-brand'});
-  const tsOrg     = CFG.organization || '';
-  const tsTagline = CFG.tagline != null ? CFG.tagline : '';
-  const tsHasLogo = CFG.logo === true || CFG.logo === 'yes';
-
-  if (!tsOrg) {
-    const tile = el('span', {className:'logo'}); tile.innerHTML = KB_BRAND_SVG;
-    const orgEl = el('span', {className:'org'});
-    orgEl.appendChild(document.createTextNode('kbenestad/timesheet'));
-    const sm = el('small'); sm.textContent = 'Timesheet generator'; orgEl.appendChild(sm);
-    brand.append(tile, orgEl);
-  } else if (tsHasLogo) {
-    const img = el('img', {alt: tsOrg});
-    img.src = '../assets/logo.png';
-    img.style.cssText = 'max-height:52px;width:auto;display:block;';
-    if (CFG['logo-maxwidth']) img.style.maxWidth = CFG['logo-maxwidth'] + 'cm';
-    img.onerror = function() { this.src = '../assets/logo.jpg'; this.onerror = function() { const s = el('span', {className:'logo'}); s.innerHTML = KB_BRAND_SVG; this.replaceWith(s); }; };
-    brand.appendChild(img);
-    hdr.style.cssText = 'background:#ffffff;border:1px solid var(--border);border-radius:8px;padding:16px 20px;';
-  } else {
-    const tile = el('span', {className:'logo'}); tile.innerHTML = TS_APP_ICON;
-    const orgEl = el('span', {className:'org'});
-    orgEl.appendChild(document.createTextNode(tsOrg));
-    if (tsTagline) { const sm = el('small'); sm.textContent = tsTagline; orgEl.appendChild(sm); }
-    brand.append(tile, orgEl);
-  }
+  // Brand block built by the shared helper (app.js) so a configured logo
+  // renders identically across the suite. TS_APP_ICON is timesheet's own mark,
+  // shown when an org is set with no logo image. See docs/logo.md.
+  const brand = kbBuildBrand({
+    cfg: CFG, headerEl: hdr, pathPrefix: '../', appIcon: TS_APP_ICON,
+    defaultOrg: 'kbenestad/timesheet', defaultTagline: 'Timesheet generator',
+  });
 
   const docTitle = el('div', {className:'kb-doctitle'});
   const h1 = el('h1');

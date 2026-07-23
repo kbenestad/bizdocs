@@ -400,14 +400,10 @@ function makeSelect(options, value, onChange, placeholder) {
 }
 
 // ========== FORM RENDERING ==========
-function appIconSVG() {
-  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  s.setAttribute('viewBox', '0 0 48 48');
-  s.setAttribute('aria-hidden', 'true');
-  s.style.cssText = 'width:100%;height:100%;display:block;';
-  s.innerHTML = `<rect width="48" height="48" rx="12" fill="var(--accent)"/><rect x="7.5" y="14" width="33" height="20" rx="3.2" fill="none" stroke="#fff" stroke-width="2.8"/><circle cx="24" cy="24" r="4.6" fill="none" stroke="#fff" stroke-width="2.6"/><path d="M12.7 21.4V26.6M35.3 21.4V26.6" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>`;
-  return s;
-}
+// reimburse's own brand mark, shown when an org is set with no logo image.
+// A markup string (like KB_BRAND_SVG / TS_APP_ICON) so it can be handed to the
+// shared kbBuildBrand() helper in app.js.
+const RB_APP_ICON = `<svg viewBox="0 0 48 48" aria-hidden="true" style="width:100%;height:100%;display:block"><rect width="48" height="48" rx="12" fill="var(--accent)"/><rect x="7.5" y="14" width="33" height="20" rx="3.2" fill="none" stroke="#fff" stroke-width="2.8"/><circle cx="24" cy="24" r="4.6" fill="none" stroke="#fff" stroke-width="2.6"/><path d="M12.7 21.4V26.6M35.3 21.4V26.6" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>`;
 
 function render() {
   const app = $('#app');
@@ -448,30 +444,13 @@ function render() {
 
   // ── Header ────────────────────────────────────────────────────────────────
   const hdr = el('div', {className:'kb-header'});
-  const brand = el('div', {className:'kb-brand'});
-  const rbOrg     = CFG.organization || '';
-  const rbTagline = CFG.tagline != null ? CFG.tagline : '';
-  const rbHasLogo = CFG.logo === true || CFG.logo === 'yes';
-
-  if (!rbOrg) {
-    const tile = el('span', {className:'logo'}); tile.innerHTML = KB_BRAND_SVG;
-    const orgSpan = el('span', {className:'org'}, 'kbenestad/reimburse');
-    orgSpan.appendChild(el('small', null, T('subtitle')));
-    brand.append(tile, orgSpan);
-  } else if (rbHasLogo) {
-    const img = el('img', {alt: rbOrg});
-    img.src = '../assets/logo.png';
-    img.style.cssText = 'max-height:52px;width:auto;display:block;';
-    if (CFG['logo-maxwidth']) img.style.maxWidth = CFG['logo-maxwidth'] + 'cm';
-    img.onerror = function() { this.src = '../assets/logo.jpg'; this.onerror = function() { const s = el('span', {className:'logo'}); s.innerHTML = KB_BRAND_SVG; this.replaceWith(s); }; };
-    brand.appendChild(img);
-    hdr.style.cssText = 'background:#ffffff;border:1px solid var(--border);border-radius:8px;padding:16px 20px;';
-  } else {
-    const tile = el('span', {className:'logo'}); tile.appendChild(appIconSVG());
-    const orgSpan = el('span', {className:'org'}, rbOrg);
-    if (rbTagline) orgSpan.appendChild(el('small', null, rbTagline));
-    brand.append(tile, orgSpan);
-  }
+  // Brand block built by the shared helper (app.js) so a configured logo
+  // renders identically across the suite. RB_APP_ICON is reimburse's own mark,
+  // shown when an org is set with no logo image. See docs/logo.md.
+  const brand = kbBuildBrand({
+    cfg: CFG, headerEl: hdr, pathPrefix: '../', appIcon: RB_APP_ICON,
+    defaultOrg: 'kbenestad/reimburse', defaultTagline: T('subtitle'),
+  });
 
   const docTitle = el('div', {className:'kb-doctitle'});
   const h1 = el('h1');
