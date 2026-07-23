@@ -231,34 +231,18 @@ const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" ar
 </svg>`;
 
 function buildHeader() {
-  const org     = cfg.organization || "";
-  const tagline = cfg.tagline || "";
-  const hasLogo = cfg.logo === true || cfg.logo === "yes";
-
-  const hdrEl   = document.querySelector(".kb-header");
-  const brandEl = document.getElementById("hdr-brand");
-  brandEl.className = "kb-brand";
-  brandEl.innerHTML = "";
-
-  if (!org) {
-    brandEl.innerHTML = `<span class="logo">${KB_BRAND_SVG}</span><span class="org">kbenestad/invoice<small>Invoice generator</small></span>`;
-  } else if (hasLogo) {
-    const img = document.createElement("img");
-    img.alt = org; img.src = "../assets/logo.png";
-    img.style.cssText = "max-height:52px;width:auto;display:block;";
-    if (cfg["logo-maxwidth"]) img.style.maxWidth = cfg["logo-maxwidth"] + "cm";
-    img.onerror = function() {
-      this.src = "../assets/logo.jpg";
-      this.onerror = function() { const s = document.createElement("span"); s.className = "logo"; s.innerHTML = KB_BRAND_SVG; this.replaceWith(s); };
-    };
-    brandEl.appendChild(img);
-    if (hdrEl) hdrEl.style.cssText = "background:#ffffff;border:1px solid var(--border);border-radius:8px;padding:16px 20px;";
-  } else {
-    let inner = `<span class="logo">${LOGO_SVG}</span><span class="org">${h(org)}`;
-    if (tagline) inner += `<small>${h(tagline)}</small>`;
-    inner += `</span>`;
-    brandEl.innerHTML = inner;
-  }
+  // Brand block built by the shared helper (app.js) — the same rendering path
+  // every bizdocs app uses, so a configured logo looks identical across the
+  // suite. LOGO_SVG is invoice's own mark, shown when an org is set with no
+  // logo image. See docs/logo.md. buildHeader() runs more than once (boot +
+  // after a language change), so the fresh brand keeps the #hdr-brand id and
+  // replaces whichever brand node is currently in place.
+  const brand = kbBuildBrand({
+    cfg, headerEl: document.querySelector(".kb-header"), pathPrefix: "../",
+    appIcon: LOGO_SVG, defaultOrg: "kbenestad/invoice", defaultTagline: "Invoice generator",
+  });
+  brand.id = "hdr-brand";
+  document.getElementById("hdr-brand").replaceWith(brand);
 
   const titleEl = document.getElementById("inv-title");
   titleEl.innerHTML = LOGO_SVG.replace("<svg ", '<svg width="24" height="24" ') + h(t("doc-title"));
