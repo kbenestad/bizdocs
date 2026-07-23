@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m http.server 8931)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8931/invoice/config.yml)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" --max-time 5 https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js)",
+      "Bash(/opt/pw-browsers/chromium-1194/chrome-linux/chrome --headless=new --no-sandbox --disable-gpu --virtual-time-budget=8000 --window-size=1200,1800 --screenshot=/tmp/claude-1001/-home-cap-Documents-05-Github-kbenestad-bizdocs/38f53dd9-47d8-4f5b-baec-2236ce6743df/scratchpad/invoice1.png http://localhost:8931/invoice/index.html)",
+      "Bash(/usr/bin/google-chrome --headless=new --no-sandbox --disable-gpu --virtual-time-budget=8000 --window-size=1200,1800 --screenshot=/tmp/claude-1001/-home-cap-Documents-05-Github-kbenestad-bizdocs/38f53dd9-47d8-4f5b-baec-2236ce6743df/scratchpad/invoice1.png http://localhost:8931/invoice/index.html)",
+      "Bash(node -e \"require\\('puppeteer'\\)\")",
+      "Bash(npm ls *)",
+      "Bash(python3 -c \"import websockets\")",
+      "Bash(pip show *)",
+      "Bash(python3 -c \"import playwright\")",
+      "Bash(/usr/bin/google-chrome --headless=new --no-sandbox --disable-gpu --virtual-time-budget=6000 --window-size=1200,1000 --screenshot=/tmp/claude-1001/-home-cap-Documents-05-Github-kbenestad-bizdocs/38f53dd9-47d8-4f5b-baec-2236ce6743df/scratchpad/invoice_fx.png http://localhost:8931/invoice/index.fxtest.html)",
+      "Bash(kill %1)",
+      "Bash(jobs)",
+      "Bash(/usr/bin/google-chrome --headless=new --no-sandbox --disable-gpu --virtual-time-budget=6000 --window-size=1200,900 --screenshot=/tmp/claude-1001/-home-cap-Documents-05-Github-kbenestad-bizdocs/38f53dd9-47d8-4f5b-baec-2236ce6743df/scratchpad/invoice_fx3.png http://localhost:8931/invoice/index.fxtest2.html)",
+      "Bash(kill %1 %2)",
+      "Bash(git fetch *)",
+      "Bash(/opt/pw-browsers/chromium-1194/chrome-linux/chrome --headless=new --no-sandbox --disable-gpu --virtual-time-budget=8000 --window-size=1200,1600 --screenshot=/tmp/claude-1001/-home-cap-Documents-05-Github-kbenestad-bizdocs/39c69be0-f700-4363-9b67-a59f04d6aec6/scratchpad/contactmanager.png http://localhost:8000/contactmanager/index.html)",
+      "Bash(cd *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(gh auth *)",
+      "Bash(git config *)",
+      "Bash(env)",
+      "Bash(apt list *)",
+      "Read(//home/kristian/.ssh/**)",
+      "Bash(command -v curl)",
+      "Bash(command -v snap)",
+      "Bash(command -v brew)"
+    ]
+  }
+}
